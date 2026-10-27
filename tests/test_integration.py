@@ -10,7 +10,7 @@ from pathlib import Path
 import pymupdf
 import pytest
 
-from noc7.batch import run_local_batch
+from noc7.batch import run_local_batch, summarize_case
 from noc7.bundle import load_bundle, rehash_bundle
 from noc7.cli import main
 from noc7.extract import analyze
@@ -122,12 +122,21 @@ def test_mixed_image_quality_keeps_good_observation_and_blocks_poor_reading():
             return LayoutResult(blocks=[
                 {"text": "ping packet loss 25%", "bbox": (0, 0, 200, 20), "quality": .99},
                 {"text": "光缆中断", "bbox": (0, 30, 200, 50), "quality": .4},
+                {"text": "测试节点：合成节点", "bbox": (0, 60, 200, 80), "quality": .99},
             ])
 
     r = analyze(BUNDLES / "SYN-S10", registry=registry(ImageParser(ocr=OCR())))
     assert "M04/img:r0" in r.elements.phenomenon.evidence_refs
     assert r.span("M04/img:r1").needs_review
     assert all("M04/img:r1" not in el.evidence_refs for _, el in r.elements.items())
+    summary = summarize_case("R01", r)
+    image = next(m for m in summary["materials"] if m["id"] == "M04")
+    assert image["conclusion_spans"] == 1
+    assert image["candidate_only_spans"] == 1
+    assert image["element_usage"] == {
+        "phenomenon": {"conclusion_spans": 1, "candidate_only_spans": 0},
+        "location": {"conclusion_spans": 0, "candidate_only_spans": 2},
+    }
 
 
 def test_batch_continues_failure_ignores_archives_and_sanitizes_summary(tmp_path, monkeypatch, capsys):
@@ -167,3 +176,38 @@ def test_batch_preflight_refuses_count_mismatch_and_repository_output(tmp_path):
     assert not out.exists()
     with pytest.raises(ValueError, match="仓库外"):
         run_local_batch(tmp_path, BUNDLES.parents[1] / "var/private-output")
+
+
+@pytest.mark.parametrize("failure, expected", [
+    ("count", "顶层工单包数量为 1"),
+    ("exists", "输出目录已存在"),
+    ("repository", "真实工单的分析产物必须写入仓库外目录"),
+    ("out_inside_input", "输入与输出目录必须互不包含"),
+    ("input_inside_out", "输入与输出目录必须互不包含"),
+    ("os_error", "合成写入权限错误"),
+])
+def test_batch_cli_reports_specific_preflight_error(tmp_path, monkeypatch, capsys, failure, expected):
+    inputs = tmp_path / "inputs"
+    inputs.mkdir()
+    clone(inputs, "SYN-P01")
+    out = tmp_path / "outputs"
+    args = ["local-batch", str(inputs), "--out", str(out)]
+    if failure == "count":
+        args.extend(["--expected-count", "15"])
+    elif failure == "exists":
+        out.mkdir()
+    elif failure == "repository":
+        args[-1] = str(BUNDLES.parents[1] / "var/private-output")
+    elif failure == "out_inside_input":
+        args[-1] = str(inputs / "outputs")
+    elif failure == "input_inside_out":
+        args[-1] = str(tmp_path)
+    elif failure == "os_error":
+        def fail_write(*_, **__):
+            raise OSError("合成写入权限错误")
+
+        monkeypatch.setattr("noc7.batch.run_local_batch", fail_write)
+    assert main(args) == 1
+    captured = capsys.readouterr()
+    assert f"批次预检/写入失败：{expected}" in captured.err
+    assert "已生成" not in captured.out

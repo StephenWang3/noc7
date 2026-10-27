@@ -30,10 +30,19 @@ def _write_json(path, value):
 
 def summarize_case(alias, result):
     """仅输出枚举、计数与本轮代号，不复制任意来源字符串或异常文本。"""
-    used = {ref for _, el in result.elements.items() for ref in el.evidence_refs}
+    element_refs = {
+        name.value: (
+            set(element.evidence_refs),
+            {ref for candidate in element.iter_candidates() for ref in candidate.evidence_refs},
+        )
+        for name, element in result.elements.items()
+    }
+    conclusion_refs = set().union(*(conclusion for conclusion, _ in element_refs.values()))
+    candidate_refs = set().union(*(candidates for _, candidates in element_refs.values()))
     materials = []
     for material in result.materials:
         spans = [s for s in result.evidence if s.material_id == material.id]
+        span_ids = {s.id for s in spans}
         materials.append({
             "id": material.id,
             "kind": material.kind.value,
@@ -41,7 +50,17 @@ def summarize_case(alias, result):
             "subtype": material.subtype.value if material.subtype else None,
             "spans": len(spans),
             "eligible_spans": sum(bool(usable_text(s)) for s in spans),
-            "conclusion_spans": sum(s.id in used for s in spans),
+            "conclusion_spans": len(span_ids & conclusion_refs),
+            "candidate_only_spans": len(span_ids & (candidate_refs - conclusion_refs)),
+            # 同一片段可能支撑现象结论，同时只作为地点候选；保留逐要素计数。
+            "element_usage": {
+                name: {
+                    "conclusion_spans": len(span_ids & conclusion),
+                    "candidate_only_spans": len(span_ids & (candidates - conclusion)),
+                }
+                for name, (conclusion, candidates) in element_refs.items()
+                if span_ids & (conclusion | candidates)
+            },
             # 仅这两个导出器固定路径作为留档计数；不把一般 other 材料排除在外。
             "source_archive": material.kind.value == "other" and material.path in {
                 "source/capture.json", "source/log-map.json"

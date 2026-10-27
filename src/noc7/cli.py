@@ -272,8 +272,8 @@ def cmd_local_batch(args: argparse.Namespace) -> int:
             args.root, args.out, expected_count=args.expected_count,
             progress=lambda alias, status: print(f"{alias}：{'已生成' if status == 'ok' else '失败，见本机记录'}", flush=True),
         )
-    except (ValueError, OSError):
-        print("批次预检/写入失败；请检查输入目录、数量，以及输出是否为新的仓库外目录。", file=sys.stderr)
+    except (ValueError, OSError) as e:
+        print(f"批次预检/写入失败：{e}", file=sys.stderr)
         return 1
     failed = sum(c["status"] != "ok" for c in summary["cases"])
     print(f"完成 {len(summary['cases']) - failed}，失败 {failed}；请打开输出目录中的 index.html。")
