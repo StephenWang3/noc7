@@ -8,6 +8,7 @@ import pytest
 from bs4 import BeautifulSoup
 from docx import Document
 from docx.enum.text import WD_COLOR_INDEX
+from docx.oxml.ns import qn
 from PIL import Image
 
 from noc7.batch import _index
@@ -86,8 +87,29 @@ def test_docx_layout_matches_company_template(results, tmp_path):
     ]
     section = doc.sections[0]
     assert (section.page_width, section.page_height) == (7560310, 10692130)
+    margins = [getattr(section, f"{s}_margin").twips for s in ("left", "right", "top", "bottom")]
+    assert margins == [1440, 1800, 1440, 1440]
     assert not section.header.paragraphs[0].text.strip()
     assert "PAGE" in section.footer._element.xml
+
+
+def test_table_width_is_fixed_even_with_long_unbroken_text(results, tmp_path):
+    # 处理过程里无空格的长串不能让 Word 自动撑开列宽。
+    r = results["SYN-P04"].model_copy(deep=True)
+    r.elements.handling_process.value[0].action = "A" * 300
+    path = tmp_path / "r.docx"
+    write_company_docx(r, path)
+    table = Document(str(path)).tables[0]
+    tbl_pr = table._tbl.tblPr
+    width = tbl_pr.find(qn("w:tblW"))
+    assert (width.get(qn("w:w")), width.get(qn("w:type"))) == ("9753", "dxa")
+    assert tbl_pr.find(qn("w:tblLayout")).get(qn("w:type")) == "fixed"
+    assert not table.autofit
+    grid = [int(c.get(qn("w:w"))) for c in table._tbl.tblGrid.findall(qn("w:gridCol"))]
+    assert grid == [1444, 1620, 1620, 5069]
+    # schema 顺序：tblBorders 在 tblLayout 之前，tblLook 最后。
+    tags = [c.tag.split("}")[1] for c in tbl_pr]
+    assert tags.index("tblBorders") < tags.index("tblLayout") < tags.index("tblLook")
 
 
 def test_cells_follow_mapping_rules(results):

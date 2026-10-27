@@ -1,6 +1,6 @@
 """对照生成的公司格式报告与本机样例的版式（ADR 0007）。
 
-只比较表格行列数、合并结构和栏目标签；不打印任何单元格内容，
+只比较页边距、表宽与布局方式、表格行列数、合并结构和栏目标签；不打印任何单元格内容，
 所以可以拿仓库外的真实样例对照，输出也可以贴进文档。
 
     uv run python scripts/check_company_report.py <生成的.docx> ~/.noc7/real/report_samples/gd_A05.docx
@@ -14,6 +14,7 @@ import sys
 from pathlib import Path
 
 from docx import Document
+from docx.oxml.ns import qn
 
 from noc7.report.company import COLS, LAYOUT, ROWS, SIGNATURES, TITLE
 
@@ -22,10 +23,25 @@ def _norm(text: str) -> str:
     return "".join(text.split())
 
 
+def _page_layout(doc) -> dict[str, object]:
+    """版式数值（twip）：页边距、第一张表的 tblW 和 tblLayout。都是排版参数，可以打印。"""
+    section = doc.sections[0]
+    layout: dict[str, object] = {
+        side: getattr(section, side).twips
+        for side in ("left_margin", "right_margin", "top_margin", "bottom_margin")
+    }
+    tbl_pr = doc.tables[0]._tbl.tblPr if doc.tables else None
+    width = tbl_pr.find(qn("w:tblW")) if tbl_pr is not None else None
+    kind = tbl_pr.find(qn("w:tblLayout")) if tbl_pr is not None else None
+    layout["tblW"] = (width.get(qn("w:w")), width.get(qn("w:type"))) if width is not None else None
+    layout["tblLayout"] = kind.get(qn("w:type")) if kind is not None else "autofit"
+    return layout
+
+
 def _structure(path: Path):
     doc = Document(str(path))
     if not doc.tables:
-        return None, None, {}, []
+        return None, None, {}, [], _page_layout(doc)
     table = doc.tables[0]
     # 同一个 tc（横向合并）或竖向合并到同一格的位置得到同一编号。
     # 保留全部 tc 引用，避免对象被回收后 id() 复用导致编号串格。
@@ -44,7 +60,7 @@ def _structure(path: Path):
         if isinstance(spec, tuple) and r < len(table.rows) and c < len(table.columns)
     }
     paragraphs = [_norm(p.text) for p in doc.paragraphs if p.text.strip()]
-    return (len(table.rows), len(table.columns)), grid, labels, paragraphs
+    return (len(table.rows), len(table.columns)), grid, labels, paragraphs, _page_layout(doc)
 
 
 def main(argv: list[str]) -> int:
@@ -63,7 +79,10 @@ def main(argv: list[str]) -> int:
     for pos, label in generated[2].items():
         if sample[2].get(pos) != label:
             problems.append(f"栏目标签不同：第 {pos[0]} 行第 {pos[1]} 列")
-    for doc_name, (_, _, _, paragraphs) in (("生成", generated), ("样例", sample)):
+    for key, value in generated[4].items():
+        if sample[4][key] != value:
+            problems.append(f"版式参数 {key} 不同：生成 {value}，样例 {sample[4][key]}")
+    for doc_name, (_, _, _, paragraphs, _) in (("生成", generated), ("样例", sample)):
         texts = "\n".join(paragraphs)
         if not paragraphs or not paragraphs[0].startswith(_norm("故障处理报告")):
             problems.append(f"{doc_name}文档首段不是标题")
@@ -75,7 +94,7 @@ def main(argv: list[str]) -> int:
     for line in problems:
         print(f"✗ {line}")
     if not problems:
-        print(f"✓ 版式一致：{ROWS}×{COLS} 表格、合并结构、{len(generated[2])} 个栏目标签、标题与签名栏")
+        print(f"✓ 版式一致：页边距、固定表宽、{ROWS}×{COLS} 表格、合并结构、{len(generated[2])} 个栏目标签、标题与签名栏")
     return 1 if problems else 0
 
 

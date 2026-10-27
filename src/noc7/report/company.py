@@ -80,6 +80,9 @@ LAYOUT: tuple[tuple[int, int, int, int, tuple[str, ...] | str], ...] = (
 )
 ROWS, COLS = 11, 4
 COLUMN_TWIPS = (1444, 1620, 1620, 5069)
+TABLE_TWIPS = sum(COLUMN_TWIPS)  # 9753，与样例 tblW 一致
+# 样例 pgMar：左/上/下 1440、右 1800 twip。
+MARGIN_TWIPS = {"left_margin": 1440, "right_margin": 1800, "top_margin": 1440, "bottom_margin": 1440}
 
 
 @dataclass(frozen=True)
@@ -367,8 +370,8 @@ def write_company_docx(
     doc = Document()
     section = doc.sections[0]
     section.page_width, section.page_height = Emu(7560310), Emu(10692130)  # A4
-    for side in ("left_margin", "right_margin", "top_margin", "bottom_margin"):
-        setattr(section, side, Emu(914400))
+    for side, twips in MARGIN_TWIPS.items():
+        setattr(section, side, Twips(twips))
     section.header_distance, section.footer_distance = Emu(540385), Emu(629920)
     normal = doc.styles["Normal"]
     normal.font.name, normal.font.size = "Times New Roman", Pt(10)
@@ -399,6 +402,11 @@ def write_company_docx(
     table.style = "Table Grid"
     table.alignment = WD_TABLE_ALIGNMENT.CENTER
     _borders(table)
+    # 固定布局 + 显式表宽：否则 Word 按内容自动调整列宽，长串会撑破 11×4 版式。
+    table.autofit = False
+    tbl_w = table._tbl.tblPr.find(qn("w:tblW"))
+    tbl_w.set(qn("w:type"), "dxa")
+    tbl_w.set(qn("w:w"), str(TABLE_TWIPS))
     for i, width in enumerate(COLUMN_TWIPS):
         table.columns[i].width = Twips(width)
         for cell in table.columns[i].cells:
