@@ -67,6 +67,10 @@ function createNocCollector(options = {}) {
       return j;
     } finally { clearTimeout(timer); }
   }
+  const emailIds = record => {
+    const parts = value => Array.isArray(value) ? value.flatMap(parts) : String(value ?? '').split(/[,;\s]+/).filter(Boolean);
+    return [...new Set([...parts(record.emailIds), ...parts(record.emailId)])];
+  };
   const validTotal = v => v !== null && v !== undefined && Number.isInteger(Number(v)) && Number(v) >= 0;
   const q = (path, params) => path+'?'+new URLSearchParams(params);
   async function list(params) {
@@ -122,7 +126,7 @@ function createNocCollector(options = {}) {
     const ids=new Set();
     for(const l of [...logs,...elogs]) {
       for(const f of l.attachments||[])files.push({source:'过程日志',file:clean(f)});
-      for(const id of String(l.emailIds||l.emailId||'').split(/[,;\s]+/).filter(Boolean))ids.add(id);
+      for(const id of emailIds(l))ids.add(id);
     }
     if(ids.size>20)throw new Error('单张预检邮件超过20封，需进一步缩小范围');
     for(const id of ids){const e=(await request(base+'/mailbox/email/findEmailById','POST',{emailId:id})).data;
@@ -190,7 +194,7 @@ function createNocCollector(options = {}) {
         await download(q(esb+'/busfault/download',{attId:f.attId,globalUniqueID:auth.globalUniqueID,fileName:f.attOrigName||'attachment.bin'}),f.attOrigName,{log_index:li});
       }
       const ids=new Set();
-      for(const log of [...out.logs,...out.email_logs])for(const id of String(log.emailIds||log.emailId||'').split(/[,;\s]+/).filter(Boolean))ids.add(id);
+      for(const log of [...out.logs,...out.email_logs])for(const id of emailIds(log))ids.add(id);
       for(const id of ids){
         const e=(await request(base+'/mailbox/email/findEmailById','POST',{emailId:id})).data;
         if(!e || (!e.htmlContent&&!e.textContent))throw new Error('邮件详情为空，不能用摘要替代');
@@ -207,12 +211,7 @@ function createNocCollector(options = {}) {
       out.info=clean((await request(q(base+'/networkFault/getNetworkFaultInfo',{woId:row.orderId}))).data);
       out.logs=clean((await request(q(base+'/networkFault/getNetworkFaultLog',{woId:row.orderId}))).data);
       if(!out.info?.sheetNo||!Array.isArray(out.logs))throw new Error('网络故障详情结构已变化');
-      const nonempty=v=>v!=null && !['','无','[]','{}','null'].includes(String(v).trim());
-      for(const k of ['attId','appendix','appendixFileUrl'])if(nonempty(out.info[k]))
-        throw new Error('网络故障有未核实附件，停止发布');
-      for(const log of out.logs)if(log.hasAttachments||log.hasFeedbackHistory||nonempty(log.emailIds)||
-          nonempty(log.attachments)||nonempty(log.uploadFaultReport)||nonempty(log.allSelectedStorage))
-        throw new Error('网络故障有未核实的附件、反馈详情或邮件，停止发布');
+      throw new Error('网络故障逐条详情及附件读取尚未核实，禁止发布完整包');
     } else if(['bpc','common'].includes(row.dataType)) {
       out.layout='workflow';
       const id=row.flowId;

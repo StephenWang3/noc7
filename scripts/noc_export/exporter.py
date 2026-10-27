@@ -12,6 +12,7 @@ import re
 import secrets
 import signal
 import shlex
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -24,6 +25,7 @@ from noc7.bundle import load_bundle
 HERE = Path(__file__).resolve().parent
 REPO = HERE.parents[1]
 DEFAULT_ROOT = Path.home() / '.noc7' / 'real'
+PACKAGER_VERSION = '3'
 
 
 def private_root(path: Path) -> Path:
@@ -144,7 +146,18 @@ def make_ticket(c: dict) -> dict:
             'fields': fields, 'related_tickets': []}
 
 
-def normalize_logs(c: dict) -> tuple[list, dict]:
+def email_ids(record: dict) -> list[str]:
+    """与浏览器一致：合并两种字段，展开数组，拆分字符串并去重。"""
+    def parts(value):
+        if value is None:
+            return []
+        if isinstance(value, (list, tuple)):
+            return [part for item in value for part in parts(item)]
+        return [part for part in re.split(r'[,;\s]+', str(value)) if part]
+    return list(dict.fromkeys(parts(record.get('emailIds')) + parts(record.get('emailId'))))
+
+
+def normalize_logs(c: dict) -> tuple[list, dict, dict]:
     logs = c['logs']
     if c['layout'] == 'business':
         # 对齐页面的编号过程；邮件/内部记录原本无编号，置于编号过程之后，映射另存。
@@ -155,21 +168,39 @@ def normalize_logs(c: dict) -> tuple[list, dict]:
     else:
         ordered = list(enumerate(logs))
         ordered += [(len(logs)+i, x) for i, x in enumerate(c.get('extra_logs') or [])]
-    entries, indices = [], {}
-    for i, (idx, item) in enumerate(ordered, 1):
-        indices[idx] = i
+    entries, indices, email_indices = [], {}, {}
+    def append_entry(item):
+        seq = len(entries) + 1
         action = item.get('nodeCnName') or item.get('taskName') or item.get('processType') or item.get('actionName') or '追加记录'
         actor = item.get('dealName') or item.get('operatorName') or item.get('createByUserName') or item.get('opPerson')
         ai = bool(re.search(r'AI|数字员工|智能摘要', action + (actor or '')))
         flag = item.get('hasAttachments')
         if flag is not None and not isinstance(flag, bool):
             raise ValueError('附件标志结构已变化')
-        entries.append({'seq': i, 'recorded_at': item.get('dealTime') or item.get('operateTime') or item.get('createTime') or item.get('completedTime'),
+        entries.append({'seq': seq, 'recorded_at': item.get('dealTime') or item.get('operateTime') or item.get('createTime') or item.get('completedTime'),
                         'actor': actor, 'actor_org': item.get('deptName') or item.get('opDeptName'), 'action': action,
                         'content': item.get('remark') or item.get('operateMessage') or item.get('processNote') or item.get('processSuggestion') or '',
-                        'entry_kind': 'ai_summary' if ai else ('email' if item.get('emailIds') else 'human'),
+                        'entry_kind': 'ai_summary' if ai else ('email' if email_ids(item) else 'human'),
                         'attachment_flag': flag, 'attachments': [], 'emails': []})
-    return entries, indices
+        return seq
+    for idx, item in ordered:
+        indices[idx] = append_entry(item)
+    known = [(item, indices[idx]) for idx, item in ordered]
+    def same_record(a, b):
+        if a.get('id') not in (None, '') and b.get('id') not in (None, ''):
+            return str(a['id']) == str(b['id'])
+        # 邮件日志视图可能省略 id、多出邮件头；只在时间及过程原文精确一致时合并。
+        return bool(a.get('dealTime')) and all(a.get(k) == b.get(k) for k in
+            ('dealTime', 'dealName', 'nodeCnName', 'remark')) and set(email_ids(a)) == set(email_ids(b))
+    for idx, item in enumerate(c.get('email_logs') or []):
+        matches = [seq for previous, seq in known if same_record(previous, item)]
+        if len(matches) == 1:
+            seq = matches[0]
+        else:
+            seq = append_entry(item)
+            known.append((item, seq))
+        email_indices[idx] = seq
+    return entries, indices, email_indices
 
 
 def file_kind(name: str, data: bytes) -> tuple[str, str, str]:
@@ -206,13 +237,19 @@ def publish(c: dict, root: Path) -> Path:
     root = private_root(root)
     if c.get('capture_version') != 1 or c.get('kind') != 'ticket' or not c.get('finished_at'):
         raise ValueError('采集未完成，不能发布工单包')
+    if c.get('layout') == 'network':
+        error = '网络故障逐条详情及附件读取尚未核实，禁止发布完整包'
+        dump(root / 'last-failure.json', {'status':'failed', 'error':error, 'partial':c})
+        raise ValueError(error)
     ticket = make_ticket(c)
-    entries, indices = normalize_logs(c)
-    digest = hashlib.sha256(('bundle-v2\n' + str(c['row']['id']) + '\n' + c['captured_at']).encode()).hexdigest()[:20]
+    entries, indices, email_indices = normalize_logs(c)
+    email_to_seqs = {}
+    for source, mapping in ((c['logs'], indices), (c.get('email_logs') or [], email_indices)):
+        for idx, log in enumerate(source):
+            for eid in email_ids(log):
+                email_to_seqs.setdefault(eid, set()).add(mapping[idx])
+    digest = hashlib.sha256((f'bundle-v{PACKAGER_VERSION}\n' + str(c['row']['id']) + '\n' + c['captured_at']).encode()).hexdigest()[:20]
     target = root / ('REAL-' + digest)
-    if target.exists():
-        load_bundle(target)
-        return target
     stage = Path(tempfile.mkdtemp(prefix='.partial-', dir=root))
     materials = []
     def add(path: str, kind: str, data: bytes, mime: str, seq: int | None = None, note: str = '') -> str:
@@ -233,7 +270,7 @@ def publish(c: dict, root: Path) -> Path:
         source_capture = {**c, 'files': [{k: v for k, v in f.items() if k != 'base64'} for f in c.get('files', [])]}
         add('source/capture.json', 'other', json_bytes(source_capture), 'application/json',
             note='只读响应存档；保留未归一化字段、详情、原始日志与邮件头')
-        add('source/log-map.json', 'other', json_bytes({'raw_log_index_to_seq': indices}), 'application/json',
+        add('source/log-map.json', 'other', json_bytes({'raw_log_index_to_seq': indices, 'email_log_index_to_seq': email_indices}), 'application/json',
             note='编号过程沿用页面序号；原无编号的邮件/内部记录置于编号过程后')
         details_to_seq = {}
         for di, d in enumerate(c.get('details', [])):
@@ -253,18 +290,15 @@ def publish(c: dict, root: Path) -> Path:
         for ei, e in enumerate(c.get('emails', [])):
             eid = str(e.get('emailId') or e.get('id') or '')
             header = '\n'.join(k + ': ' + (text(e.get(k)) or '') for k in ('fromAddress', 'recipients', 'ccList', 'subject', 'sendTime', 'receiveTime') if e.get(k) is not None)
-            body = ('<pre>' + html.escape(header) + '</pre>\n' + e['htmlContent']) if e.get('htmlContent') else header + '\n\n' + (e.get('textContent') or '')
-            mid = add(f'emails/{ei+1:03d}.html' if e.get('htmlContent') else f'emails/{ei+1:03d}.txt',
-                      'email_html' if e.get('htmlContent') else 'text',
-                      body.encode(),
-                      'text/html' if e.get('htmlContent') else 'text/plain', note='完整邮件正文；头字段见 source/capture.json')
+            body = '<pre>' + html.escape(header) + '</pre>\n' + (e.get('htmlContent') or
+                '<pre>' + html.escape(e.get('textContent') or '') + '</pre>')
+            seqs = email_to_seqs.get(eid, set())
+            mid = add(f'emails/{ei+1:03d}.html', 'email_html', body.encode(), 'text/html',
+                      min(seqs) if seqs else None, note='完整邮件正文；头字段见 source/capture.json')
             email_materials[eid] = mid
-        for idx, log in enumerate(c['logs']):
-            for eid in re.split(r'[,;\s]+', str(log.get('emailIds') or log.get('emailId') or '')):
-                if eid in email_materials:
-                    mid = email_materials[eid]
-                    if next(m for m in materials if m['id']==mid)['kind'] in ('email_html','email_eml'):
-                        entries[indices[idx]-1]['emails'].append(mid)
+        for eid, mid in email_materials.items():
+            for seq in email_to_seqs.get(eid, ()):
+                entries[seq-1]['emails'].append(mid)
         for fi, f in enumerate(c.get('files', [])):
             data = base64.b64decode(f['base64'], validate=True)
             if not data or len(data) != f['size_bytes']:
@@ -277,9 +311,7 @@ def publish(c: dict, root: Path) -> Path:
                 if 'detail_index' in src and details_to_seq.get(src['detail_index']):
                     seqs.add(details_to_seq[src['detail_index']])
                 if 'email_id' in src:
-                    for idx, log in enumerate(c['logs']):
-                        if src['email_id'] in re.split(r'[,;\s]+', str(log.get('emailIds') or '')):
-                            seqs.add(indices[idx])
+                    seqs.update(email_to_seqs.get(str(src['email_id']), ()))
             mid = add(f'attachments/{fi+1:03d}{suffix}', kind, data, mime,
                       min(seqs) if seqs else None,
                       note=f"源文件名：{f['name']}；详情/邮件索引见 source/capture.json" +
@@ -288,11 +320,17 @@ def publish(c: dict, root: Path) -> Path:
                 entries[seq-1]['attachments'].append(mid)
         add('process_log.json', 'process_log', json_bytes({'entries': entries}), 'application/json')
         manifest = {'bundle_format_version': '1.0', 'bundle_id': target.name, 'data_class': 'real',
-                    'source': {'kind': 'noc_export', 'tool': 'noc7-readonly-export@0.1',
+                    'source': {'kind': 'noc_export', 'tool': f'noc7-readonly-export@{PACKAGER_VERSION}',
                                'note': '本机只读采集；未调用外部模型；完整性及匹配记录见 source/capture.json'},
                     'captured_at': c['finished_at'], 'default_timezone': '+08:00', 'materials': materials}
         dump(stage / 'manifest.json', manifest)
-        load_bundle(stage)
+        staged = load_bundle(stage)
+        if target.exists():
+            existing = load_bundle(target)
+            if existing.manifest != staged.manifest:
+                raise ValueError('已有工单包与本次输出不一致，拒绝静默复用')
+            shutil.rmtree(stage)
+            return target
         os.rename(stage, target)
         return target
     except Exception:

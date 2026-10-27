@@ -107,12 +107,12 @@ def test_network_void_status_and_process_text(tmp_path):
     c.update(layout='network', files=[], emails=[], details=[])
     c['info']={'sheetNo':'FAKE-VOID','sheetStatus':'作废','orgType':'网络中断','faultPhenomenon':'虚构现象'}
     c['logs']=[{'completedTime':'2026-01-01 00:00:00','opPerson':'虚构处理人',
-                'opDeptName':'虚构部门','actionName':'作废','processSuggestion':'虚构作废理由','hasAttachments':False}]
-    b = load_bundle(exporter.publish(c, tmp_path / 'real'))
-    assert b.ticket.ticket_ref == 'FAKE-VOID'
-    assert b.ticket.status.detail_status == '作废'
-    assert b.process_log.entries[0].content == '虚构作废理由'
-    assert b.process_log.entries[0].actor_org == '虚构部门'
+                'opDeptName':'虚构部门','actionName':'作废','processSuggestion':'虚构作废理由','hasAttachments':False,'attachments':None}]
+    with pytest.raises(ValueError, match='逐条详情及附件读取尚未核实'):
+        exporter.accept_capture({'status':'done','result':c}, tmp_path / 'real')
+    assert not list((tmp_path / 'real').glob('REAL-*'))
+    failure = json.loads((tmp_path / 'real/last-failure.json').read_text())
+    assert failure['status'] == 'failed' and failure['partial']['logs'][0]['hasAttachments'] is False
 
 
 def test_nested_output_symlink_cannot_write_to_repo(tmp_path):
@@ -121,3 +121,61 @@ def test_nested_output_symlink_cannot_write_to_repo(tmp_path):
     with pytest.raises(ValueError, match='仓库外'):
         exporter.dump(root / 'discoveries' / 'blocked.real.json', {'fake':'private'})
     assert not (exporter.REPO / 'blocked.real.json').exists()
+
+
+@pytest.mark.parametrize('ids', [{'emailId':'FAKE-MAIL'}, {'emailIds':['FAKE-MAIL']},
+                                  {'emailIds':'FAKE-MAIL; FAKE-MAIL'}])
+@pytest.mark.parametrize('source', ['logs', 'email_logs', 'both'])
+@pytest.mark.parametrize('plain', [False, True])
+def test_mail_and_eml_links_share_normalized_ids_and_provenance(tmp_path, ids, source, plain):
+    c = capture()
+    c['details'] = []
+    record = {**c['logs'][0], 'id':'FAKE-PROCESS'}
+    record.pop('emailIds')
+    record.update(ids)
+    c['logs'] = [record] if source != 'email_logs' else [{'nodeCnName':'建单', 'remark':'虚构建单'}]
+    c['email_logs'] = [dict(record)] if source != 'logs' else []
+    if plain:
+        c['emails'] = [{'emailId':'FAKE-MAIL','textContent':'<script>虚构纯文本</script>'}]
+    data = b'From: fake@example.test\r\nSubject: fake\r\n\r\nbody'
+    c['files'] = [{'name':'fake.eml','base64':base64.b64encode(data).decode(),
+                   'size_bytes':len(data),'sources':[{'email_id':'FAKE-MAIL'}]}]
+    b = load_bundle(exporter.publish(c, tmp_path / 'real'))
+    seq = 2 if source == 'email_logs' else 1
+    assert len(b.process_log.entries) == seq
+    entry = b.process_log.entries[seq-1]
+    assert entry.entry_kind.value == 'email'
+    assert len(entry.emails) == len(entry.attachments) == 1
+    mail = b.manifest.material(entry.emails[0])
+    eml = b.manifest.material(entry.attachments[0])
+    assert mail.kind.value == 'email_html' and eml.kind.value == 'email_eml'
+    assert mail.origin.log_seq == eml.origin.log_seq == seq
+    if plain:
+        assert '&lt;script&gt;' in b.path_of(mail).read_text()
+    mapping = json.loads((b.root / 'source/log-map.json').read_text())
+    assert mapping['raw_log_index_to_seq']['0'] == 1
+    if source != 'logs':
+        assert mapping['email_log_index_to_seq']['0'] == seq
+
+
+def test_mail_id_fields_are_merged_and_duplicate_views_do_not_add_process_rows():
+    assert exporter.email_ids({'emailIds':['A; B', 'A'], 'emailId':'C B'}) == ['A','B','C']
+    c = capture()
+    c['email_logs'] = [{**c['logs'][0], 'fromAddress':'fake@example.test'}]
+    entries, _, mapping = exporter.normalize_logs(c)
+    assert len(entries) == 1 and mapping == {0:1}
+
+
+def test_replay_compares_output_and_packager_version_changes_identity(tmp_path, monkeypatch):
+    c = capture()
+    c['files'] = []
+    original = exporter.publish(c, tmp_path)
+    assert exporter.publish(c, tmp_path) == original
+    c['emails'][0]['htmlContent'] = '<p>修改后的虚构邮件</p>'
+    with pytest.raises(ValueError, match='拒绝静默复用'):
+        exporter.publish(c, tmp_path)
+    assert '修改后' not in (original / 'emails/001.html').read_text()
+    monkeypatch.setattr(exporter, 'PACKAGER_VERSION', 'test-next')
+    newer = exporter.publish(c, tmp_path)
+    assert newer != original
+    assert '修改后' in (newer / 'emails/001.html').read_text()
