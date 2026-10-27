@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="zh-CN">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>{{ result.ticket_ref }} · {{ title }}</title><link rel="stylesheet" href="report.css"></head>
+<body><main>
+<header><p class="eyebrow">NOC · 故障七要素</p><h1>{{ title }}</h1><p>{{ result.ticket_ref }} · 报告版本 {{ template_version }} · 待人工审核</p>
+{% if result.data_class == 'synthetic' %}<p class="notice">合成演示数据，不代表真实工单或真实模型质量。</p>{% endif %}
+<dl><dt>生成时间</dt><dd>{{ generated }}</dd><dt>数据截止</dt><dd>{{ result.data_cutoff }}</dd><dt>分析来源</dt><dd>{{ result.run.provider }} · 规则 {{ result.run.rules_version }}</dd><dt>输入快照</dt><dd><code>{{ result.run.bundle_sha256 }}</code></dd></dl></header>
+<section><h2>事件概述</h2><p>{{ result.elements.phenomenon.value or '未提供足够的现象材料。' }}</p><p>最终历时：{% if duration is not none %}{{ '%g'|format(duration) }} 分钟（有确认依据的起止时间差）{% else %}暂不计算（恢复未知、未核实、时间冲突或工单已撤销）{% endif %}</p></section>
+<section><h2>七要素与候选</h2>
+{% for row in rows %}<article id="element-{{ row.name }}"><h3>{{ row.label }} <span class="status">{{ row.el.status|status }}</span></h3><p>{{ row.value }}</p>
+{% if row.el.note %}<p class="muted">{{ row.el.note }}</p>{% endif %}
+<p class="refs">依据：{% for ref in row.el.evidence_refs %}<a href="#e-{{ ref }}">{{ ref }}</a> {% else %}未提供{% endfor %}</p>
+{% if row.candidates %}<details><summary>查看 {{ row.candidates|length }} 个候选/观测</summary><ul>{% for c in row.candidates %}<li><b>{{ c.id }} · {{ c.source }}</b> <code>{{ c.kind }}</code><p>{{ c.text }}</p>{% if c.note %}<p>{{ c.note }}</p>{% endif %}{% for ref in c.refs %}<a href="#e-{{ ref }}">{{ ref }}</a> {% endfor %}</li>{% endfor %}</ul></details>{% endif %}
+</article>{% endfor %}</section>
+<section><h2>关键处理时间线</h2><ol class="timeline">{% for event in result.events %}<li><p><b>{{ event.time|time_text }}</b> · {{ event.event_kind|step }} · {{ event.attribution|source }}{% if event.actor %} · {{ event.actor }}{% endif %}</p><p>{{ event.action }}</p>{% if event.duplicate_of %}<p>重复记录，原事件：{{ event.duplicate_of }}</p>{% endif %}<p>{% for ref in event.evidence_refs %}<a href="#e-{{ ref }}">{{ ref }}</a> {% endfor %}</p></li>{% else %}<li>未提供处理记录。</li>{% endfor %}</ol></section>
+<section><h2>恢复与验证情况</h2><p>{{ rows[1].value }}</p><p>{{ result.elements.end_time.status|status }}；系统记录、告警清除、客户确认和同意结单保留各自语义。</p></section>
+<section><h2>未决事项与待核实清单</h2><ul>{% for i in result.issues %}<li><b>{{ i.severity }} · {{ i.code }}</b>：{{ i.message }}{% if i.resolved %}（已处理：{{ i.resolution_note }}）{% else %}（待核实）{% endif %} {% for ref in i.evidence_refs %}<a href="#e-{{ ref }}">{{ ref }}</a> {% endfor %}</li>{% else %}<li>规则未发现问题，仍需人工审核。</li>{% endfor %}</ul></section>
+<section><h2>服务身份与关联单</h2>{% if result.service_identity %}<p>{{ result.service_identity.status }} · {{ result.service_identity.note or '' }}</p><ul>{% for ident in result.service_identity.identifiers %}<li>{{ ident.role }}：{{ ident.value }} {% for ref in ident.evidence_refs %}<a href="#e-{{ ref }}">{{ ref }}</a> {% endfor %}</li>{% endfor %}</ul>{% endif %}<ul>{% for t in result.related_tickets %}<li>{{ t.ticket_ref }} · {{ t.relation }} · {{ t.status or '状态未知' }} · {{ t.note or '' }}</li>{% else %}<li>没有登记关联单。</li>{% endfor %}</ul></section>
+<section><h2>材料完整性</h2><table><thead><tr><th>材料</th><th>文件</th><th>解析状态</th><th>说明</th></tr></thead><tbody>{% for m in result.materials %}<tr><td>{{ m.id }}</td><td>{{ m.path }}</td><td>{{ m.parse_status|parse }}</td><td>{{ m.parse_note or '' }}</td></tr>{% endfor %}</tbody></table></section>
+<section><h2>内部证据索引</h2>{% for s in result.evidence %}<article id="e-{{ s.id }}"><h3>{{ s.id }} <span class="status">{{ s.role|role }}</span></h3><p class="muted">{{ s.locator.model_dump_json(exclude_none=True) }} · {{ s.extractor }}</p><pre>{{ s.text }}</pre>{% if s.reading %}<pre>{{ s.reading.model_dump_json(indent=2) }}</pre>{% endif %}{% if s.derived_from %}<p>来源关系：{% for ref in s.derived_from %}<a href="#e-{{ ref }}">{{ ref }}</a> {% endfor %}</p>{% endif %}</article>{% endfor %}</section>
+<section><h2>审核记录</h2><ul>{% for row in rows %}<li>{{ row.label }}：{% if row.el.review %}{{ row.el.review.reviewer }} · {{ row.el.review.reviewed_at }} · {{ row.el.review.action }} · {{ row.el.review.reason or '' }}{% else %}尚未人工审核{% endif %}</li>{% endfor %}</ul><p>本报告为草稿，不表示已批准结案。</p></section>
+</main></body></html>
