@@ -27,16 +27,19 @@ uv run noc7 bundle validate              # 校验 fixtures/bundles/ 下全部工
 uv run noc7 gold check                   # 检查 evals/gold/ 下的标准答案与工单包是否对得上
 uv run noc7 schema check                 # 检查 schemas/ 是否与代码一致
 uv run noc7 schema export                # 代码改动后重新导出 JSON Schema
-uv run noc7 analyze                      # 分析全部合成包，生成 JSON/Markdown/HTML
+uv run noc7 analyze                      # 分析全部合成包，生成 JSON、审核报告（Markdown/HTML）和公司格式报告（Word/HTML 预览）
 uv run noc7 analyze --save-replay        # 同时录制离线回放快照
 uv run noc7 analyze --provider replay --replay var/reports --out var/replayed
 uv run noc7 local-batch ~/.noc7/real --out ~/.noc7/integration-next --expected-count 15  # 仓库外新批次
 uv run python scripts/check_integration.py  # 默认全链路对照合成 gold，有差异则退出 1
+uv run python scripts/check_company_report.py <生成的.docx> <本机样例.docx>  # 只比版式，不打印内容
 uv run noc7 bundle rehash <工单包目录>    # 编写合成样本时重算清单里的哈希
 uv run --group fixtures python scripts/make_fixture_assets.py   # 重新生成合成附件（PNG/PDF/DOCX）
 uv run python -m noc7.parsers.attachments fixtures/bundles/SYN-S10 --out var/a2/s10.json  # 独立解析附件
 uv run python scripts/check_a2.py          # 复现合成附件验收，不调用外部模型
 ```
+
+公司格式报告的页眉（公司名、logo）只从仓库外的 `~/.noc7/report_profile/profile.json` 读取（`{"company_name": "…", "logo": "logo.png"}`，可用 `NOC7_REPORT_PROFILE` 改目录），未配置时页眉留空；取值与待核实规则见 [ADR 0007](docs/decisions/0007-company-report-format.md)。
 
 合并后的全量测试、本机 15 张真实工单统计和待核实项见 [联调问题清单](docs/INTEGRATION_ISSUES.md)。真实报告仅在本机，不进仓库；测试通过与语义提取正确分别陈述。
 
@@ -51,7 +54,7 @@ src/noc7/
   extract/       文本事件、七要素抽取与分析流水线
   fuse/          精确重复与衍生来源链接
   rules/         证据引用校验、时间/恢复/原因/身份等业务规则
-  report/        Markdown/HTML 模板与独立样式
+  report/        审核报告 Markdown/HTML 模板、公司格式故障报告（company.py，Word/HTML）与独立样式
   providers/     模型/OCR 提供方；gate.py 是数据外发闸门
   goldcheck.py   标准答案检查
   cli.py         命令行入口 noc7
