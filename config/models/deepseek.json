@@ -1,0 +1,16 @@
+{
+  "name": "deepseek",
+  "base_url": "https://api.deepseek.com",
+  "model": "deepseek-flash",
+  "api_key_env": "DEEPSEEK_API_KEY",
+  "external": true,
+  "allowed_data": ["synthetic", "real"],
+  "approval_ref": "docs/decisions/llm-text-providers.md",
+  "json_mode": true,
+  "thinking_mode": "enabled",
+  "max_request_bytes": 524288,
+  "max_tokens": 32768,
+  "max_response_bytes": 4194304,
+  "timeout_seconds": 90,
+  "max_retries": 2
+}

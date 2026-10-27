@@ -119,6 +119,8 @@ def cmd_gold_check(args: argparse.Namespace) -> int:
 
 
 def cmd_analyze(args: argparse.Namespace) -> int:
+    from .extract.storage import ensure_output_allowed
+    from .providers.text_config import create_text_provider
     from .extract.pipeline import analyze_with_context
     from .providers.text_replay import ReplayProvider, save_replay
     from .report import write_reports
@@ -127,6 +129,22 @@ def cmd_analyze(args: argparse.Namespace) -> int:
     if args.provider == "replay" and args.replay is None:
         print("replay 提供方必须指定 --replay。", file=sys.stderr)
         return 2
+    if args.model_config is not None and args.provider != "llm":
+        print("--model-config 必须配合 --provider llm 使用。", file=sys.stderr)
+        return 2
+    llm = None
+    if args.provider == "llm":
+        if args.model_config is None or args.replay is not None:
+            print("llm 必须指定 --model-config，且不能同时指定 --replay。", file=sys.stderr)
+            return 2
+        if args.out.exists():
+            print("模型输出目录已存在，请指定新目录，避免旧报告冒充本次结果。", file=sys.stderr)
+            return 2
+        try:
+            llm = create_text_provider(args.model_config)
+        except ValueError as e:
+            print(str(e), file=sys.stderr)
+            return 2
     try:
         directories = _bundle_dirs(args.paths)
     except OSError as e:
@@ -153,12 +171,20 @@ def cmd_analyze(args: argparse.Namespace) -> int:
             replay = args.replay
             if replay is not None and replay.is_dir():
                 replay = replay / directory.name / "replay.json"
-            provider = ReplayProvider(replay) if args.provider == "replay" else None
-            result, ctx, extraction = analyze_with_context(directory, provider)
+            provider = ReplayProvider(replay) if args.provider == "replay" else llm
             target = args.out / directory.name
+            if llm is not None:
+                bundle = load_bundle(directory)
+                ensure_output_allowed(bundle.manifest.data_class, target)
+                llm.preflight(bundle.manifest.data_class)
+                args.out.mkdir(parents=True, mode=0o700, exist_ok=True)
+                target.mkdir(mode=0o700)
+            result, ctx, extraction = analyze_with_context(directory, provider)
             write_reports(result, target, report_type=args.report_type)
             if args.save_replay:
                 save_replay(target / "replay.json", ctx, extraction)
+                if llm is not None:
+                    (target / "replay.json").chmod(0o600)
             incomplete = sum(m.parse_status != "parsed" for m in result.materials)
             print(
                 f"✓ {directory.name}：{len(result.evidence)} 段证据，{len(result.issues)} 项提示，{incomplete} 份材料未完整解析 → {target}"
@@ -219,7 +245,8 @@ def build_parser() -> argparse.ArgumentParser:
     p = sub.add_parser("analyze", help="分析工单包并生成 JSON、Markdown、HTML 报告")
     p.add_argument("paths", nargs="*", type=Path, help="工单包或包含多个工单包的目录")
     p.add_argument("--out", type=Path, default=Path("var/reports"))
-    p.add_argument("--provider", choices=("rules", "replay"), default="rules")
+    p.add_argument("--provider", choices=("rules", "replay", "llm"), default="rules")
+    p.add_argument("--model-config", type=Path, help="统一文本模型的 JSON 配置文件")
     p.add_argument(
         "--replay",
         type=Path,

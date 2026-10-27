@@ -1,0 +1,16 @@
+{
+  "name": "qwen",
+  "base_url": null,
+  "model": null,
+  "api_key_env": null,
+  "external": false,
+  "allowed_data": ["synthetic", "real"],
+  "approval_ref": null,
+  "json_mode": false,
+  "thinking_mode": null,
+  "max_request_bytes": null,
+  "max_tokens": null,
+  "max_response_bytes": 4194304,
+  "timeout_seconds": 90,
+  "max_retries": 2
+}

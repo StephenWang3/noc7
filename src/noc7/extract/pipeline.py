@@ -92,6 +92,7 @@ def analyze_with_context(path, provider=None, *, registry=None):
             pipeline_version="integration.1.0",
             schema_version="1.0",
             provider=provider.name,
+            prompt_version=getattr(provider, "prompt_version", None),
             rules_version=VERSION,
             bundle_sha256=b.manifest_sha256,
             started_at=started,
