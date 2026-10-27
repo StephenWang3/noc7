@@ -1,0 +1,13 @@
+{% macro lines(cell) %}{% for line in cell.lines %}<p>{% for part in line %}{% if part.pending %}<mark>{{ part.text }}</mark>{% else %}{{ part.text }}{% endif %}{% endfor %}</p>{% endfor %}{% endmacro %}<!doctype html>
+<html lang="zh-CN">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>{{ report.ticket_ref }} · {{ title }}</title><link rel="stylesheet" href="report.css"></head>
+<body><main class="company">
+<header class="company-header">{% if company_name %}<p>{{ company_name }}</p>{% endif %}</header>
+<h1>{{ title }}</h1>
+{% if report.synthetic %}<p class="notice">{{ synthetic_notice }}</p>{% endif %}
+<p class="company-date">{{ report.report_date }}</p>
+<table class="company-table"><colgroup><col class="c0"><col class="c1"><col class="c2"><col class="c3"></colgroup><tbody>
+{% for row in rows %}<tr>{% for cell in row %}{% if cell.label %}<th{% if cell.rowspan > 1 %} rowspan="{{ cell.rowspan }}"{% endif %}{% if cell.colspan > 1 %} colspan="{{ cell.colspan }}"{% endif %}{% if cell.col == 0 %} class="group"{% endif %}>{{ lines(cell) }}</th>{% else %}<td{% if cell.rowspan > 1 %} rowspan="{{ cell.rowspan }}"{% endif %}{% if cell.colspan > 1 %} colspan="{{ cell.colspan }}"{% endif %}>{{ lines(cell) }}</td>{% endif %}{% endfor %}</tr>
+{% endfor %}</tbody></table>
+<footer class="company-signatures">{% for label in signatures %}<p>{{ label }}</p>{% endfor %}<p class="muted">公司格式模板 {{ template_version }}；系统生成草稿，标记处待人工核实，证据与候选见 <a href="report.html">审核报告</a>。</p></footer>
+</main></body></html>
