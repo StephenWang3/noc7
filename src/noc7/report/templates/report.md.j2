@@ -1,0 +1,74 @@
+# {{ result.ticket_ref|md }} · {{ title|md }}
+
+{% if result.data_class == 'synthetic' %}> 合成演示数据，不代表真实工单或真实模型质量。
+{% endif %}
+报告版本：{{ template_version|md }}；待人工审核。生成：{{ generated|md }}；数据截止：{{ result.data_cutoff|md }}。
+
+分析来源：{{ result.run.provider|md }}；规则 {{ result.run.rules_version|md }}；输入快照：{{ result.run.bundle_sha256|md }}。
+
+## 事件概述
+
+{{ (result.elements.phenomenon.value or '未提供足够的现象材料。')|md }}
+
+最终历时：{% if duration is not none %}{{ '%g'|format(duration) }} 分钟（有确认依据的起止时间差）{% else %}暂不计算（恢复未知、未核实、时间冲突或工单已撤销）{% endif %}。
+
+## 七要素
+
+| 要素 | 状态 | 结论 | 证据 |
+| --- | --- | --- | --- |
+{% for row in rows %}| {{ row.label|md }} | {{ row.el.status|status }} | {{ row.value|md }} | {{ row.el.evidence_refs|join('、')|md }} |
+{% endfor %}
+{% for row in rows %}
+### {{ row.label|md }}：候选与观测
+
+{% if row.el.note %}{{ row.el.note|md }}
+{% endif %}
+{% for c in row.candidates %}- {{ c.id|md }} / {{ c.kind|md }} / {{ c.source|md }}：{{ c.text|md }}（{{ c.refs|join('、')|md }}）{% if c.note %}；{{ c.note|md }}{% endif %}
+{% else %}- 没有可用候选。
+{% endfor %}
+{% endfor %}
+## 关键处理时间线
+
+{% for event in result.events %}- {{ event.time|time_text|md }} / {{ event.event_kind|step }} / {{ event.attribution|source }} / {{ (event.actor or '')|md }}：{{ event.action|md }}（{{ event.evidence_refs|join('、')|md }}）{% if event.duplicate_of %}；重复自 {{ event.duplicate_of|md }}{% endif %}
+{% else %}- 未提供处理记录。
+{% endfor %}
+## 恢复与验证情况
+
+{{ rows[1].value|md }}；{{ result.elements.end_time.status|status }}。系统记录、告警清除、客户确认和同意结单保留各自语义。
+
+## 未决事项与待核实清单
+
+{% for i in result.issues %}- {{ i.severity|md }} / {{ i.code|md }}：{{ i.message|md }}（{{ i.evidence_refs|join('、')|md }}）；{% if i.resolved %}已处理：{{ (i.resolution_note or '')|md }}{% else %}待核实{% endif %}。
+{% else %}- 规则未发现问题，仍需人工审核。
+{% endfor %}
+## 服务身份与关联单
+
+{% if result.service_identity %}{{ result.service_identity.status|md }}：{{ (result.service_identity.note or '')|md }}
+
+{% for ident in result.service_identity.identifiers %}- {{ ident.role|md }}：{{ ident.value|md }}（{{ ident.evidence_refs|join('、')|md }}）
+{% endfor %}{% endif %}
+{% for t in result.related_tickets %}- {{ t.ticket_ref|md }} / {{ t.relation|md }} / {{ (t.status or '状态未知')|md }}：{{ (t.note or '')|md }}
+{% else %}- 没有登记关联单。
+{% endfor %}
+## 材料完整性
+
+| 材料 | 文件 | 状态 | 说明 |
+| --- | --- | --- | --- |
+{% for m in result.materials %}| {{ m.id|md }} | {{ m.path|md }} | {{ m.parse_status|parse }} | {{ (m.parse_note or '')|md }} |
+{% endfor %}
+## 内部证据索引
+
+{% for s in result.evidence %}### {{ s.id|md }} · {{ s.role|role }}
+
+定位：{{ s.locator.model_dump_json(exclude_none=True)|md }}；{{ s.extractor|md }}。
+
+> {{ s.text|md }}
+
+{% if s.reading %}结构化读数：{{ s.reading.model_dump_json()|md }}
+{% endif %}{% if s.derived_from %}来源关系：{{ s.derived_from|join('、')|md }}
+{% endif %}{% endfor %}
+## 审核记录
+
+{% for row in rows %}- {{ row.label|md }}：{% if row.el.review %}{{ row.el.review.reviewer|md }} / {{ row.el.review.reviewed_at|md }} / {{ row.el.review.action|md }} / {{ (row.el.review.reason or '')|md }}{% else %}尚未人工审核{% endif %}。
+{% endfor %}
+本报告为草稿，不表示已批准结案。

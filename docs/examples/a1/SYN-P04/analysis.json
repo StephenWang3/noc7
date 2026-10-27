@@ -1,0 +1,1467 @@
+{
+  "schema_version": "1.0",
+  "bundle_id": "SYN-P04",
+  "ticket_ref": "SYN-P04",
+  "data_class": "synthetic",
+  "data_cutoff": "2026-10-11T11:30:00+08:00",
+  "materials": [
+    {
+      "id": "M01",
+      "kind": "ticket_fields",
+      "path": "ticket.json",
+      "sha256": "0a717965eaf92963f61f6bd86f6048767a8ae1debde6357545110a1cb5a400f9",
+      "size_bytes": 1589,
+      "media_type": "application/json",
+      "origin": null,
+      "derived": false,
+      "derived_from": [],
+      "description": null,
+      "parse_status": "parsed",
+      "subtype": null,
+      "parser": "a1.ticket_fields@1.0",
+      "parse_note": null
+    },
+    {
+      "id": "M02",
+      "kind": "process_log",
+      "path": "process_log.json",
+      "sha256": "30b1e43d67fae373c9a09ab7193f051d519394c7c7b08b1d2bbfe412e997c669",
+      "size_bytes": 3150,
+      "media_type": "application/json",
+      "origin": null,
+      "derived": false,
+      "derived_from": [],
+      "description": null,
+      "parse_status": "parsed",
+      "subtype": null,
+      "parser": "a1.process_log@1.0",
+      "parse_note": null
+    },
+    {
+      "id": "M03",
+      "kind": "pdf",
+      "path": "attachments/M03-repair-report.pdf",
+      "sha256": "0c9ff39c76325450d5c57c03ff0104e6bce3069a7f82429bdb200712fc10bae7",
+      "size_bytes": 4821,
+      "media_type": "application/pdf",
+      "origin": {
+        "log_seq": 9,
+        "note": null
+      },
+      "derived": false,
+      "derived_from": [],
+      "description": "现场抢修报告",
+      "parse_status": "unsupported",
+      "subtype": null,
+      "parser": "a0.unsupported@0.1",
+      "parse_note": null
+    }
+  ],
+  "evidence": [
+    {
+      "id": "M01/f:ticket_no",
+      "material_id": "M01",
+      "locator": {
+        "char_start": null,
+        "char_end": null,
+        "type": "field",
+        "field_key": "ticket_no"
+      },
+      "text": "SYN-P04",
+      "role": "original",
+      "extractor": "a1.ticket_fields@1.0",
+      "quality": null,
+      "needs_review": false,
+      "derived_from": [],
+      "reading": null,
+      "language": null
+    },
+    {
+      "id": "M01/f:customer",
+      "material_id": "M01",
+      "locator": {
+        "char_start": null,
+        "char_end": null,
+        "type": "field",
+        "field_key": "customer"
+      },
+      "text": "示例客户壬（合成）",
+      "role": "original",
+      "extractor": "a1.ticket_fields@1.0",
+      "quality": null,
+      "needs_review": false,
+      "derived_from": [],
+      "reading": null,
+      "language": null
+    },
+    {
+      "id": "M01/f:circuit_id",
+      "material_id": "M01",
+      "locator": {
+        "char_start": null,
+        "char_end": null,
+        "type": "field",
+        "field_key": "circuit_id"
+      },
+      "text": "SYN-CKT-1024",
+      "role": "original",
+      "extractor": "a1.ticket_fields@1.0",
+      "quality": null,
+      "needs_review": false,
+      "derived_from": [],
+      "reading": null,
+      "language": null
+    },
+    {
+      "id": "M01/f:created_at",
+      "material_id": "M01",
+      "locator": {
+        "char_start": null,
+        "char_end": null,
+        "type": "field",
+        "field_key": "created_at"
+      },
+      "text": "2026-10-10 15:50:08",
+      "role": "original",
+      "extractor": "a1.ticket_fields@1.0",
+      "quality": null,
+      "needs_review": false,
+      "derived_from": [],
+      "reading": null,
+      "language": null
+    },
+    {
+      "id": "M01/f:fault_type",
+      "material_id": "M01",
+      "locator": {
+        "char_start": null,
+        "char_end": null,
+        "type": "field",
+        "field_key": "fault_type"
+      },
+      "text": "业务中断",
+      "role": "original",
+      "extractor": "a1.ticket_fields@1.0",
+      "quality": null,
+      "needs_review": false,
+      "derived_from": [],
+      "reading": null,
+      "language": null
+    },
+    {
+      "id": "M01/f:occurred_at",
+      "material_id": "M01",
+      "locator": {
+        "char_start": null,
+        "char_end": null,
+        "type": "field",
+        "field_key": "occurred_at"
+      },
+      "text": "2026-10-10 15:42:00",
+      "role": "original",
+      "extractor": "a1.ticket_fields@1.0",
+      "quality": null,
+      "needs_review": false,
+      "derived_from": [],
+      "reading": null,
+      "language": null
+    },
+    {
+      "id": "M01/f:recovered_at",
+      "material_id": "M01",
+      "locator": {
+        "char_start": null,
+        "char_end": null,
+        "type": "field",
+        "field_key": "recovered_at"
+      },
+      "text": "2026-10-10 19:08:00",
+      "role": "original",
+      "extractor": "a1.ticket_fields@1.0",
+      "quality": null,
+      "needs_review": false,
+      "derived_from": [],
+      "reading": null,
+      "language": null
+    },
+    {
+      "id": "M01/f:duration_returned",
+      "material_id": "M01",
+      "locator": {
+        "char_start": null,
+        "char_end": null,
+        "type": "field",
+        "field_key": "duration_returned"
+      },
+      "text": "206分钟",
+      "role": "original",
+      "extractor": "a1.ticket_fields@1.0",
+      "quality": null,
+      "needs_review": false,
+      "derived_from": [],
+      "reading": null,
+      "language": null
+    },
+    {
+      "id": "M01/f:description",
+      "material_id": "M01",
+      "locator": {
+        "char_start": null,
+        "char_end": null,
+        "type": "field",
+        "field_key": "description"
+      },
+      "text": "客户报专线 SYN-CKT-1024 业务中断。",
+      "role": "original",
+      "extractor": "a1.ticket_fields@1.0",
+      "quality": null,
+      "needs_review": false,
+      "derived_from": [],
+      "reading": null,
+      "language": null
+    },
+    {
+      "id": "M01/f:cause",
+      "material_id": "M01",
+      "locator": {
+        "char_start": null,
+        "char_end": null,
+        "type": "field",
+        "field_key": "cause"
+      },
+      "text": "市政道路施工挖断 24 芯光缆，已熔接恢复。",
+      "role": "original",
+      "extractor": "a1.ticket_fields@1.0",
+      "quality": null,
+      "needs_review": false,
+      "derived_from": [],
+      "reading": null,
+      "language": null
+    },
+    {
+      "id": "M01/f:responsible_party",
+      "material_id": "M01",
+      "locator": {
+        "char_start": null,
+        "char_end": null,
+        "type": "field",
+        "field_key": "responsible_party"
+      },
+      "text": "第三方施工单位：示例建设公司（合成）",
+      "role": "original",
+      "extractor": "a1.ticket_fields@1.0",
+      "quality": null,
+      "needs_review": false,
+      "derived_from": [],
+      "reading": null,
+      "language": null
+    },
+    {
+      "id": "M02/log:1",
+      "material_id": "M02",
+      "locator": {
+        "char_start": null,
+        "char_end": null,
+        "type": "log_entry",
+        "seq": 1
+      },
+      "text": "客户来电报障建单。",
+      "role": "original",
+      "extractor": "a1.process_log@1.0",
+      "quality": null,
+      "needs_review": false,
+      "derived_from": [],
+      "reading": null,
+      "language": null
+    },
+    {
+      "id": "M02/log:2",
+      "material_id": "M02",
+      "locator": {
+        "char_start": null,
+        "char_end": null,
+        "type": "log_entry",
+        "seq": 2
+      },
+      "text": "已受理。",
+      "role": "original",
+      "extractor": "a1.process_log@1.0",
+      "quality": null,
+      "needs_review": false,
+      "derived_from": [],
+      "reading": null,
+      "language": null
+    },
+    {
+      "id": "M02/log:3",
+      "material_id": "M02",
+      "locator": {
+        "char_start": null,
+        "char_end": null,
+        "type": "log_entry",
+        "seq": 3
+      },
+      "text": "查告警：15:42 起 SYN-CKT-1024 所在光缆段 R_LOS；OTDR 测试显示断点距 A 端局站约 3.2 km。",
+      "role": "original",
+      "extractor": "a1.process_log@1.0",
+      "quality": null,
+      "needs_review": false,
+      "derived_from": [],
+      "reading": null,
+      "language": null
+    },
+    {
+      "id": "M02/log:4",
+      "material_id": "M02",
+      "locator": {
+        "char_start": null,
+        "char_end": null,
+        "type": "log_entry",
+        "seq": 4
+      },
+      "text": "派线路维护部现场抢修。",
+      "role": "original",
+      "extractor": "a1.process_log@1.0",
+      "quality": null,
+      "needs_review": false,
+      "derived_from": [],
+      "reading": null,
+      "language": null
+    },
+    {
+      "id": "M02/log:5",
+      "material_id": "M02",
+      "locator": {
+        "char_start": null,
+        "char_end": null,
+        "type": "log_entry",
+        "seq": 5
+      },
+      "text": "现场确认：示例路与示例大道交叉口人井 SYN-MH-0102 东侧约 15 m 处，市政道路施工挖断 24 芯光缆，施工时间约 15:40。开始抢修。",
+      "role": "original",
+      "extractor": "a1.process_log@1.0",
+      "quality": null,
+      "needs_review": false,
+      "derived_from": [],
+      "reading": null,
+      "language": null
+    },
+    {
+      "id": "M02/log:6",
+      "material_id": "M02",
+      "locator": {
+        "char_start": null,
+        "char_end": null,
+        "type": "log_entry",
+        "seq": 6
+      },
+      "text": "18:55 熔接完成。",
+      "role": "original",
+      "extractor": "a1.process_log@1.0",
+      "quality": null,
+      "needs_review": false,
+      "derived_from": [],
+      "reading": null,
+      "language": null
+    },
+    {
+      "id": "M02/log:7",
+      "material_id": "M02",
+      "locator": {
+        "char_start": null,
+        "char_end": null,
+        "type": "log_entry",
+        "seq": 7
+      },
+      "text": "19:08 告警清除，业务恢复；19:15 客户电话确认业务正常。",
+      "role": "original",
+      "extractor": "a1.process_log@1.0",
+      "quality": null,
+      "needs_review": false,
+      "derived_from": [],
+      "reading": null,
+      "language": null
+    },
+    {
+      "id": "M02/log:8",
+      "material_id": "M02",
+      "locator": {
+        "char_start": null,
+        "char_end": null,
+        "type": "log_entry",
+        "seq": 8
+      },
+      "text": "返单。",
+      "role": "original",
+      "extractor": "a1.process_log@1.0",
+      "quality": null,
+      "needs_review": false,
+      "derived_from": [],
+      "reading": null,
+      "language": null
+    },
+    {
+      "id": "M02/log:9",
+      "material_id": "M02",
+      "locator": {
+        "char_start": null,
+        "char_end": null,
+        "type": "log_entry",
+        "seq": 9
+      },
+      "text": "上传现场抢修报告（PDF）。",
+      "role": "original",
+      "extractor": "a1.process_log@1.0",
+      "quality": null,
+      "needs_review": false,
+      "derived_from": [],
+      "reading": null,
+      "language": null
+    },
+    {
+      "id": "M02/log:10",
+      "material_id": "M02",
+      "locator": {
+        "char_start": null,
+        "char_end": null,
+        "type": "log_entry",
+        "seq": 10
+      },
+      "text": "责任认定：本次中断由第三方施工单位示例建设公司（合成）未按管线交底施工造成，责任方为该施工单位，已启动索赔。",
+      "role": "original",
+      "extractor": "a1.process_log@1.0",
+      "quality": null,
+      "needs_review": false,
+      "derived_from": [],
+      "reading": null,
+      "language": null
+    },
+    {
+      "id": "M02/log:11",
+      "material_id": "M02",
+      "locator": {
+        "char_start": null,
+        "char_end": null,
+        "type": "log_entry",
+        "seq": 11
+      },
+      "text": "结单。",
+      "role": "original",
+      "extractor": "a1.process_log@1.0",
+      "quality": null,
+      "needs_review": false,
+      "derived_from": [],
+      "reading": null,
+      "language": null
+    }
+  ],
+  "events": [
+    {
+      "id": "EV1",
+      "time": {
+        "raw": "2026-10-10 15:50:08",
+        "iso": "2026-10-10T15:50:08+08:00",
+        "tz_source": "assumed",
+        "utc_offset": "+08:00",
+        "precision": "second",
+        "placeholder": false
+      },
+      "time_kind": "record_time",
+      "actor": "系统",
+      "attribution": "customer",
+      "action": "客户来电报障建单。",
+      "target": null,
+      "result": null,
+      "scope": null,
+      "event_kind": "workflow",
+      "evidence_refs": [
+        "M02/log:1"
+      ],
+      "duplicate_of": null
+    },
+    {
+      "id": "EV2",
+      "time": {
+        "raw": "2026-10-10 15:52:30",
+        "iso": "2026-10-10T15:52:30+08:00",
+        "tz_source": "assumed",
+        "utc_offset": "+08:00",
+        "precision": "second",
+        "placeholder": false
+      },
+      "time_kind": "record_time",
+      "actor": "值班员AF",
+      "attribution": "noc_check",
+      "action": "已受理。",
+      "target": null,
+      "result": null,
+      "scope": null,
+      "event_kind": "workflow",
+      "evidence_refs": [
+        "M02/log:2"
+      ],
+      "duplicate_of": null
+    },
+    {
+      "id": "EV3",
+      "time": {
+        "raw": "2026-10-10 15:58:14",
+        "iso": "2026-10-10T15:58:14+08:00",
+        "tz_source": "assumed",
+        "utc_offset": "+08:00",
+        "precision": "second",
+        "placeholder": false
+      },
+      "time_kind": "record_time",
+      "actor": "值班员AF",
+      "attribution": "noc_check",
+      "action": "查告警：15:42 起 SYN-CKT-1024 所在光缆段 R_LOS；OTDR 测试显示断点距 A 端局站约 3.2 km。",
+      "target": null,
+      "result": null,
+      "scope": null,
+      "event_kind": "check_result",
+      "evidence_refs": [
+        "M02/log:3"
+      ],
+      "duplicate_of": null
+    },
+    {
+      "id": "EV4",
+      "time": {
+        "raw": "2026-10-10 16:05:40",
+        "iso": "2026-10-10T16:05:40+08:00",
+        "tz_source": "assumed",
+        "utc_offset": "+08:00",
+        "precision": "second",
+        "placeholder": false
+      },
+      "time_kind": "record_time",
+      "actor": "值班员AF",
+      "attribution": "noc_check",
+      "action": "派线路维护部现场抢修。",
+      "target": null,
+      "result": null,
+      "scope": null,
+      "event_kind": "technical_action",
+      "evidence_refs": [
+        "M02/log:4"
+      ],
+      "duplicate_of": null
+    },
+    {
+      "id": "EV5",
+      "time": {
+        "raw": "2026-10-10 16:48:22",
+        "iso": "2026-10-10T16:48:22+08:00",
+        "tz_source": "assumed",
+        "utc_offset": "+08:00",
+        "precision": "second",
+        "placeholder": false
+      },
+      "time_kind": "record_time",
+      "actor": "线路工程师AG",
+      "attribution": "field_engineer",
+      "action": "现场确认：示例路与示例大道交叉口人井 SYN-MH-0102 东侧约 15 m 处，市政道路施工挖断 24 芯光缆，施工时间约 15:40。开始抢修。",
+      "target": null,
+      "result": null,
+      "scope": null,
+      "event_kind": "technical_action",
+      "evidence_refs": [
+        "M02/log:5"
+      ],
+      "duplicate_of": null
+    },
+    {
+      "id": "EV6",
+      "time": {
+        "raw": "2026-10-10 18:57:05",
+        "iso": "2026-10-10T18:57:05+08:00",
+        "tz_source": "assumed",
+        "utc_offset": "+08:00",
+        "precision": "second",
+        "placeholder": false
+      },
+      "time_kind": "record_time",
+      "actor": "线路工程师AG",
+      "attribution": "noc_check",
+      "action": "18:55 熔接完成。",
+      "target": null,
+      "result": null,
+      "scope": null,
+      "event_kind": "technical_action",
+      "evidence_refs": [
+        "M02/log:6"
+      ],
+      "duplicate_of": null
+    },
+    {
+      "id": "EV7",
+      "time": {
+        "raw": "2026-10-10 19:16:31",
+        "iso": "2026-10-10T19:16:31+08:00",
+        "tz_source": "assumed",
+        "utc_offset": "+08:00",
+        "precision": "second",
+        "placeholder": false
+      },
+      "time_kind": "record_time",
+      "actor": "值班员AF",
+      "attribution": "noc_check",
+      "action": "19:08 告警清除，业务恢复；19:15 客户电话确认业务正常。",
+      "target": null,
+      "result": null,
+      "scope": null,
+      "event_kind": "communication",
+      "evidence_refs": [
+        "M02/log:7"
+      ],
+      "duplicate_of": null
+    },
+    {
+      "id": "EV8",
+      "time": {
+        "raw": "2026-10-10 19:18:00",
+        "iso": "2026-10-10T19:18:00+08:00",
+        "tz_source": "assumed",
+        "utc_offset": "+08:00",
+        "precision": "second",
+        "placeholder": false
+      },
+      "time_kind": "record_time",
+      "actor": "值班员AF",
+      "attribution": "noc_check",
+      "action": "返单。",
+      "target": null,
+      "result": null,
+      "scope": null,
+      "event_kind": "workflow",
+      "evidence_refs": [
+        "M02/log:8"
+      ],
+      "duplicate_of": null
+    },
+    {
+      "id": "EV9",
+      "time": {
+        "raw": "2026-10-10 20:30:12",
+        "iso": "2026-10-10T20:30:12+08:00",
+        "tz_source": "assumed",
+        "utc_offset": "+08:00",
+        "precision": "second",
+        "placeholder": false
+      },
+      "time_kind": "record_time",
+      "actor": "线路工程师AG",
+      "attribution": "noc_check",
+      "action": "上传现场抢修报告（PDF）。",
+      "target": null,
+      "result": null,
+      "scope": null,
+      "event_kind": "technical_action",
+      "evidence_refs": [
+        "M02/log:9"
+      ],
+      "duplicate_of": null
+    },
+    {
+      "id": "EV10",
+      "time": {
+        "raw": "2026-10-11 10:20:45",
+        "iso": "2026-10-11T10:20:45+08:00",
+        "tz_source": "assumed",
+        "utc_offset": "+08:00",
+        "precision": "second",
+        "placeholder": false
+      },
+      "time_kind": "record_time",
+      "actor": "线路维护部主管AH",
+      "attribution": "noc_check",
+      "action": "责任认定：本次中断由第三方施工单位示例建设公司（合成）未按管线交底施工造成，责任方为该施工单位，已启动索赔。",
+      "target": null,
+      "result": null,
+      "scope": null,
+      "event_kind": "communication",
+      "evidence_refs": [
+        "M02/log:10"
+      ],
+      "duplicate_of": null
+    },
+    {
+      "id": "EV11",
+      "time": {
+        "raw": "2026-10-11 11:00:00",
+        "iso": "2026-10-11T11:00:00+08:00",
+        "tz_source": "assumed",
+        "utc_offset": "+08:00",
+        "precision": "second",
+        "placeholder": false
+      },
+      "time_kind": "record_time",
+      "actor": "值班员AI",
+      "attribution": "noc_check",
+      "action": "结单。",
+      "target": null,
+      "result": null,
+      "scope": null,
+      "event_kind": "workflow",
+      "evidence_refs": [
+        "M02/log:11"
+      ],
+      "duplicate_of": null
+    }
+  ],
+  "elements": {
+    "start_time": {
+      "status": "documented",
+      "evidence_refs": [
+        "M01/f:occurred_at"
+      ],
+      "issues": [
+        "TIME_CANDIDATES_DIFFER"
+      ],
+      "review": null,
+      "note": null,
+      "value": {
+        "raw": "2026-10-10 15:42:00",
+        "iso": "2026-10-10T15:42:00+08:00",
+        "tz_source": "assumed",
+        "utc_offset": "+08:00",
+        "precision": "second",
+        "placeholder": false
+      },
+      "selected": "C2",
+      "candidates": [
+        {
+          "id": "C1",
+          "evidence_refs": [
+            "M01/f:created_at"
+          ],
+          "attribution": "system_field",
+          "note": null,
+          "time": {
+            "raw": "2026-10-10 15:50:08",
+            "iso": "2026-10-10T15:50:08+08:00",
+            "tz_source": "assumed",
+            "utc_offset": "+08:00",
+            "precision": "second",
+            "placeholder": false
+          },
+          "time_kind": "ticket_created"
+        },
+        {
+          "id": "C2",
+          "evidence_refs": [
+            "M01/f:occurred_at"
+          ],
+          "attribution": "system_field",
+          "note": null,
+          "time": {
+            "raw": "2026-10-10 15:42:00",
+            "iso": "2026-10-10T15:42:00+08:00",
+            "tz_source": "assumed",
+            "utc_offset": "+08:00",
+            "precision": "second",
+            "placeholder": false
+          },
+          "time_kind": "fault_start_field"
+        },
+        {
+          "id": "C3",
+          "evidence_refs": [
+            "M02/log:1"
+          ],
+          "attribution": "system_field",
+          "note": null,
+          "time": {
+            "raw": "2026-10-10 15:50:08",
+            "iso": "2026-10-10T15:50:08+08:00",
+            "tz_source": "assumed",
+            "utc_offset": "+08:00",
+            "precision": "second",
+            "placeholder": false
+          },
+          "time_kind": "ticket_created"
+        },
+        {
+          "id": "C4",
+          "evidence_refs": [
+            "M02/log:3",
+            "M01/f:occurred_at"
+          ],
+          "attribution": "noc_check",
+          "note": "原文只有时刻；日期与同单对应起止字段对齐，保留两处依据。",
+          "time": {
+            "raw": "15:42",
+            "iso": "2026-10-10T15:42:00+08:00",
+            "tz_source": "assumed",
+            "utc_offset": "+08:00",
+            "precision": "minute",
+            "placeholder": false
+          },
+          "time_kind": "alarm_raised"
+        },
+        {
+          "id": "C5",
+          "evidence_refs": [
+            "M02/log:5"
+          ],
+          "attribution": "field_engineer",
+          "note": "仅有时刻，日期按同条记录/邮件头补齐；跨日需复核。",
+          "time": {
+            "raw": "15:40",
+            "iso": "2026-10-10T15:40:00+08:00",
+            "tz_source": "assumed",
+            "utc_offset": "+08:00",
+            "precision": "minute",
+            "placeholder": false
+          },
+          "time_kind": "observation"
+        },
+        {
+          "id": "C6",
+          "evidence_refs": [
+            "M02/log:7"
+          ],
+          "attribution": "noc_check",
+          "note": "仅有时刻，日期按同条记录/邮件头补齐；跨日需复核。",
+          "time": {
+            "raw": "19:15",
+            "iso": "2026-10-10T19:15:00+08:00",
+            "tz_source": "assumed",
+            "utc_offset": "+08:00",
+            "precision": "minute",
+            "placeholder": false
+          },
+          "time_kind": "observation"
+        }
+      ]
+    },
+    "end_time": {
+      "status": "confirmed",
+      "evidence_refs": [
+        "M01/f:recovered_at",
+        "M02/log:7"
+      ],
+      "issues": [
+        "TIME_CANDIDATES_DIFFER"
+      ],
+      "review": null,
+      "note": null,
+      "value": {
+        "raw": "2026-10-10 19:08:00",
+        "iso": "2026-10-10T19:08:00+08:00",
+        "tz_source": "assumed",
+        "utc_offset": "+08:00",
+        "precision": "second",
+        "placeholder": false
+      },
+      "selected": "C1",
+      "candidates": [
+        {
+          "id": "C1",
+          "evidence_refs": [
+            "M01/f:recovered_at"
+          ],
+          "attribution": "system_field",
+          "note": null,
+          "time": {
+            "raw": "2026-10-10 19:08:00",
+            "iso": "2026-10-10T19:08:00+08:00",
+            "tz_source": "assumed",
+            "utc_offset": "+08:00",
+            "precision": "second",
+            "placeholder": false
+          },
+          "time_kind": "recovery_field"
+        },
+        {
+          "id": "C2",
+          "evidence_refs": [
+            "M02/log:6"
+          ],
+          "attribution": "noc_check",
+          "note": "仅有时刻，日期按同条记录/邮件头补齐；跨日需复核。",
+          "time": {
+            "raw": "18:55",
+            "iso": "2026-10-10T18:55:00+08:00",
+            "tz_source": "assumed",
+            "utc_offset": "+08:00",
+            "precision": "minute",
+            "placeholder": false
+          },
+          "time_kind": "repair_completed"
+        },
+        {
+          "id": "C3",
+          "evidence_refs": [
+            "M02/log:7"
+          ],
+          "attribution": "noc_check",
+          "note": "仅有时刻，日期按同条记录/邮件头补齐；跨日需复核。",
+          "time": {
+            "raw": "19:08",
+            "iso": "2026-10-10T19:08:00+08:00",
+            "tz_source": "assumed",
+            "utc_offset": "+08:00",
+            "precision": "minute",
+            "placeholder": false
+          },
+          "time_kind": "customer_confirmed_recovery"
+        },
+        {
+          "id": "C4",
+          "evidence_refs": [
+            "M02/log:8"
+          ],
+          "attribution": "system_field",
+          "note": null,
+          "time": {
+            "raw": "2026-10-10 19:18:00",
+            "iso": "2026-10-10T19:18:00+08:00",
+            "tz_source": "assumed",
+            "utc_offset": "+08:00",
+            "precision": "second",
+            "placeholder": false
+          },
+          "time_kind": "ticket_returned"
+        },
+        {
+          "id": "C5",
+          "evidence_refs": [
+            "M02/log:11"
+          ],
+          "attribution": "system_field",
+          "note": null,
+          "time": {
+            "raw": "2026-10-11 11:00:00",
+            "iso": "2026-10-11T11:00:00+08:00",
+            "tz_source": "assumed",
+            "utc_offset": "+08:00",
+            "precision": "second",
+            "placeholder": false
+          },
+          "time_kind": "ticket_closed"
+        }
+      ]
+    },
+    "phenomenon": {
+      "status": "documented",
+      "evidence_refs": [
+        "M01/f:description",
+        "M02/log:3",
+        "M02/log:7",
+        "M02/log:10"
+      ],
+      "issues": [
+        "OBSERVATION_SCOPE_DIFFERS"
+      ],
+      "review": null,
+      "note": null,
+      "value": "客户反馈：客户报专线 SYN-CKT-1024 业务中断。；检查显示：查告警：15:42 起 SYN-CKT-1024 所在光缆段 R_LOS；OTDR 测试显示断点距 A 端局站约 3.2 km。；检查显示：19:08 告警清除，业务恢复；19:15 客户电话确认业务正常。；检查显示：责任认定：本次中断由第三方施工单位示例建设公司（合成）未按管线交底施工造成，责任方为该施工单位，已启动索赔。",
+      "candidates": [
+        {
+          "id": "C1",
+          "evidence_refs": [
+            "M01/f:description"
+          ],
+          "attribution": "customer",
+          "note": null,
+          "description": "客户报专线 SYN-CKT-1024 业务中断。",
+          "metric": "告警/状态",
+          "value": null,
+          "value_text": null,
+          "unit": null,
+          "scope": "客户报专线 SYN-CKT-1024 业务中断。",
+          "observed_at": null
+        },
+        {
+          "id": "C2",
+          "evidence_refs": [
+            "M02/log:3"
+          ],
+          "attribution": "noc_check",
+          "note": null,
+          "description": "查告警：15:42 起 SYN-CKT-1024 所在光缆段 R_LOS；OTDR 测试显示断点距 A 端局站约 3.2 km。",
+          "metric": "告警/状态",
+          "value": null,
+          "value_text": null,
+          "unit": null,
+          "scope": "查告警：15:42 起 SYN-CKT-1024 所在光缆段 R_LOS；OTDR 测试显示断点距 A 端局站约 3.2 km。",
+          "observed_at": null
+        },
+        {
+          "id": "C3",
+          "evidence_refs": [
+            "M02/log:7"
+          ],
+          "attribution": "noc_check",
+          "note": null,
+          "description": "19:08 告警清除，业务恢复；19:15 客户电话确认业务正常。",
+          "metric": "告警/状态",
+          "value": null,
+          "value_text": null,
+          "unit": null,
+          "scope": "19:08 告警清除，业务恢复；19:15 客户电话确认业务正常。",
+          "observed_at": null
+        },
+        {
+          "id": "C4",
+          "evidence_refs": [
+            "M02/log:10"
+          ],
+          "attribution": "noc_check",
+          "note": null,
+          "description": "责任认定：本次中断由第三方施工单位示例建设公司（合成）未按管线交底施工造成，责任方为该施工单位，已启动索赔。",
+          "metric": "告警/状态",
+          "value": null,
+          "value_text": null,
+          "unit": null,
+          "scope": "责任认定：本次中断由第三方施工单位示例建设公司（合成）未按管线交底施工造成，责任方为该施工单位，已启动索赔。",
+          "observed_at": null
+        }
+      ]
+    },
+    "responsible_party": {
+      "status": "confirmed",
+      "evidence_refs": [
+        "M02/log:10"
+      ],
+      "issues": [],
+      "review": null,
+      "note": null,
+      "value": "责任认定：本次中断由第三方施工单位示例建设公司（合成）未按管线交底施工造成，责任方为该施工单位，已启动索赔。",
+      "selected": "C2",
+      "candidates": [
+        {
+          "id": "C1",
+          "evidence_refs": [
+            "M01/f:responsible_party"
+          ],
+          "attribution": "system_field",
+          "note": null,
+          "party": "第三方施工单位：示例建设公司（合成）",
+          "basis": "claimed"
+        },
+        {
+          "id": "C2",
+          "evidence_refs": [
+            "M02/log:10"
+          ],
+          "attribution": "noc_check",
+          "note": null,
+          "party": "责任认定：本次中断由第三方施工单位示例建设公司（合成）未按管线交底施工造成，责任方为该施工单位，已启动索赔。",
+          "basis": "formal_determination"
+        }
+      ]
+    },
+    "cause": {
+      "status": "confirmed",
+      "evidence_refs": [
+        "M02/log:5"
+      ],
+      "issues": [],
+      "review": null,
+      "note": null,
+      "value": "现场确认：示例路与示例大道交叉口人井 SYN-MH-0102 东侧约 15 m 处，市政道路施工挖断 24 芯光缆，施工时间约 15:40。开始抢修。",
+      "selected": "C2",
+      "candidates": [
+        {
+          "id": "C1",
+          "evidence_refs": [
+            "M01/f:cause"
+          ],
+          "attribution": "system_field",
+          "note": null,
+          "statement": "市政道路施工挖断 24 芯光缆，已熔接恢复。",
+          "cause_kind": "root_cause_claimed"
+        },
+        {
+          "id": "C2",
+          "evidence_refs": [
+            "M02/log:5"
+          ],
+          "attribution": "field_engineer",
+          "note": null,
+          "statement": "现场确认：示例路与示例大道交叉口人井 SYN-MH-0102 东侧约 15 m 处，市政道路施工挖断 24 芯光缆，施工时间约 15:40。开始抢修。",
+          "cause_kind": "root_cause_confirmed"
+        }
+      ]
+    },
+    "handling_process": {
+      "status": "documented",
+      "evidence_refs": [
+        "M02/log:1",
+        "M02/log:2",
+        "M02/log:3",
+        "M02/log:4",
+        "M02/log:5",
+        "M02/log:6",
+        "M02/log:7",
+        "M02/log:8",
+        "M02/log:9",
+        "M02/log:10",
+        "M02/log:11"
+      ],
+      "issues": [],
+      "review": null,
+      "note": null,
+      "value": [
+        {
+          "id": "P1",
+          "evidence_refs": [
+            "M02/log:1"
+          ],
+          "attribution": "customer",
+          "note": null,
+          "time": {
+            "raw": "2026-10-10 15:50:08",
+            "iso": "2026-10-10T15:50:08+08:00",
+            "tz_source": "assumed",
+            "utc_offset": "+08:00",
+            "precision": "second",
+            "placeholder": false
+          },
+          "actor": "系统",
+          "action": "客户来电报障建单。",
+          "target": null,
+          "result": null,
+          "step_kind": "workflow",
+          "duplicate_of": null
+        },
+        {
+          "id": "P2",
+          "evidence_refs": [
+            "M02/log:2"
+          ],
+          "attribution": "noc_check",
+          "note": null,
+          "time": {
+            "raw": "2026-10-10 15:52:30",
+            "iso": "2026-10-10T15:52:30+08:00",
+            "tz_source": "assumed",
+            "utc_offset": "+08:00",
+            "precision": "second",
+            "placeholder": false
+          },
+          "actor": "值班员AF",
+          "action": "已受理。",
+          "target": null,
+          "result": null,
+          "step_kind": "workflow",
+          "duplicate_of": null
+        },
+        {
+          "id": "P3",
+          "evidence_refs": [
+            "M02/log:3"
+          ],
+          "attribution": "noc_check",
+          "note": null,
+          "time": {
+            "raw": "2026-10-10 15:58:14",
+            "iso": "2026-10-10T15:58:14+08:00",
+            "tz_source": "assumed",
+            "utc_offset": "+08:00",
+            "precision": "second",
+            "placeholder": false
+          },
+          "actor": "值班员AF",
+          "action": "查告警：15:42 起 SYN-CKT-1024 所在光缆段 R_LOS；OTDR 测试显示断点距 A 端局站约 3.2 km。",
+          "target": null,
+          "result": null,
+          "step_kind": "check_result",
+          "duplicate_of": null
+        },
+        {
+          "id": "P4",
+          "evidence_refs": [
+            "M02/log:4"
+          ],
+          "attribution": "noc_check",
+          "note": null,
+          "time": {
+            "raw": "2026-10-10 16:05:40",
+            "iso": "2026-10-10T16:05:40+08:00",
+            "tz_source": "assumed",
+            "utc_offset": "+08:00",
+            "precision": "second",
+            "placeholder": false
+          },
+          "actor": "值班员AF",
+          "action": "派线路维护部现场抢修。",
+          "target": null,
+          "result": null,
+          "step_kind": "technical_action",
+          "duplicate_of": null
+        },
+        {
+          "id": "P5",
+          "evidence_refs": [
+            "M02/log:5"
+          ],
+          "attribution": "field_engineer",
+          "note": null,
+          "time": {
+            "raw": "2026-10-10 16:48:22",
+            "iso": "2026-10-10T16:48:22+08:00",
+            "tz_source": "assumed",
+            "utc_offset": "+08:00",
+            "precision": "second",
+            "placeholder": false
+          },
+          "actor": "线路工程师AG",
+          "action": "现场确认：示例路与示例大道交叉口人井 SYN-MH-0102 东侧约 15 m 处，市政道路施工挖断 24 芯光缆，施工时间约 15:40。开始抢修。",
+          "target": null,
+          "result": null,
+          "step_kind": "technical_action",
+          "duplicate_of": null
+        },
+        {
+          "id": "P6",
+          "evidence_refs": [
+            "M02/log:6"
+          ],
+          "attribution": "noc_check",
+          "note": null,
+          "time": {
+            "raw": "2026-10-10 18:57:05",
+            "iso": "2026-10-10T18:57:05+08:00",
+            "tz_source": "assumed",
+            "utc_offset": "+08:00",
+            "precision": "second",
+            "placeholder": false
+          },
+          "actor": "线路工程师AG",
+          "action": "18:55 熔接完成。",
+          "target": null,
+          "result": null,
+          "step_kind": "technical_action",
+          "duplicate_of": null
+        },
+        {
+          "id": "P7",
+          "evidence_refs": [
+            "M02/log:7"
+          ],
+          "attribution": "noc_check",
+          "note": null,
+          "time": {
+            "raw": "2026-10-10 19:16:31",
+            "iso": "2026-10-10T19:16:31+08:00",
+            "tz_source": "assumed",
+            "utc_offset": "+08:00",
+            "precision": "second",
+            "placeholder": false
+          },
+          "actor": "值班员AF",
+          "action": "19:08 告警清除，业务恢复；19:15 客户电话确认业务正常。",
+          "target": null,
+          "result": null,
+          "step_kind": "communication",
+          "duplicate_of": null
+        },
+        {
+          "id": "P8",
+          "evidence_refs": [
+            "M02/log:8"
+          ],
+          "attribution": "noc_check",
+          "note": null,
+          "time": {
+            "raw": "2026-10-10 19:18:00",
+            "iso": "2026-10-10T19:18:00+08:00",
+            "tz_source": "assumed",
+            "utc_offset": "+08:00",
+            "precision": "second",
+            "placeholder": false
+          },
+          "actor": "值班员AF",
+          "action": "返单。",
+          "target": null,
+          "result": null,
+          "step_kind": "workflow",
+          "duplicate_of": null
+        },
+        {
+          "id": "P9",
+          "evidence_refs": [
+            "M02/log:9"
+          ],
+          "attribution": "noc_check",
+          "note": null,
+          "time": {
+            "raw": "2026-10-10 20:30:12",
+            "iso": "2026-10-10T20:30:12+08:00",
+            "tz_source": "assumed",
+            "utc_offset": "+08:00",
+            "precision": "second",
+            "placeholder": false
+          },
+          "actor": "线路工程师AG",
+          "action": "上传现场抢修报告（PDF）。",
+          "target": null,
+          "result": null,
+          "step_kind": "technical_action",
+          "duplicate_of": null
+        },
+        {
+          "id": "P10",
+          "evidence_refs": [
+            "M02/log:10"
+          ],
+          "attribution": "noc_check",
+          "note": null,
+          "time": {
+            "raw": "2026-10-11 10:20:45",
+            "iso": "2026-10-11T10:20:45+08:00",
+            "tz_source": "assumed",
+            "utc_offset": "+08:00",
+            "precision": "second",
+            "placeholder": false
+          },
+          "actor": "线路维护部主管AH",
+          "action": "责任认定：本次中断由第三方施工单位示例建设公司（合成）未按管线交底施工造成，责任方为该施工单位，已启动索赔。",
+          "target": null,
+          "result": null,
+          "step_kind": "communication",
+          "duplicate_of": null
+        },
+        {
+          "id": "P11",
+          "evidence_refs": [
+            "M02/log:11"
+          ],
+          "attribution": "noc_check",
+          "note": null,
+          "time": {
+            "raw": "2026-10-11 11:00:00",
+            "iso": "2026-10-11T11:00:00+08:00",
+            "tz_source": "assumed",
+            "utc_offset": "+08:00",
+            "precision": "second",
+            "placeholder": false
+          },
+          "actor": "值班员AI",
+          "action": "结单。",
+          "target": null,
+          "result": null,
+          "step_kind": "workflow",
+          "duplicate_of": null
+        }
+      ]
+    },
+    "location": {
+      "status": "documented",
+      "evidence_refs": [
+        "M02/log:5"
+      ],
+      "issues": [],
+      "review": null,
+      "note": null,
+      "value": "现场确认：示例路与示例大道交叉口人井 SYN-MH-0102 东侧约 15 m 处，市政道路施工挖断 24 芯光缆，施工时间约 15:40。开始抢修。",
+      "selected": "C1",
+      "candidates": [
+        {
+          "id": "C1",
+          "evidence_refs": [
+            "M02/log:5"
+          ],
+          "attribution": "field_engineer",
+          "note": null,
+          "description": "现场确认：示例路与示例大道交叉口人井 SYN-MH-0102 东侧约 15 m 处，市政道路施工挖断 24 芯光缆，施工时间约 15:40。开始抢修。",
+          "role": "located_fault_point",
+          "granularity": null
+        }
+      ]
+    }
+  },
+  "issues": [
+    {
+      "code": "MATERIAL_UNSUPPORTED",
+      "severity": "warning",
+      "message": "材料 M03（pdf，attachments/M03-repair-report.pdf）暂无可用解析器，相关要素可能不完整",
+      "element": null,
+      "evidence_refs": [],
+      "candidate_ids": [],
+      "rule_id": null,
+      "resolved": false,
+      "resolution_note": null
+    },
+    {
+      "code": "TIME_CANDIDATES_DIFFER",
+      "severity": "warning",
+      "message": "时间候选有不同语义或数值；建单、告警、关单时间不能替代起障/恢复。",
+      "element": "start_time",
+      "evidence_refs": [
+        "M01/f:created_at",
+        "M01/f:occurred_at",
+        "M02/log:1",
+        "M02/log:3",
+        "M02/log:5",
+        "M02/log:7"
+      ],
+      "candidate_ids": [],
+      "rule_id": "r.time_candidates_differ@1",
+      "resolved": false,
+      "resolution_note": null
+    },
+    {
+      "code": "TIME_CANDIDATES_DIFFER",
+      "severity": "warning",
+      "message": "时间候选有不同语义或数值；建单、告警、关单时间不能替代起障/恢复。",
+      "element": "end_time",
+      "evidence_refs": [
+        "M01/f:recovered_at",
+        "M02/log:6",
+        "M02/log:7",
+        "M02/log:8",
+        "M02/log:11"
+      ],
+      "candidate_ids": [],
+      "rule_id": "r.time_candidates_differ@1",
+      "resolved": false,
+      "resolution_note": null
+    },
+    {
+      "code": "OBSERVATION_SCOPE_DIFFERS",
+      "severity": "warning",
+      "message": "客户感知与网管观测来源、时刻或范围不同，分别保留。",
+      "element": "phenomenon",
+      "evidence_refs": [
+        "M01/f:description",
+        "M02/log:3",
+        "M02/log:7",
+        "M02/log:10"
+      ],
+      "candidate_ids": [],
+      "rule_id": "r.observation_scope_differs@1",
+      "resolved": false,
+      "resolution_note": null
+    }
+  ],
+  "service_identity": {
+    "status": "unverified",
+    "identifiers": [
+      {
+        "value": "SYN-CKT-1024",
+        "role": "reported",
+        "evidence_refs": [
+          "M01/f:circuit_id"
+        ],
+        "note": null
+      }
+    ],
+    "note": "服务身份尚未经独立核实。"
+  },
+  "related_tickets": [],
+  "run": {
+    "pipeline_version": "a1.1.0",
+    "schema_version": "1.0",
+    "provider": "rules",
+    "prompt_version": null,
+    "rules_version": "1.0",
+    "bundle_sha256": "5eabd404b4c678cdb1be0876c3e4db396a5f06514cd0b86b696303eed9d500b1",
+    "started_at": "2026-10-27T13:05:01.528538+00:00",
+    "finished_at": "2026-10-27T13:05:01.533317+00:00"
+  }
+}

@@ -1,0 +1,1336 @@
+{
+  "schema_version": "1.0",
+  "bundle_id": "SYN-S09",
+  "ticket_ref": "SYN-S09",
+  "data_class": "synthetic",
+  "data_cutoff": "2026-09-29T10:30:00+08:00",
+  "materials": [
+    {
+      "id": "M01",
+      "kind": "ticket_fields",
+      "path": "ticket.json",
+      "sha256": "e502b47e27fdbcf351c07c8689852b746a631e4ac61fffb64bfbce58aa055cfb",
+      "size_bytes": 1923,
+      "media_type": "application/json",
+      "origin": null,
+      "derived": false,
+      "derived_from": [],
+      "description": null,
+      "parse_status": "parsed",
+      "subtype": null,
+      "parser": "a1.ticket_fields@1.0",
+      "parse_note": null
+    },
+    {
+      "id": "M02",
+      "kind": "process_log",
+      "path": "process_log.json",
+      "sha256": "b1da27f9f0c55713a414038ae3a8964a93cb9f6ee603ae3d961f4646a1c71a33",
+      "size_bytes": 2078,
+      "media_type": "application/json",
+      "origin": null,
+      "derived": false,
+      "derived_from": [],
+      "description": null,
+      "parse_status": "parsed",
+      "subtype": null,
+      "parser": "a1.process_log@1.0",
+      "parse_note": null
+    }
+  ],
+  "evidence": [
+    {
+      "id": "M01/f:ticket_no",
+      "material_id": "M01",
+      "locator": {
+        "char_start": null,
+        "char_end": null,
+        "type": "field",
+        "field_key": "ticket_no"
+      },
+      "text": "SYN-S09",
+      "role": "original",
+      "extractor": "a1.ticket_fields@1.0",
+      "quality": null,
+      "needs_review": false,
+      "derived_from": [],
+      "reading": null,
+      "language": null
+    },
+    {
+      "id": "M01/f:customer",
+      "material_id": "M01",
+      "locator": {
+        "char_start": null,
+        "char_end": null,
+        "type": "field",
+        "field_key": "customer"
+      },
+      "text": "Example Corp B（合成）",
+      "role": "original",
+      "extractor": "a1.ticket_fields@1.0",
+      "quality": null,
+      "needs_review": false,
+      "derived_from": [],
+      "reading": null,
+      "language": null
+    },
+    {
+      "id": "M01/f:circuit_id",
+      "material_id": "M01",
+      "locator": {
+        "char_start": null,
+        "char_end": null,
+        "type": "field",
+        "field_key": "circuit_id"
+      },
+      "text": "SYN-CKT-1009",
+      "role": "original",
+      "extractor": "a1.ticket_fields@1.0",
+      "quality": null,
+      "needs_review": false,
+      "derived_from": [],
+      "reading": null,
+      "language": null
+    },
+    {
+      "id": "M01/f:created_at",
+      "material_id": "M01",
+      "locator": {
+        "char_start": null,
+        "char_end": null,
+        "type": "field",
+        "field_key": "created_at"
+      },
+      "text": "2026-09-28 13:02:41",
+      "role": "original",
+      "extractor": "a1.ticket_fields@1.0",
+      "quality": null,
+      "needs_review": false,
+      "derived_from": [],
+      "reading": null,
+      "language": null
+    },
+    {
+      "id": "M01/f:fault_type",
+      "material_id": "M01",
+      "locator": {
+        "char_start": null,
+        "char_end": null,
+        "type": "field",
+        "field_key": "fault_type"
+      },
+      "text": "业务性能-丢包",
+      "role": "original",
+      "extractor": "a1.ticket_fields@1.0",
+      "quality": null,
+      "needs_review": false,
+      "derived_from": [],
+      "reading": null,
+      "language": null
+    },
+    {
+      "id": "M01/f:occurred_at",
+      "material_id": "M01",
+      "locator": {
+        "char_start": null,
+        "char_end": null,
+        "type": "field",
+        "field_key": "occurred_at"
+      },
+      "text": "2026-09-28 13:00:00",
+      "role": "original",
+      "extractor": "a1.ticket_fields@1.0",
+      "quality": null,
+      "needs_review": false,
+      "derived_from": [],
+      "reading": null,
+      "language": null
+    },
+    {
+      "id": "M01/f:recovered_at",
+      "material_id": "M01",
+      "locator": {
+        "char_start": null,
+        "char_end": null,
+        "type": "field",
+        "field_key": "recovered_at"
+      },
+      "text": "2026-09-28 13:36:00",
+      "role": "original",
+      "extractor": "a1.ticket_fields@1.0",
+      "quality": null,
+      "needs_review": false,
+      "derived_from": [],
+      "reading": null,
+      "language": null
+    },
+    {
+      "id": "M01/f:duration_returned",
+      "material_id": "M01",
+      "locator": {
+        "char_start": null,
+        "char_end": null,
+        "type": "field",
+        "field_key": "duration_returned"
+      },
+      "text": "18分钟",
+      "role": "original",
+      "extractor": "a1.ticket_fields@1.0",
+      "quality": null,
+      "needs_review": false,
+      "derived_from": [],
+      "reading": null,
+      "language": null
+    },
+    {
+      "id": "M01/f:description",
+      "material_id": "M01",
+      "locator": {
+        "char_start": null,
+        "char_end": null,
+        "type": "field",
+        "field_key": "description"
+      },
+      "text": "Circuit ID: SYN-CKT-1009\nTime Circuit Failed: NA\nIssue: We see about 25% packet loss from our proxy 198.51.100.20 (Frankfurt) to target 203.0.113.50 (Hong Kong).\nNote: Intrusive testing is NOT approved. Please schedule a test window with us in advance.\n\nBest regards,\nJohn Doe | Network Operations | Example Corp B\nTel: +1-555-0100\nThis email and any attachments are confidential and intended solely for the addressee.",
+      "role": "original",
+      "extractor": "a1.ticket_fields@1.0",
+      "quality": null,
+      "needs_review": false,
+      "derived_from": [],
+      "reading": null,
+      "language": null
+    },
+    {
+      "id": "M01/f:cause",
+      "material_id": "M01",
+      "locator": {
+        "char_start": null,
+        "char_end": null,
+        "type": "field",
+        "field_key": "cause"
+      },
+      "text": "本端 ping 测试 100 发 100 收，无丢包，端口流量正常；请客户提供故障时的源/目的地址及 ping/trace 结果。",
+      "role": "original",
+      "extractor": "a1.ticket_fields@1.0",
+      "quality": null,
+      "needs_review": false,
+      "derived_from": [],
+      "reading": null,
+      "language": null
+    },
+    {
+      "id": "M02/log:1",
+      "material_id": "M02",
+      "locator": {
+        "char_start": null,
+        "char_end": null,
+        "type": "log_entry",
+        "seq": 1
+      },
+      "text": "根据客户邮件建单。",
+      "role": "original",
+      "extractor": "a1.process_log@1.0",
+      "quality": null,
+      "needs_review": false,
+      "derived_from": [],
+      "reading": null,
+      "language": null
+    },
+    {
+      "id": "M02/log:2",
+      "material_id": "M02",
+      "locator": {
+        "char_start": null,
+        "char_end": null,
+        "type": "log_entry",
+        "seq": 2
+      },
+      "text": "已受理。",
+      "role": "original",
+      "extractor": "a1.process_log@1.0",
+      "quality": null,
+      "needs_review": false,
+      "derived_from": [],
+      "reading": null,
+      "language": null
+    },
+    {
+      "id": "M02/log:3",
+      "material_id": "M02",
+      "locator": {
+        "char_start": null,
+        "char_end": null,
+        "type": "log_entry",
+        "seq": 3
+      },
+      "text": "本端 PE ping 客户 CE 互联地址：100 发 100 收，无丢包，平均 RTT 2 ms。",
+      "role": "original",
+      "extractor": "a1.process_log@1.0",
+      "quality": null,
+      "needs_review": false,
+      "derived_from": [],
+      "reading": null,
+      "language": null
+    },
+    {
+      "id": "M02/log:4",
+      "material_id": "M02",
+      "locator": {
+        "char_start": null,
+        "char_end": null,
+        "type": "log_entry",
+        "seq": 4
+      },
+      "text": "本端 PE ping 香港侧目标网段网关：100 发 100 收，无丢包，平均 RTT 3 ms。",
+      "role": "original",
+      "extractor": "a1.process_log@1.0",
+      "quality": null,
+      "needs_review": false,
+      "derived_from": [],
+      "reading": null,
+      "language": null
+    },
+    {
+      "id": "M02/log:5",
+      "material_id": "M02",
+      "locator": {
+        "char_start": null,
+        "char_end": null,
+        "type": "log_entry",
+        "seq": 5
+      },
+      "text": "检查 PE 端口流量与错包计数：流量正常，无 CRC 错包。",
+      "role": "original",
+      "extractor": "a1.process_log@1.0",
+      "quality": null,
+      "needs_review": false,
+      "derived_from": [],
+      "reading": null,
+      "language": null
+    },
+    {
+      "id": "M02/log:6",
+      "material_id": "M02",
+      "locator": {
+        "char_start": null,
+        "char_end": null,
+        "type": "log_entry",
+        "seq": 6
+      },
+      "text": "返单：本端 ping 测试 100 发 100 收，无丢包，端口流量正常；请客户提供故障时的源/目的地址及 ping/trace 结果。",
+      "role": "original",
+      "extractor": "a1.process_log@1.0",
+      "quality": null,
+      "needs_review": false,
+      "derived_from": [],
+      "reading": null,
+      "language": null
+    },
+    {
+      "id": "M02/log:7",
+      "material_id": "M02",
+      "locator": {
+        "char_start": null,
+        "char_end": null,
+        "type": "log_entry",
+        "seq": 7
+      },
+      "text": "已转告客户，请其提供故障时源/目的地址及 ping/trace 结果。",
+      "role": "original",
+      "extractor": "a1.process_log@1.0",
+      "quality": null,
+      "needs_review": false,
+      "derived_from": [],
+      "reading": null,
+      "language": null
+    },
+    {
+      "id": "M02/log:8",
+      "material_id": "M02",
+      "locator": {
+        "char_start": null,
+        "char_end": null,
+        "type": "log_entry",
+        "seq": 8
+      },
+      "text": "客户暂未提供测试资料。",
+      "role": "original",
+      "extractor": "a1.process_log@1.0",
+      "quality": null,
+      "needs_review": false,
+      "derived_from": [],
+      "reading": null,
+      "language": null
+    },
+    {
+      "id": "M02/log:9",
+      "material_id": "M02",
+      "locator": {
+        "char_start": null,
+        "char_end": null,
+        "type": "log_entry",
+        "seq": 9
+      },
+      "text": "工单进入索要报告/结单签收环节。",
+      "role": "original",
+      "extractor": "a1.process_log@1.0",
+      "quality": null,
+      "needs_review": false,
+      "derived_from": [],
+      "reading": null,
+      "language": null
+    }
+  ],
+  "events": [
+    {
+      "id": "EV1",
+      "time": {
+        "raw": "2026-09-28 13:02:41",
+        "iso": "2026-09-28T13:02:41+08:00",
+        "tz_source": "assumed",
+        "utc_offset": "+08:00",
+        "precision": "second",
+        "placeholder": false
+      },
+      "time_kind": "record_time",
+      "actor": "系统",
+      "attribution": "noc_check",
+      "action": "根据客户邮件建单。",
+      "target": null,
+      "result": null,
+      "scope": null,
+      "event_kind": "workflow",
+      "evidence_refs": [
+        "M02/log:1"
+      ],
+      "duplicate_of": null
+    },
+    {
+      "id": "EV2",
+      "time": {
+        "raw": "2026-09-28 13:05:10",
+        "iso": "2026-09-28T13:05:10+08:00",
+        "tz_source": "assumed",
+        "utc_offset": "+08:00",
+        "precision": "second",
+        "placeholder": false
+      },
+      "time_kind": "record_time",
+      "actor": "值班员N",
+      "attribution": "noc_check",
+      "action": "已受理。",
+      "target": null,
+      "result": null,
+      "scope": null,
+      "event_kind": "workflow",
+      "evidence_refs": [
+        "M02/log:2"
+      ],
+      "duplicate_of": null
+    },
+    {
+      "id": "EV3",
+      "time": {
+        "raw": "2026-09-28 13:09:55",
+        "iso": "2026-09-28T13:09:55+08:00",
+        "tz_source": "assumed",
+        "utc_offset": "+08:00",
+        "precision": "second",
+        "placeholder": false
+      },
+      "time_kind": "record_time",
+      "actor": "值班员N",
+      "attribution": "noc_check",
+      "action": "本端 PE ping 客户 CE 互联地址：100 发 100 收，无丢包，平均 RTT 2 ms。",
+      "target": null,
+      "result": null,
+      "scope": null,
+      "event_kind": "check_result",
+      "evidence_refs": [
+        "M02/log:3"
+      ],
+      "duplicate_of": null
+    },
+    {
+      "id": "EV4",
+      "time": {
+        "raw": "2026-09-28 13:14:20",
+        "iso": "2026-09-28T13:14:20+08:00",
+        "tz_source": "assumed",
+        "utc_offset": "+08:00",
+        "precision": "second",
+        "placeholder": false
+      },
+      "time_kind": "record_time",
+      "actor": "值班员N",
+      "attribution": "noc_check",
+      "action": "本端 PE ping 香港侧目标网段网关：100 发 100 收，无丢包，平均 RTT 3 ms。",
+      "target": null,
+      "result": null,
+      "scope": null,
+      "event_kind": "check_result",
+      "evidence_refs": [
+        "M02/log:4"
+      ],
+      "duplicate_of": null
+    },
+    {
+      "id": "EV5",
+      "time": {
+        "raw": "2026-09-28 13:18:02",
+        "iso": "2026-09-28T13:18:02+08:00",
+        "tz_source": "assumed",
+        "utc_offset": "+08:00",
+        "precision": "second",
+        "placeholder": false
+      },
+      "time_kind": "record_time",
+      "actor": "值班员N",
+      "attribution": "noc_check",
+      "action": "检查 PE 端口流量与错包计数：流量正常，无 CRC 错包。",
+      "target": null,
+      "result": null,
+      "scope": null,
+      "event_kind": "check_result",
+      "evidence_refs": [
+        "M02/log:5"
+      ],
+      "duplicate_of": null
+    },
+    {
+      "id": "EV6",
+      "time": {
+        "raw": "2026-09-28 13:20:47",
+        "iso": "2026-09-28T13:20:47+08:00",
+        "tz_source": "assumed",
+        "utc_offset": "+08:00",
+        "precision": "second",
+        "placeholder": false
+      },
+      "time_kind": "record_time",
+      "actor": "值班员N",
+      "attribution": "noc_check",
+      "action": "返单：本端 ping 测试 100 发 100 收，无丢包，端口流量正常；请客户提供故障时的源/目的地址及 ping/trace 结果。",
+      "target": null,
+      "result": null,
+      "scope": null,
+      "event_kind": "workflow",
+      "evidence_refs": [
+        "M02/log:6"
+      ],
+      "duplicate_of": null
+    },
+    {
+      "id": "EV7",
+      "time": {
+        "raw": "2026-09-28 13:40:30",
+        "iso": "2026-09-28T13:40:30+08:00",
+        "tz_source": "assumed",
+        "utc_offset": "+08:00",
+        "precision": "second",
+        "placeholder": false
+      },
+      "time_kind": "record_time",
+      "actor": "客户经理P",
+      "attribution": "noc_check",
+      "action": "已转告客户，请其提供故障时源/目的地址及 ping/trace 结果。",
+      "target": null,
+      "result": null,
+      "scope": null,
+      "event_kind": "check_result",
+      "evidence_refs": [
+        "M02/log:7"
+      ],
+      "duplicate_of": null
+    },
+    {
+      "id": "EV8",
+      "time": {
+        "raw": "2026-09-29 10:00:12",
+        "iso": "2026-09-29T10:00:12+08:00",
+        "tz_source": "assumed",
+        "utc_offset": "+08:00",
+        "precision": "second",
+        "placeholder": false
+      },
+      "time_kind": "record_time",
+      "actor": "客户经理P",
+      "attribution": "noc_check",
+      "action": "客户暂未提供测试资料。",
+      "target": null,
+      "result": null,
+      "scope": null,
+      "event_kind": "check_result",
+      "evidence_refs": [
+        "M02/log:8"
+      ],
+      "duplicate_of": null
+    },
+    {
+      "id": "EV9",
+      "time": {
+        "raw": "2026-09-29 10:02:00",
+        "iso": "2026-09-29T10:02:00+08:00",
+        "tz_source": "assumed",
+        "utc_offset": "+08:00",
+        "precision": "second",
+        "placeholder": false
+      },
+      "time_kind": "record_time",
+      "actor": "系统",
+      "attribution": "noc_check",
+      "action": "工单进入索要报告/结单签收环节。",
+      "target": null,
+      "result": null,
+      "scope": null,
+      "event_kind": "workflow",
+      "evidence_refs": [
+        "M02/log:9"
+      ],
+      "duplicate_of": null
+    }
+  ],
+  "elements": {
+    "start_time": {
+      "status": "documented",
+      "evidence_refs": [
+        "M01/f:occurred_at"
+      ],
+      "issues": [
+        "TIME_CANDIDATES_DIFFER"
+      ],
+      "review": null,
+      "note": null,
+      "value": {
+        "raw": "2026-09-28 13:00:00",
+        "iso": "2026-09-28T13:00:00+08:00",
+        "tz_source": "assumed",
+        "utc_offset": "+08:00",
+        "precision": "second",
+        "placeholder": false
+      },
+      "selected": "C2",
+      "candidates": [
+        {
+          "id": "C1",
+          "evidence_refs": [
+            "M01/f:created_at"
+          ],
+          "attribution": "system_field",
+          "note": null,
+          "time": {
+            "raw": "2026-09-28 13:02:41",
+            "iso": "2026-09-28T13:02:41+08:00",
+            "tz_source": "assumed",
+            "utc_offset": "+08:00",
+            "precision": "second",
+            "placeholder": false
+          },
+          "time_kind": "ticket_created"
+        },
+        {
+          "id": "C2",
+          "evidence_refs": [
+            "M01/f:occurred_at"
+          ],
+          "attribution": "system_field",
+          "note": null,
+          "time": {
+            "raw": "2026-09-28 13:00:00",
+            "iso": "2026-09-28T13:00:00+08:00",
+            "tz_source": "assumed",
+            "utc_offset": "+08:00",
+            "precision": "second",
+            "placeholder": false
+          },
+          "time_kind": "fault_start_field"
+        },
+        {
+          "id": "C3",
+          "evidence_refs": [
+            "M02/log:1"
+          ],
+          "attribution": "system_field",
+          "note": null,
+          "time": {
+            "raw": "2026-09-28 13:02:41",
+            "iso": "2026-09-28T13:02:41+08:00",
+            "tz_source": "assumed",
+            "utc_offset": "+08:00",
+            "precision": "second",
+            "placeholder": false
+          },
+          "time_kind": "ticket_created"
+        }
+      ]
+    },
+    "end_time": {
+      "status": "documented",
+      "evidence_refs": [
+        "M01/f:recovered_at"
+      ],
+      "issues": [
+        "TIME_CANDIDATES_DIFFER",
+        "RECOVERY_UNVERIFIED",
+        "RECOVERY_SCOPE_LIMITED"
+      ],
+      "review": null,
+      "note": null,
+      "value": {
+        "raw": "2026-09-28 13:36:00",
+        "iso": "2026-09-28T13:36:00+08:00",
+        "tz_source": "assumed",
+        "utc_offset": "+08:00",
+        "precision": "second",
+        "placeholder": false
+      },
+      "selected": "C1",
+      "candidates": [
+        {
+          "id": "C1",
+          "evidence_refs": [
+            "M01/f:recovered_at"
+          ],
+          "attribution": "system_field",
+          "note": null,
+          "time": {
+            "raw": "2026-09-28 13:36:00",
+            "iso": "2026-09-28T13:36:00+08:00",
+            "tz_source": "assumed",
+            "utc_offset": "+08:00",
+            "precision": "second",
+            "placeholder": false
+          },
+          "time_kind": "recovery_field"
+        },
+        {
+          "id": "C2",
+          "evidence_refs": [
+            "M02/log:6"
+          ],
+          "attribution": "system_field",
+          "note": null,
+          "time": {
+            "raw": "2026-09-28 13:20:47",
+            "iso": "2026-09-28T13:20:47+08:00",
+            "tz_source": "assumed",
+            "utc_offset": "+08:00",
+            "precision": "second",
+            "placeholder": false
+          },
+          "time_kind": "ticket_returned"
+        }
+      ]
+    },
+    "phenomenon": {
+      "status": "documented",
+      "evidence_refs": [
+        "M01/f:description",
+        "M02/log:3",
+        "M02/log:4",
+        "M02/log:6"
+      ],
+      "issues": [
+        "OBSERVATION_SCOPE_DIFFERS"
+      ],
+      "review": null,
+      "note": null,
+      "value": "客户反馈：Circuit ID: SYN-CKT-1009\nTime Circuit Failed: NA\nIssue: We see about 25% packet loss from our proxy 198.51.100.20 (Frankfurt) to target 203.0.113.50 (Hong Kong).\nNote: Intrusive testing is NOT approved. Please schedule a test window with us in advance.；检查显示：本端 PE ping 客户 CE 互联地址：100 发 100 收，无丢包，平均 RTT 2 ms。；检查显示：本端 PE ping 香港侧目标网段网关：100 发 100 收，无丢包，平均 RTT 3 ms。；检查显示：返单：本端 ping 测试 100 发 100 收，无丢包，端口流量正常；请客户提供故障时的源/目的地址及 ping/trace 结果。",
+      "candidates": [
+        {
+          "id": "C1",
+          "evidence_refs": [
+            "M01/f:description"
+          ],
+          "attribution": "customer",
+          "note": null,
+          "description": "Circuit ID: SYN-CKT-1009\nTime Circuit Failed: NA\nIssue: We see about 25% packet loss from our proxy 198.51.100.20 (Frankfurt) to target 203.0.113.50 (Hong Kong).\nNote: Intrusive testing is NOT approved. Please schedule a test window with us in advance.",
+          "metric": "丢包率",
+          "value": 25.0,
+          "value_text": null,
+          "unit": "%",
+          "scope": "Circuit ID: SYN-CKT-1009\nTime Circuit Failed: NA\nIssue: We see about 25% packet loss from our proxy 198.51.100.20 (Frankfurt) to target 203.0.113.50 (Hong Kong).\nNote: Intrusive testing is NOT approved. Please schedule a test window with us in advance.",
+          "observed_at": null
+        },
+        {
+          "id": "C2",
+          "evidence_refs": [
+            "M02/log:3"
+          ],
+          "attribution": "noc_check",
+          "note": null,
+          "description": "本端 PE ping 客户 CE 互联地址：100 发 100 收，无丢包，平均 RTT 2 ms。",
+          "metric": "丢包率",
+          "value": 2.0,
+          "value_text": null,
+          "unit": "ms",
+          "scope": "本端 PE ping 客户 CE 互联地址：100 发 100 收，无丢包，平均 RTT 2 ms。",
+          "observed_at": null
+        },
+        {
+          "id": "C3",
+          "evidence_refs": [
+            "M02/log:4"
+          ],
+          "attribution": "noc_check",
+          "note": null,
+          "description": "本端 PE ping 香港侧目标网段网关：100 发 100 收，无丢包，平均 RTT 3 ms。",
+          "metric": "丢包率",
+          "value": 3.0,
+          "value_text": null,
+          "unit": "ms",
+          "scope": "本端 PE ping 香港侧目标网段网关：100 发 100 收，无丢包，平均 RTT 3 ms。",
+          "observed_at": null
+        },
+        {
+          "id": "C4",
+          "evidence_refs": [
+            "M02/log:6"
+          ],
+          "attribution": "noc_check",
+          "note": null,
+          "description": "返单：本端 ping 测试 100 发 100 收，无丢包，端口流量正常；请客户提供故障时的源/目的地址及 ping/trace 结果。",
+          "metric": "丢包率",
+          "value": null,
+          "value_text": null,
+          "unit": null,
+          "scope": "返单：本端 ping 测试 100 发 100 收，无丢包，端口流量正常；请客户提供故障时的源/目的地址及 ping/trace 结果。",
+          "observed_at": null
+        }
+      ]
+    },
+    "responsible_party": {
+      "status": "unknown",
+      "evidence_refs": [],
+      "issues": [
+        "RESPONSIBILITY_NO_BASIS"
+      ],
+      "review": null,
+      "note": null,
+      "value": null,
+      "selected": null,
+      "candidates": []
+    },
+    "cause": {
+      "status": "unknown",
+      "evidence_refs": [],
+      "issues": [
+        "CAUSE_NOT_DIAGNOSIS"
+      ],
+      "review": null,
+      "note": null,
+      "value": null,
+      "selected": null,
+      "candidates": [
+        {
+          "id": "C1",
+          "evidence_refs": [
+            "M01/f:cause"
+          ],
+          "attribution": "system_field",
+          "note": null,
+          "statement": "本端 ping 测试 100 发 100 收，无丢包，端口流量正常；请客户提供故障时的源/目的地址及 ping/trace 结果。",
+          "cause_kind": "investigation_finding"
+        },
+        {
+          "id": "C2",
+          "evidence_refs": [
+            "M02/log:3"
+          ],
+          "attribution": "noc_check",
+          "note": null,
+          "statement": "本端 PE ping 客户 CE 互联地址：100 发 100 收，无丢包，平均 RTT 2 ms。",
+          "cause_kind": "investigation_finding"
+        },
+        {
+          "id": "C3",
+          "evidence_refs": [
+            "M02/log:4"
+          ],
+          "attribution": "noc_check",
+          "note": null,
+          "statement": "本端 PE ping 香港侧目标网段网关：100 发 100 收，无丢包，平均 RTT 3 ms。",
+          "cause_kind": "investigation_finding"
+        },
+        {
+          "id": "C4",
+          "evidence_refs": [
+            "M02/log:6"
+          ],
+          "attribution": "noc_check",
+          "note": null,
+          "statement": "返单：本端 ping 测试 100 发 100 收，无丢包，端口流量正常；请客户提供故障时的源/目的地址及 ping/trace 结果。",
+          "cause_kind": "investigation_finding"
+        },
+        {
+          "id": "C5",
+          "evidence_refs": [
+            "M02/log:8"
+          ],
+          "attribution": "noc_check",
+          "note": null,
+          "statement": "客户暂未提供测试资料。",
+          "cause_kind": "process_blocker"
+        }
+      ]
+    },
+    "handling_process": {
+      "status": "documented",
+      "evidence_refs": [
+        "M02/log:1",
+        "M02/log:2",
+        "M02/log:3",
+        "M02/log:4",
+        "M02/log:5",
+        "M02/log:6",
+        "M02/log:7",
+        "M02/log:8",
+        "M02/log:9"
+      ],
+      "issues": [],
+      "review": null,
+      "note": null,
+      "value": [
+        {
+          "id": "P1",
+          "evidence_refs": [
+            "M02/log:1"
+          ],
+          "attribution": "noc_check",
+          "note": null,
+          "time": {
+            "raw": "2026-09-28 13:02:41",
+            "iso": "2026-09-28T13:02:41+08:00",
+            "tz_source": "assumed",
+            "utc_offset": "+08:00",
+            "precision": "second",
+            "placeholder": false
+          },
+          "actor": "系统",
+          "action": "根据客户邮件建单。",
+          "target": null,
+          "result": null,
+          "step_kind": "workflow",
+          "duplicate_of": null
+        },
+        {
+          "id": "P2",
+          "evidence_refs": [
+            "M02/log:2"
+          ],
+          "attribution": "noc_check",
+          "note": null,
+          "time": {
+            "raw": "2026-09-28 13:05:10",
+            "iso": "2026-09-28T13:05:10+08:00",
+            "tz_source": "assumed",
+            "utc_offset": "+08:00",
+            "precision": "second",
+            "placeholder": false
+          },
+          "actor": "值班员N",
+          "action": "已受理。",
+          "target": null,
+          "result": null,
+          "step_kind": "workflow",
+          "duplicate_of": null
+        },
+        {
+          "id": "P3",
+          "evidence_refs": [
+            "M02/log:3"
+          ],
+          "attribution": "noc_check",
+          "note": null,
+          "time": {
+            "raw": "2026-09-28 13:09:55",
+            "iso": "2026-09-28T13:09:55+08:00",
+            "tz_source": "assumed",
+            "utc_offset": "+08:00",
+            "precision": "second",
+            "placeholder": false
+          },
+          "actor": "值班员N",
+          "action": "本端 PE ping 客户 CE 互联地址：100 发 100 收，无丢包，平均 RTT 2 ms。",
+          "target": null,
+          "result": null,
+          "step_kind": "check_result",
+          "duplicate_of": null
+        },
+        {
+          "id": "P4",
+          "evidence_refs": [
+            "M02/log:4"
+          ],
+          "attribution": "noc_check",
+          "note": null,
+          "time": {
+            "raw": "2026-09-28 13:14:20",
+            "iso": "2026-09-28T13:14:20+08:00",
+            "tz_source": "assumed",
+            "utc_offset": "+08:00",
+            "precision": "second",
+            "placeholder": false
+          },
+          "actor": "值班员N",
+          "action": "本端 PE ping 香港侧目标网段网关：100 发 100 收，无丢包，平均 RTT 3 ms。",
+          "target": null,
+          "result": null,
+          "step_kind": "check_result",
+          "duplicate_of": null
+        },
+        {
+          "id": "P5",
+          "evidence_refs": [
+            "M02/log:5"
+          ],
+          "attribution": "noc_check",
+          "note": null,
+          "time": {
+            "raw": "2026-09-28 13:18:02",
+            "iso": "2026-09-28T13:18:02+08:00",
+            "tz_source": "assumed",
+            "utc_offset": "+08:00",
+            "precision": "second",
+            "placeholder": false
+          },
+          "actor": "值班员N",
+          "action": "检查 PE 端口流量与错包计数：流量正常，无 CRC 错包。",
+          "target": null,
+          "result": null,
+          "step_kind": "check_result",
+          "duplicate_of": null
+        },
+        {
+          "id": "P6",
+          "evidence_refs": [
+            "M02/log:6"
+          ],
+          "attribution": "noc_check",
+          "note": null,
+          "time": {
+            "raw": "2026-09-28 13:20:47",
+            "iso": "2026-09-28T13:20:47+08:00",
+            "tz_source": "assumed",
+            "utc_offset": "+08:00",
+            "precision": "second",
+            "placeholder": false
+          },
+          "actor": "值班员N",
+          "action": "返单：本端 ping 测试 100 发 100 收，无丢包，端口流量正常；请客户提供故障时的源/目的地址及 ping/trace 结果。",
+          "target": null,
+          "result": null,
+          "step_kind": "workflow",
+          "duplicate_of": null
+        },
+        {
+          "id": "P7",
+          "evidence_refs": [
+            "M02/log:7"
+          ],
+          "attribution": "noc_check",
+          "note": null,
+          "time": {
+            "raw": "2026-09-28 13:40:30",
+            "iso": "2026-09-28T13:40:30+08:00",
+            "tz_source": "assumed",
+            "utc_offset": "+08:00",
+            "precision": "second",
+            "placeholder": false
+          },
+          "actor": "客户经理P",
+          "action": "已转告客户，请其提供故障时源/目的地址及 ping/trace 结果。",
+          "target": null,
+          "result": null,
+          "step_kind": "check_result",
+          "duplicate_of": null
+        },
+        {
+          "id": "P8",
+          "evidence_refs": [
+            "M02/log:8"
+          ],
+          "attribution": "noc_check",
+          "note": null,
+          "time": {
+            "raw": "2026-09-29 10:00:12",
+            "iso": "2026-09-29T10:00:12+08:00",
+            "tz_source": "assumed",
+            "utc_offset": "+08:00",
+            "precision": "second",
+            "placeholder": false
+          },
+          "actor": "客户经理P",
+          "action": "客户暂未提供测试资料。",
+          "target": null,
+          "result": null,
+          "step_kind": "check_result",
+          "duplicate_of": null
+        },
+        {
+          "id": "P9",
+          "evidence_refs": [
+            "M02/log:9"
+          ],
+          "attribution": "noc_check",
+          "note": null,
+          "time": {
+            "raw": "2026-09-29 10:02:00",
+            "iso": "2026-09-29T10:02:00+08:00",
+            "tz_source": "assumed",
+            "utc_offset": "+08:00",
+            "precision": "second",
+            "placeholder": false
+          },
+          "actor": "系统",
+          "action": "工单进入索要报告/结单签收环节。",
+          "target": null,
+          "result": null,
+          "step_kind": "workflow",
+          "duplicate_of": null
+        }
+      ]
+    },
+    "location": {
+      "status": "unknown",
+      "evidence_refs": [],
+      "issues": [
+        "LOCATION_NOT_LOCATED"
+      ],
+      "review": null,
+      "note": null,
+      "value": null,
+      "selected": null,
+      "candidates": [
+        {
+          "id": "C1",
+          "evidence_refs": [
+            "M01/f:description"
+          ],
+          "attribution": "customer",
+          "note": null,
+          "description": "Circuit ID: SYN-CKT-1009\nTime Circuit Failed: NA\nIssue: We see about 25% packet loss from our proxy 198.51.100.20 (Frankfurt) to target 203.0.113.50 (Hong Kong).\nNote: Intrusive testing is NOT approved. Please schedule a test window with us in advance.",
+          "role": "test_node",
+          "granularity": null
+        },
+        {
+          "id": "C2",
+          "evidence_refs": [
+            "M01/f:cause"
+          ],
+          "attribution": "system_field",
+          "note": null,
+          "description": "本端 ping 测试 100 发 100 收，无丢包，端口流量正常；请客户提供故障时的源/目的地址及 ping/trace 结果。",
+          "role": "test_node",
+          "granularity": null
+        },
+        {
+          "id": "C3",
+          "evidence_refs": [
+            "M02/log:3"
+          ],
+          "attribution": "noc_check",
+          "note": null,
+          "description": "本端 PE ping 客户 CE 互联地址：100 发 100 收，无丢包，平均 RTT 2 ms。",
+          "role": "test_node",
+          "granularity": null
+        },
+        {
+          "id": "C4",
+          "evidence_refs": [
+            "M02/log:4"
+          ],
+          "attribution": "noc_check",
+          "note": null,
+          "description": "本端 PE ping 香港侧目标网段网关：100 发 100 收，无丢包，平均 RTT 3 ms。",
+          "role": "test_node",
+          "granularity": null
+        },
+        {
+          "id": "C5",
+          "evidence_refs": [
+            "M02/log:6"
+          ],
+          "attribution": "noc_check",
+          "note": null,
+          "description": "返单：本端 ping 测试 100 发 100 收，无丢包，端口流量正常；请客户提供故障时的源/目的地址及 ping/trace 结果。",
+          "role": "test_node",
+          "granularity": null
+        },
+        {
+          "id": "C6",
+          "evidence_refs": [
+            "M02/log:7"
+          ],
+          "attribution": "noc_check",
+          "note": null,
+          "description": "已转告客户，请其提供故障时源/目的地址及 ping/trace 结果。",
+          "role": "test_node",
+          "granularity": null
+        }
+      ]
+    }
+  },
+  "issues": [
+    {
+      "code": "DURATION_BASIS_MISMATCH",
+      "severity": "info",
+      "message": "返单历时 18 分钟与系统字段差 36 分钟不同，不能混用口径。",
+      "element": null,
+      "evidence_refs": [
+        "M01/f:duration_returned"
+      ],
+      "candidate_ids": [],
+      "rule_id": "r.duration_basis_mismatch@1",
+      "resolved": false,
+      "resolution_note": null
+    },
+    {
+      "code": "TIME_CANDIDATES_DIFFER",
+      "severity": "warning",
+      "message": "时间候选有不同语义或数值；建单、告警、关单时间不能替代起障/恢复。",
+      "element": "start_time",
+      "evidence_refs": [
+        "M01/f:created_at",
+        "M01/f:occurred_at",
+        "M02/log:1"
+      ],
+      "candidate_ids": [],
+      "rule_id": "r.time_candidates_differ@1",
+      "resolved": false,
+      "resolution_note": null
+    },
+    {
+      "code": "TIME_CANDIDATES_DIFFER",
+      "severity": "warning",
+      "message": "时间候选有不同语义或数值；建单、告警、关单时间不能替代起障/恢复。",
+      "element": "end_time",
+      "evidence_refs": [
+        "M01/f:recovered_at",
+        "M02/log:6"
+      ],
+      "candidate_ids": [],
+      "rule_id": "r.time_candidates_differ@1",
+      "resolved": false,
+      "resolution_note": null
+    },
+    {
+      "code": "RECOVERY_UNVERIFIED",
+      "severity": "warning",
+      "message": "仅有系统恢复记载，未见客户恢复确认；同意结单不等于确认恢复。",
+      "element": "end_time",
+      "evidence_refs": [
+        "M01/f:recovered_at"
+      ],
+      "candidate_ids": [],
+      "rule_id": "r.recovery_unverified@1",
+      "resolved": false,
+      "resolution_note": null
+    },
+    {
+      "code": "CAUSE_NOT_DIAGNOSIS",
+      "severity": "warning",
+      "message": "排查结论、恢复方式和资源状态保留为候选，不能当作根因。",
+      "element": "cause",
+      "evidence_refs": [
+        "M01/f:cause",
+        "M02/log:3",
+        "M02/log:4",
+        "M02/log:6",
+        "M02/log:8"
+      ],
+      "candidate_ids": [],
+      "rule_id": "r.cause_not_diagnosis@1",
+      "resolved": false,
+      "resolution_note": null
+    },
+    {
+      "code": "RESPONSIBILITY_NO_BASIS",
+      "severity": "info",
+      "message": "未见明确责任认定，不按供应商或处理部门补齐。",
+      "element": "responsible_party",
+      "evidence_refs": [],
+      "candidate_ids": [],
+      "rule_id": "r.responsibility_no_basis@1",
+      "resolved": false,
+      "resolution_note": null
+    },
+    {
+      "code": "RECOVERY_SCOPE_LIMITED",
+      "severity": "warning",
+      "message": "检查范围内正常不能替代业务恢复确认。",
+      "element": "end_time",
+      "evidence_refs": [
+        "M01/f:cause",
+        "M02/log:3",
+        "M02/log:4",
+        "M02/log:5",
+        "M02/log:6"
+      ],
+      "candidate_ids": [],
+      "rule_id": "r.recovery_scope_limited@1",
+      "resolved": false,
+      "resolution_note": null
+    },
+    {
+      "code": "OBSERVATION_SCOPE_DIFFERS",
+      "severity": "warning",
+      "message": "客户感知与网管观测来源、时刻或范围不同，分别保留。",
+      "element": "phenomenon",
+      "evidence_refs": [
+        "M01/f:description",
+        "M02/log:3",
+        "M02/log:4",
+        "M02/log:6"
+      ],
+      "candidate_ids": [],
+      "rule_id": "r.observation_scope_differs@1",
+      "resolved": false,
+      "resolution_note": null
+    },
+    {
+      "code": "LOCATION_NOT_LOCATED",
+      "severity": "info",
+      "message": "未定位实际故障点，业务端点、告警位置和测试节点只作候选。",
+      "element": "location",
+      "evidence_refs": [
+        "M01/f:description",
+        "M01/f:cause",
+        "M02/log:3",
+        "M02/log:4",
+        "M02/log:6",
+        "M02/log:7"
+      ],
+      "candidate_ids": [],
+      "rule_id": "r.location_not_located@1",
+      "resolved": false,
+      "resolution_note": null
+    }
+  ],
+  "service_identity": {
+    "status": "unverified",
+    "identifiers": [
+      {
+        "value": "SYN-CKT-1009",
+        "role": "reported",
+        "evidence_refs": [
+          "M01/f:circuit_id"
+        ],
+        "note": null
+      }
+    ],
+    "note": "服务身份尚未经独立核实。"
+  },
+  "related_tickets": [],
+  "run": {
+    "pipeline_version": "a1.1.0",
+    "schema_version": "1.0",
+    "provider": "rules",
+    "prompt_version": null,
+    "rules_version": "1.0",
+    "bundle_sha256": "3b5a15345f1ced9d6c42edd2425ddbb95e2ebd58c990ab81b724eccd0302f21e",
+    "started_at": "2026-10-27T13:05:01.355443+00:00",
+    "finished_at": "2026-10-27T13:05:01.359313+00:00"
+  }
+}

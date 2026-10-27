@@ -1,0 +1,12 @@
+:root { color-scheme: light; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; color: #183247; background: #edf2f5; line-height: 1.65; }
+body { margin: 0; }
+main { max-width: 1080px; margin: 32px auto; padding: 40px; background: #fff; border-top: 6px solid #007c83; }
+h1 { font-size: 2.5rem; margin: 0; } h2 { margin-top: 36px; border-bottom: 1px solid #cbd8df; padding-bottom: 8px; } h3 { font-size: 1.08rem; }
+.eyebrow { color: #007c83; letter-spacing: .12em; } .status { color: #435d6c; background: #edf3f5; border-radius: 4px; padding: 3px 8px; font-size: .8rem; font-weight: 400; }
+.notice { padding: 12px 16px; border-left: 3px solid #dc9b28; background: #fff7e8; } .muted { color: #607784; font-size: .86rem; }
+a { color: #007078; overflow-wrap: anywhere; } pre, code { font-family: ui-monospace, monospace; font-size: .86rem; } pre { white-space: pre-wrap; overflow-wrap: anywhere; padding: 16px; background: #f4f7f9; }
+article { padding: 4px 0 18px; border-bottom: 1px solid #e4ebef; scroll-margin-top: 20px; } article:target { background: #fff8de; } details { padding: 8px 0; } summary { cursor: pointer; } li { margin-bottom: 10px; }
+table { border-collapse: collapse; width: 100%; font-size: .9rem; } th, td { border-bottom: 1px solid #dce5eb; text-align: left; padding: 10px; overflow-wrap: anywhere; } th { background: #f4f7f9; }
+dl { display: grid; grid-template-columns: 100px 1fr; font-size: .9rem; } dd { margin: 0; overflow-wrap: anywhere; } .timeline { border-left: 2px solid #dce5eb; margin-left: 12px; padding-left: 28px; }
+@media (max-width: 700px) { main { padding: 20px; margin: 0; } h1 { font-size: 2rem; } table { display: block; overflow-x: auto; } }
+@media print { main { margin: 0; padding: 0; max-width: none; } details { display: block; } a { color: inherit; } }
