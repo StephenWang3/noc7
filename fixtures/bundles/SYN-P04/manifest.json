@@ -1,0 +1,43 @@
+{
+  "bundle_format_version": "1.0",
+  "bundle_id": "SYN-P04",
+  "data_class": "synthetic",
+  "source": {
+    "kind": "synthetic",
+    "tool": "hand-written + scripts/make_fixture_assets.py (A0)",
+    "note": "按正向对照：七要素均有依据的完整结案；PDF 附件编写"
+  },
+  "captured_at": "2026-10-11T11:30:00+08:00",
+  "default_timezone": "+08:00",
+  "synthetic_notice": "合成数据：内容全部虚构，只保留正向对照：七要素均有依据的完整结案；PDF 附件的问题模式，不含任何真实工单内容、编号、客户信息或附件。",
+  "materials": [
+    {
+      "id": "M01",
+      "kind": "ticket_fields",
+      "path": "ticket.json",
+      "sha256": "0a717965eaf92963f61f6bd86f6048767a8ae1debde6357545110a1cb5a400f9",
+      "size_bytes": 1589,
+      "media_type": "application/json"
+    },
+    {
+      "id": "M02",
+      "kind": "process_log",
+      "path": "process_log.json",
+      "sha256": "30b1e43d67fae373c9a09ab7193f051d519394c7c7b08b1d2bbfe412e997c669",
+      "size_bytes": 3150,
+      "media_type": "application/json"
+    },
+    {
+      "id": "M03",
+      "kind": "pdf",
+      "path": "attachments/M03-repair-report.pdf",
+      "sha256": "0c9ff39c76325450d5c57c03ff0104e6bce3069a7f82429bdb200712fc10bae7",
+      "size_bytes": 4821,
+      "media_type": "application/pdf",
+      "origin": {
+        "log_seq": 9
+      },
+      "description": "现场抢修报告"
+    }
+  ]
+}

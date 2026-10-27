@@ -1,0 +1,21 @@
+{
+  "ticket_ref": "SYN-P03",
+  "title": "【合成】客户专线中断（含同电路作废单）",
+  "ticket_family": "business",
+  "category": "业务中断",
+  "status": {"list_status": "处理中", "detail_status": "处理中"},
+  "fields": [
+    {"key": "ticket_no", "label": "工单编号", "value": "SYN-P03", "section": "基础信息"},
+    {"key": "customer", "label": "客户名称", "value": "示例客户辛（合成）", "section": "基础信息"},
+    {"key": "circuit_id", "label": "电路编号", "value": "SYN-CKT-1023", "section": "基础信息"},
+    {"key": "created_at", "label": "建单时间", "value": "2026-10-08 08:21:40", "section": "基础信息"},
+    {"key": "fault_type", "label": "故障类型", "value": "业务中断", "section": "故障信息"},
+    {"key": "occurred_at", "label": "故障发生时间", "value": "2026-10-08 08:15:00", "section": "故障信息"},
+    {"key": "recovered_at", "label": "故障恢复时间", "value": null, "section": "故障信息"},
+    {"key": "description", "label": "故障描述", "value": "客户报专线 SYN-CKT-1023 自 08:15 起中断。", "section": "故障信息"},
+    {"key": "cause", "label": "故障原因", "value": null, "section": "故障信息"}
+  ],
+  "related_tickets": [
+    {"ticket_ref": "SYN-P03-OLD", "relation": "same_circuit", "status": "已作废", "note": "同一电路的重复建单，已作废"}
+  ]
+}

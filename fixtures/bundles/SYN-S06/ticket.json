@@ -1,0 +1,23 @@
+{
+  "ticket_ref": "SYN-S06",
+  "title": "【合成】东京—香港大客户电路丢包",
+  "ticket_family": "key_account",
+  "category": "业务性能-丢包",
+  "status": {"list_status": "已结单", "detail_status": "已结单"},
+  "fields": [
+    {"key": "ticket_no", "label": "工单编号", "value": "SYN-S06", "section": "基础信息"},
+    {"key": "customer", "label": "客户名称", "value": "示例客户丁（合成）", "section": "基础信息"},
+    {"key": "circuit_id", "label": "电路编号", "value": "SYN-CKT-1006", "section": "基础信息"},
+    {"key": "a_end", "label": "A 端", "value": "东京 示例 PoP（合成）", "section": "基础信息"},
+    {"key": "z_end", "label": "Z 端", "value": "香港 示例 PoP（合成）", "section": "基础信息"},
+    {"key": "vendor", "label": "供应商", "value": "上游运营商 JP-Carrier（合成）", "section": "基础信息"},
+    {"key": "created_at", "label": "建单时间", "value": "2026-09-25 09:20:05", "section": "基础信息"},
+    {"key": "fault_type", "label": "故障类型", "value": "业务性能-丢包", "section": "故障信息"},
+    {"key": "occurred_at", "label": "故障发生时间", "value": "2026-09-25 09:40:00", "section": "故障信息"},
+    {"key": "recovered_at", "label": "故障恢复时间", "value": "2026-09-25 10:01:00", "section": "故障信息"},
+    {"key": "duration_returned", "label": "返单历时", "value": "63分钟", "section": "故障信息"},
+    {"key": "description", "label": "故障描述", "value": "客户报东京—香港电路 SYN-CKT-1006 丢包约 86%，视频会议无法使用。", "section": "故障信息"},
+    {"key": "cause", "label": "故障原因", "value": "自恢", "section": "故障信息"}
+  ],
+  "related_tickets": []
+}

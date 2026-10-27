@@ -1,0 +1,5 @@
+{
+  "entries": [
+    {"seq": 1, "recorded_at": "2026-09-22 03:58:40", "actor": "中继监控系统", "action": "创建工单", "content": "【中继预警】中继 SYN-TRK-HK-SG-02 ISIS 邻居中断，底层光层告警 R_LOS（SYN-ALM-778812），自动创建中继工单。", "entry_kind": "system"}
+  ]
+}

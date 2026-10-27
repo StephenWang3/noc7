@@ -1,0 +1,2668 @@
+{
+  "$defs": {
+    "Attribution": {
+      "description": "陈述归属。报告里要保留“客户反馈”“供应商称”“检查显示”这类归属。",
+      "enum": [
+        "customer",
+        "vendor",
+        "noc_check",
+        "field_engineer",
+        "system_field",
+        "alarm_system",
+        "monitoring_chart",
+        "ai_summary",
+        "internal_staff",
+        "unknown"
+      ],
+      "title": "Attribution",
+      "type": "string"
+    },
+    "CauseCandidate": {
+      "additionalProperties": false,
+      "properties": {
+        "attribution": {
+          "$ref": "#/$defs/Attribution"
+        },
+        "cause_kind": {
+          "$ref": "#/$defs/CauseKind"
+        },
+        "evidence_refs": {
+          "description": "候选必须有证据，否则不能成为候选",
+          "items": {
+            "pattern": "^M\\d{2,}/[A-Za-z0-9:_.\\-]+$",
+            "type": "string"
+          },
+          "minItems": 1,
+          "title": "Evidence Refs",
+          "type": "array"
+        },
+        "id": {
+          "pattern": "^[A-Za-z][A-Za-z0-9_.\\-]*$",
+          "title": "Id",
+          "type": "string"
+        },
+        "note": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Note"
+        },
+        "statement": {
+          "title": "Statement",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "evidence_refs",
+        "attribution",
+        "statement",
+        "cause_kind"
+      ],
+      "title": "CauseCandidate",
+      "type": "object"
+    },
+    "CauseElement": {
+      "additionalProperties": false,
+      "properties": {
+        "candidates": {
+          "items": {
+            "$ref": "#/$defs/CauseCandidate"
+          },
+          "title": "Candidates",
+          "type": "array"
+        },
+        "evidence_refs": {
+          "description": "支撑结论值的证据",
+          "items": {
+            "pattern": "^M\\d{2,}/[A-Za-z0-9:_.\\-]+$",
+            "type": "string"
+          },
+          "title": "Evidence Refs",
+          "type": "array"
+        },
+        "issues": {
+          "items": {
+            "$ref": "#/$defs/IssueCode"
+          },
+          "title": "Issues",
+          "type": "array"
+        },
+        "note": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "给报告和审核人员的说明，如“未见恢复确认”",
+          "title": "Note"
+        },
+        "review": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ReviewInfo"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "selected": {
+          "anyOf": [
+            {
+              "pattern": "^[A-Za-z][A-Za-z0-9_.\\-]*$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Selected"
+        },
+        "status": {
+          "$ref": "#/$defs/ElementStatus"
+        },
+        "value": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Value"
+        }
+      },
+      "required": [
+        "status"
+      ],
+      "title": "CauseElement",
+      "type": "object"
+    },
+    "CauseKind": {
+      "enum": [
+        "root_cause_confirmed",
+        "root_cause_claimed",
+        "candidate_list_item",
+        "investigation_finding",
+        "alarm_explanation",
+        "recovery_mode",
+        "resource_state",
+        "planned_work",
+        "process_blocker",
+        "customer_suspicion"
+      ],
+      "title": "CauseKind",
+      "type": "string"
+    },
+    "ChartReading": {
+      "additionalProperties": false,
+      "description": "监控曲线读数。图例颜色与曲线的绑定由解析器负责，读数按类别分开保存。",
+      "properties": {
+        "metric": {
+          "description": "指标，如 丢包率",
+          "title": "Metric",
+          "type": "string"
+        },
+        "series": {
+          "items": {
+            "$ref": "#/$defs/ChartSeriesStat"
+          },
+          "title": "Series",
+          "type": "array"
+        },
+        "timezone_shown": {
+          "default": false,
+          "description": "图上是否标明时区",
+          "title": "Timezone Shown",
+          "type": "boolean"
+        },
+        "type": {
+          "const": "chart",
+          "default": "chart",
+          "title": "Type",
+          "type": "string"
+        },
+        "unit": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Unit"
+        },
+        "x_end": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "横轴终点原文",
+          "title": "X End"
+        },
+        "x_start": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "横轴起点原文",
+          "title": "X Start"
+        }
+      },
+      "required": [
+        "metric"
+      ],
+      "title": "ChartReading",
+      "type": "object"
+    },
+    "ChartSeriesStat": {
+      "additionalProperties": false,
+      "properties": {
+        "avg": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Avg"
+        },
+        "first_nonzero": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "首次出现非零值的横轴原文（如 02:12），不等于起障时间",
+          "title": "First Nonzero"
+        },
+        "max": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Max"
+        },
+        "min": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Min"
+        },
+        "series": {
+          "description": "曲线名称/类别，如 QoS 类别 EF",
+          "title": "Series",
+          "type": "string"
+        }
+      },
+      "required": [
+        "series"
+      ],
+      "title": "ChartSeriesStat",
+      "type": "object"
+    },
+    "DataClass": {
+      "description": "数据分级。决定数据能否发往外部服务（见 noc7.providers.gate）。",
+      "enum": [
+        "synthetic",
+        "real"
+      ],
+      "title": "DataClass",
+      "type": "string"
+    },
+    "DocBlockLocator": {
+      "additionalProperties": false,
+      "description": "DOCX 段落或表格单元格（序号均从 0 起）。",
+      "properties": {
+        "col": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Col"
+        },
+        "paragraph_index": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Paragraph Index"
+        },
+        "row": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Row"
+        },
+        "table_index": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Table Index"
+        },
+        "type": {
+          "const": "doc_block",
+          "default": "doc_block",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "title": "DocBlockLocator",
+      "type": "object"
+    },
+    "ElementName": {
+      "description": "七要素。顺序即报告中的展示顺序。",
+      "enum": [
+        "start_time",
+        "end_time",
+        "phenomenon",
+        "responsible_party",
+        "cause",
+        "handling_process",
+        "location"
+      ],
+      "title": "ElementName",
+      "type": "string"
+    },
+    "ElementStatus": {
+      "description": "要素状态（PRD §6）。模型自评置信度不能代替状态。",
+      "enum": [
+        "documented",
+        "confirmed",
+        "unknown",
+        "conflicted"
+      ],
+      "title": "ElementStatus",
+      "type": "string"
+    },
+    "EmailMessageLocator": {
+      "additionalProperties": false,
+      "description": "邮件按消息边界切分：0 = 当前消息，1 = 第一层引用，以此类推。",
+      "properties": {
+        "char_end": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Char End"
+        },
+        "char_start": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Char Start"
+        },
+        "message_index": {
+          "minimum": 0,
+          "title": "Message Index",
+          "type": "integer"
+        },
+        "part": {
+          "default": "body",
+          "enum": [
+            "header",
+            "body",
+            "table",
+            "signature",
+            "disclaimer"
+          ],
+          "title": "Part",
+          "type": "string"
+        },
+        "type": {
+          "const": "email_message",
+          "default": "email_message",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "message_index"
+      ],
+      "title": "EmailMessageLocator",
+      "type": "object"
+    },
+    "Event": {
+      "additionalProperties": false,
+      "description": "时间线上的一个事件（ARCHITECTURE_OPTIONS §5.4 第一步“事件抽取”的产物）。",
+      "properties": {
+        "action": {
+          "title": "Action",
+          "type": "string"
+        },
+        "actor": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Actor"
+        },
+        "attribution": {
+          "$ref": "#/$defs/Attribution"
+        },
+        "duplicate_of": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "重复事件指向首次出现的事件编号",
+          "title": "Duplicate Of"
+        },
+        "event_kind": {
+          "$ref": "#/$defs/StepKind"
+        },
+        "evidence_refs": {
+          "items": {
+            "pattern": "^M\\d{2,}/[A-Za-z0-9:_.\\-]+$",
+            "type": "string"
+          },
+          "minItems": 1,
+          "title": "Evidence Refs",
+          "type": "array"
+        },
+        "id": {
+          "pattern": "^EV[A-Za-z0-9_.\\-]+$",
+          "title": "Id",
+          "type": "string"
+        },
+        "result": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Result"
+        },
+        "scope": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Scope"
+        },
+        "target": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Target"
+        },
+        "time": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/TimeValue"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "time_kind": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/TimeKind"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "id",
+        "attribution",
+        "action",
+        "event_kind",
+        "evidence_refs"
+      ],
+      "title": "Event",
+      "type": "object"
+    },
+    "EvidenceSpan": {
+      "additionalProperties": false,
+      "description": "一段带编号、可定位的证据。\n\n编号规则 <材料编号>/<局部编号>，局部编号由该材料的解析器决定，建议：\n  字段 f:<field_key>；处理过程 log:<seq>；邮件 msg:<i>[:part]；\n  PDF p<页>[:b<块>]；图片 img[:r<区域>]；DOCX para:<i> / tbl:<i>:<r>:<c>。",
+      "properties": {
+        "derived_from": {
+          "items": {
+            "pattern": "^M\\d{2,}/[A-Za-z0-9:_.\\-]+$",
+            "type": "string"
+          },
+          "title": "Derived From",
+          "type": "array"
+        },
+        "extractor": {
+          "description": "产出该片段的解析器及版本，如 'a1.email_html@0.1'",
+          "title": "Extractor",
+          "type": "string"
+        },
+        "id": {
+          "pattern": "^M\\d{2,}/[A-Za-z0-9:_.\\-]+$",
+          "title": "Id",
+          "type": "string"
+        },
+        "language": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Language"
+        },
+        "locator": {
+          "discriminator": {
+            "mapping": {
+              "doc_block": "#/$defs/DocBlockLocator",
+              "email_message": "#/$defs/EmailMessageLocator",
+              "field": "#/$defs/FieldLocator",
+              "image_region": "#/$defs/ImageRegionLocator",
+              "log_entry": "#/$defs/LogEntryLocator",
+              "page": "#/$defs/PageLocator",
+              "text_range": "#/$defs/TextRangeLocator"
+            },
+            "propertyName": "type"
+          },
+          "oneOf": [
+            {
+              "$ref": "#/$defs/FieldLocator"
+            },
+            {
+              "$ref": "#/$defs/LogEntryLocator"
+            },
+            {
+              "$ref": "#/$defs/EmailMessageLocator"
+            },
+            {
+              "$ref": "#/$defs/PageLocator"
+            },
+            {
+              "$ref": "#/$defs/ImageRegionLocator"
+            },
+            {
+              "$ref": "#/$defs/DocBlockLocator"
+            },
+            {
+              "$ref": "#/$defs/TextRangeLocator"
+            }
+          ],
+          "title": "Locator"
+        },
+        "material_id": {
+          "pattern": "^M\\d{2,}$",
+          "title": "Material Id",
+          "type": "string"
+        },
+        "needs_review": {
+          "default": false,
+          "title": "Needs Review",
+          "type": "boolean"
+        },
+        "quality": {
+          "anyOf": [
+            {
+              "maximum": 1,
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "OCR/识图质量分",
+          "title": "Quality"
+        },
+        "reading": {
+          "anyOf": [
+            {
+              "discriminator": {
+                "mapping": {
+                  "chart": "#/$defs/ChartReading",
+                  "table": "#/$defs/TableReading"
+                },
+                "propertyName": "type"
+              },
+              "oneOf": [
+                {
+                  "$ref": "#/$defs/ChartReading"
+                },
+                {
+                  "$ref": "#/$defs/TableReading"
+                }
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Reading"
+        },
+        "role": {
+          "$ref": "#/$defs/SpanRole",
+          "default": "original"
+        },
+        "text": {
+          "description": "原文；OCR/视觉片段为识别出的文字或描述",
+          "title": "Text",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "material_id",
+        "locator",
+        "text",
+        "extractor"
+      ],
+      "title": "EvidenceSpan",
+      "type": "object"
+    },
+    "FieldLocator": {
+      "additionalProperties": false,
+      "properties": {
+        "char_end": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Char End"
+        },
+        "char_start": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Char Start"
+        },
+        "field_key": {
+          "pattern": "^[a-z][a-z0-9_]*$",
+          "title": "Field Key",
+          "type": "string"
+        },
+        "type": {
+          "const": "field",
+          "default": "field",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "field_key"
+      ],
+      "title": "FieldLocator",
+      "type": "object"
+    },
+    "HandlingProcessElement": {
+      "additionalProperties": false,
+      "properties": {
+        "evidence_refs": {
+          "description": "支撑结论值的证据",
+          "items": {
+            "pattern": "^M\\d{2,}/[A-Za-z0-9:_.\\-]+$",
+            "type": "string"
+          },
+          "title": "Evidence Refs",
+          "type": "array"
+        },
+        "issues": {
+          "items": {
+            "$ref": "#/$defs/IssueCode"
+          },
+          "title": "Issues",
+          "type": "array"
+        },
+        "note": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "给报告和审核人员的说明，如“未见恢复确认”",
+          "title": "Note"
+        },
+        "review": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ReviewInfo"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "status": {
+          "$ref": "#/$defs/ElementStatus"
+        },
+        "value": {
+          "description": "按时间排列的处理步骤",
+          "items": {
+            "$ref": "#/$defs/ProcessStep"
+          },
+          "title": "Value",
+          "type": "array"
+        }
+      },
+      "required": [
+        "status"
+      ],
+      "title": "HandlingProcessElement",
+      "type": "object"
+    },
+    "IdentityStatus": {
+      "enum": [
+        "verified",
+        "unverified",
+        "conflicting"
+      ],
+      "title": "IdentityStatus",
+      "type": "string"
+    },
+    "ImageRegionLocator": {
+      "additionalProperties": false,
+      "description": "图片区域（像素坐标 x0, y0, x1, y1）。bbox 为空表示整张图。",
+      "properties": {
+        "bbox": {
+          "anyOf": [
+            {
+              "maxItems": 4,
+              "minItems": 4,
+              "prefixItems": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "integer"
+                }
+              ],
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Bbox"
+        },
+        "type": {
+          "const": "image_region",
+          "default": "image_region",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "title": "ImageRegionLocator",
+      "type": "object"
+    },
+    "ImageSubtype": {
+      "description": "图片先分类再理解（ARCHITECTURE_OPTIONS §2.1）。由附件线 A2 判定。",
+      "enum": [
+        "qos_chart",
+        "document_composite",
+        "site_photo",
+        "terminal_screenshot",
+        "other"
+      ],
+      "title": "ImageSubtype",
+      "type": "string"
+    },
+    "IssueCode": {
+      "enum": [
+        "TIME_ORDER_INVERTED",
+        "NEGATIVE_DURATION",
+        "TIME_PLACEHOLDER",
+        "TIME_TZ_MISSING",
+        "TIME_CANDIDATES_DIFFER",
+        "TIME_BODY_RECORD_MISMATCH",
+        "DURATION_BASIS_MISMATCH",
+        "ONGOING_NO_END",
+        "RECOVERY_UNVERIFIED",
+        "RECOVERY_SCOPE_LIMITED",
+        "CAUSE_NOT_DIAGNOSIS",
+        "CAUSE_CANDIDATE_LIST",
+        "RESPONSIBILITY_NO_BASIS",
+        "OBSERVATION_SCOPE_DIFFERS",
+        "LOCATION_NOT_LOCATED",
+        "SERVICE_IDENTITY_UNVERIFIED",
+        "RELATED_TICKET_SHARED_SOURCE",
+        "RELATED_TICKET_INVALID",
+        "RELATED_TICKET_REOPENED",
+        "TICKET_CANCELLED",
+        "STATUS_VIEW_MISMATCH",
+        "EVIDENCE_REF_MISSING",
+        "EVIDENCE_QUOTE_MISMATCH",
+        "DERIVED_SOURCE_DUPLICATE",
+        "DUPLICATE_CONTENT",
+        "MATERIAL_PARSE_FAILED",
+        "MATERIAL_LOW_QUALITY",
+        "MATERIAL_UNSUPPORTED",
+        "MATERIAL_MISSING",
+        "ATTACHMENT_FLAG_MISMATCH",
+        "EMBEDDED_INSTRUCTION"
+      ],
+      "title": "IssueCode",
+      "type": "string"
+    },
+    "LocationCandidate": {
+      "additionalProperties": false,
+      "properties": {
+        "attribution": {
+          "$ref": "#/$defs/Attribution"
+        },
+        "description": {
+          "title": "Description",
+          "type": "string"
+        },
+        "evidence_refs": {
+          "description": "候选必须有证据，否则不能成为候选",
+          "items": {
+            "pattern": "^M\\d{2,}/[A-Za-z0-9:_.\\-]+$",
+            "type": "string"
+          },
+          "minItems": 1,
+          "title": "Evidence Refs",
+          "type": "array"
+        },
+        "granularity": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LocationGranularity"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "id": {
+          "pattern": "^[A-Za-z][A-Za-z0-9_.\\-]*$",
+          "title": "Id",
+          "type": "string"
+        },
+        "note": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Note"
+        },
+        "role": {
+          "$ref": "#/$defs/LocationRole"
+        }
+      },
+      "required": [
+        "id",
+        "evidence_refs",
+        "attribution",
+        "description",
+        "role"
+      ],
+      "title": "LocationCandidate",
+      "type": "object"
+    },
+    "LocationElement": {
+      "additionalProperties": false,
+      "properties": {
+        "candidates": {
+          "items": {
+            "$ref": "#/$defs/LocationCandidate"
+          },
+          "title": "Candidates",
+          "type": "array"
+        },
+        "evidence_refs": {
+          "description": "支撑结论值的证据",
+          "items": {
+            "pattern": "^M\\d{2,}/[A-Za-z0-9:_.\\-]+$",
+            "type": "string"
+          },
+          "title": "Evidence Refs",
+          "type": "array"
+        },
+        "issues": {
+          "items": {
+            "$ref": "#/$defs/IssueCode"
+          },
+          "title": "Issues",
+          "type": "array"
+        },
+        "note": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "给报告和审核人员的说明，如“未见恢复确认”",
+          "title": "Note"
+        },
+        "review": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ReviewInfo"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "selected": {
+          "anyOf": [
+            {
+              "pattern": "^[A-Za-z][A-Za-z0-9_.\\-]*$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Selected"
+        },
+        "status": {
+          "$ref": "#/$defs/ElementStatus"
+        },
+        "value": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Value"
+        }
+      },
+      "required": [
+        "status"
+      ],
+      "title": "LocationElement",
+      "type": "object"
+    },
+    "LocationGranularity": {
+      "enum": [
+        "country",
+        "city",
+        "site",
+        "segment",
+        "device",
+        "port"
+      ],
+      "title": "LocationGranularity",
+      "type": "string"
+    },
+    "LocationRole": {
+      "enum": [
+        "located_fault_point",
+        "alarm_location",
+        "service_endpoint",
+        "customer_site",
+        "test_node",
+        "transit_node"
+      ],
+      "title": "LocationRole",
+      "type": "string"
+    },
+    "LogEntryLocator": {
+      "additionalProperties": false,
+      "properties": {
+        "char_end": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Char End"
+        },
+        "char_start": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Char Start"
+        },
+        "seq": {
+          "minimum": 1,
+          "title": "Seq",
+          "type": "integer"
+        },
+        "type": {
+          "const": "log_entry",
+          "default": "log_entry",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "seq"
+      ],
+      "title": "LogEntryLocator",
+      "type": "object"
+    },
+    "Material": {
+      "additionalProperties": false,
+      "description": "分析结果中的材料：在 manifest 声明之上附加解析状态。",
+      "properties": {
+        "derived": {
+          "default": false,
+          "description": "是否为衍生材料（如源系统生成的 AI 摘要）",
+          "title": "Derived",
+          "type": "boolean"
+        },
+        "derived_from": {
+          "items": {
+            "pattern": "^M\\d{2,}$",
+            "type": "string"
+          },
+          "title": "Derived From",
+          "type": "array"
+        },
+        "description": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Description"
+        },
+        "id": {
+          "pattern": "^M\\d{2,}$",
+          "title": "Id",
+          "type": "string"
+        },
+        "kind": {
+          "$ref": "#/$defs/MaterialKind"
+        },
+        "media_type": {
+          "title": "Media Type",
+          "type": "string"
+        },
+        "origin": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/MaterialOrigin"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "parse_note": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Parse Note"
+        },
+        "parse_status": {
+          "$ref": "#/$defs/ParseStatus",
+          "default": "pending"
+        },
+        "parser": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "实际使用的解析器，如 'a1.ticket_fields@0.1'",
+          "title": "Parser"
+        },
+        "path": {
+          "description": "相对工单包根目录的路径",
+          "title": "Path",
+          "type": "string"
+        },
+        "sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Sha256",
+          "type": "string"
+        },
+        "size_bytes": {
+          "minimum": 0,
+          "title": "Size Bytes",
+          "type": "integer"
+        },
+        "subtype": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ImageSubtype"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "id",
+        "kind",
+        "path",
+        "sha256",
+        "size_bytes",
+        "media_type"
+      ],
+      "title": "Material",
+      "type": "object"
+    },
+    "MaterialKind": {
+      "enum": [
+        "ticket_fields",
+        "process_log",
+        "email_html",
+        "email_eml",
+        "image",
+        "pdf",
+        "docx",
+        "text",
+        "other"
+      ],
+      "title": "MaterialKind",
+      "type": "string"
+    },
+    "MaterialOrigin": {
+      "additionalProperties": false,
+      "description": "材料在源系统中的位置，用于溯源和漏件检查。",
+      "properties": {
+        "log_seq": {
+          "anyOf": [
+            {
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "出自处理过程第几条",
+          "title": "Log Seq"
+        },
+        "note": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Note"
+        }
+      },
+      "title": "MaterialOrigin",
+      "type": "object"
+    },
+    "Observation": {
+      "additionalProperties": false,
+      "description": "一次观测。不同时刻、不同来源的观测并列保存，不压成一个数（S06：86%、10%、ping 中断）。",
+      "properties": {
+        "attribution": {
+          "$ref": "#/$defs/Attribution"
+        },
+        "description": {
+          "title": "Description",
+          "type": "string"
+        },
+        "evidence_refs": {
+          "description": "候选必须有证据，否则不能成为候选",
+          "items": {
+            "pattern": "^M\\d{2,}/[A-Za-z0-9:_.\\-]+$",
+            "type": "string"
+          },
+          "minItems": 1,
+          "title": "Evidence Refs",
+          "type": "array"
+        },
+        "id": {
+          "pattern": "^[A-Za-z][A-Za-z0-9_.\\-]*$",
+          "title": "Id",
+          "type": "string"
+        },
+        "metric": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "指标：丢包率、时延、收光功率、告警……",
+          "title": "Metric"
+        },
+        "note": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Note"
+        },
+        "observed_at": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/TimeValue"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "scope": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "观测范围/测试对象：端到端、国内段、某 QoS 类别……",
+          "title": "Scope"
+        },
+        "unit": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Unit"
+        },
+        "value": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Value"
+        },
+        "value_text": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "非数值读数的原文，如 ping 中断、R_LOS",
+          "title": "Value Text"
+        }
+      },
+      "required": [
+        "id",
+        "evidence_refs",
+        "attribution",
+        "description"
+      ],
+      "title": "Observation",
+      "type": "object"
+    },
+    "PageLocator": {
+      "additionalProperties": false,
+      "description": "PDF 页（1 起），可选页内区域（PDF 坐标，单位 pt）。",
+      "properties": {
+        "bbox": {
+          "anyOf": [
+            {
+              "maxItems": 4,
+              "minItems": 4,
+              "prefixItems": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "number"
+                }
+              ],
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Bbox"
+        },
+        "page": {
+          "minimum": 1,
+          "title": "Page",
+          "type": "integer"
+        },
+        "type": {
+          "const": "page",
+          "default": "page",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "page"
+      ],
+      "title": "PageLocator",
+      "type": "object"
+    },
+    "ParseStatus": {
+      "enum": [
+        "pending",
+        "parsed",
+        "needs_review",
+        "failed",
+        "unsupported"
+      ],
+      "title": "ParseStatus",
+      "type": "string"
+    },
+    "PartyCandidate": {
+      "additionalProperties": false,
+      "properties": {
+        "attribution": {
+          "$ref": "#/$defs/Attribution"
+        },
+        "basis": {
+          "$ref": "#/$defs/ResponsibilityBasis"
+        },
+        "evidence_refs": {
+          "description": "候选必须有证据，否则不能成为候选",
+          "items": {
+            "pattern": "^M\\d{2,}/[A-Za-z0-9:_.\\-]+$",
+            "type": "string"
+          },
+          "minItems": 1,
+          "title": "Evidence Refs",
+          "type": "array"
+        },
+        "id": {
+          "pattern": "^[A-Za-z][A-Za-z0-9_.\\-]*$",
+          "title": "Id",
+          "type": "string"
+        },
+        "note": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Note"
+        },
+        "party": {
+          "title": "Party",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "evidence_refs",
+        "attribution",
+        "party",
+        "basis"
+      ],
+      "title": "PartyCandidate",
+      "type": "object"
+    },
+    "PhenomenonElement": {
+      "additionalProperties": false,
+      "properties": {
+        "candidates": {
+          "description": "全部观测，并列保存",
+          "items": {
+            "$ref": "#/$defs/Observation"
+          },
+          "title": "Candidates",
+          "type": "array"
+        },
+        "evidence_refs": {
+          "description": "支撑结论值的证据",
+          "items": {
+            "pattern": "^M\\d{2,}/[A-Za-z0-9:_.\\-]+$",
+            "type": "string"
+          },
+          "title": "Evidence Refs",
+          "type": "array"
+        },
+        "issues": {
+          "items": {
+            "$ref": "#/$defs/IssueCode"
+          },
+          "title": "Issues",
+          "type": "array"
+        },
+        "note": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "给报告和审核人员的说明，如“未见恢复确认”",
+          "title": "Note"
+        },
+        "review": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ReviewInfo"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "status": {
+          "$ref": "#/$defs/ElementStatus"
+        },
+        "value": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "现象概述，必须保留观测方归属",
+          "title": "Value"
+        }
+      },
+      "required": [
+        "status"
+      ],
+      "title": "PhenomenonElement",
+      "type": "object"
+    },
+    "ProcessStep": {
+      "additionalProperties": false,
+      "properties": {
+        "action": {
+          "title": "Action",
+          "type": "string"
+        },
+        "actor": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Actor"
+        },
+        "attribution": {
+          "$ref": "#/$defs/Attribution"
+        },
+        "duplicate_of": {
+          "anyOf": [
+            {
+              "pattern": "^[A-Za-z][A-Za-z0-9_.\\-]*$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "与哪一步重复（重复结论去重后保留关系）",
+          "title": "Duplicate Of"
+        },
+        "evidence_refs": {
+          "description": "候选必须有证据，否则不能成为候选",
+          "items": {
+            "pattern": "^M\\d{2,}/[A-Za-z0-9:_.\\-]+$",
+            "type": "string"
+          },
+          "minItems": 1,
+          "title": "Evidence Refs",
+          "type": "array"
+        },
+        "id": {
+          "pattern": "^[A-Za-z][A-Za-z0-9_.\\-]*$",
+          "title": "Id",
+          "type": "string"
+        },
+        "note": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Note"
+        },
+        "result": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Result"
+        },
+        "step_kind": {
+          "$ref": "#/$defs/StepKind"
+        },
+        "target": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Target"
+        },
+        "time": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/TimeValue"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "id",
+        "evidence_refs",
+        "attribution",
+        "action",
+        "step_kind"
+      ],
+      "title": "ProcessStep",
+      "type": "object"
+    },
+    "RelatedTicket": {
+      "additionalProperties": false,
+      "properties": {
+        "note": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Note"
+        },
+        "relation": {
+          "$ref": "#/$defs/RelationKind"
+        },
+        "status": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "关联单在源系统中的状态，如 已作废、已结单",
+          "title": "Status"
+        },
+        "ticket_ref": {
+          "title": "Ticket Ref",
+          "type": "string"
+        }
+      },
+      "required": [
+        "ticket_ref",
+        "relation"
+      ],
+      "title": "RelatedTicket",
+      "type": "object"
+    },
+    "RelationKind": {
+      "enum": [
+        "shared_alarm",
+        "reopened_from",
+        "same_circuit",
+        "parent_child",
+        "other"
+      ],
+      "title": "RelationKind",
+      "type": "string"
+    },
+    "ResponsibilityBasis": {
+      "enum": [
+        "formal_determination",
+        "claimed",
+        "inferred_from_role"
+      ],
+      "title": "ResponsibilityBasis",
+      "type": "string"
+    },
+    "ResponsiblePartyElement": {
+      "additionalProperties": false,
+      "properties": {
+        "candidates": {
+          "items": {
+            "$ref": "#/$defs/PartyCandidate"
+          },
+          "title": "Candidates",
+          "type": "array"
+        },
+        "evidence_refs": {
+          "description": "支撑结论值的证据",
+          "items": {
+            "pattern": "^M\\d{2,}/[A-Za-z0-9:_.\\-]+$",
+            "type": "string"
+          },
+          "title": "Evidence Refs",
+          "type": "array"
+        },
+        "issues": {
+          "items": {
+            "$ref": "#/$defs/IssueCode"
+          },
+          "title": "Issues",
+          "type": "array"
+        },
+        "note": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "给报告和审核人员的说明，如“未见恢复确认”",
+          "title": "Note"
+        },
+        "review": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ReviewInfo"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "selected": {
+          "anyOf": [
+            {
+              "pattern": "^[A-Za-z][A-Za-z0-9_.\\-]*$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Selected"
+        },
+        "status": {
+          "$ref": "#/$defs/ElementStatus"
+        },
+        "value": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Value"
+        }
+      },
+      "required": [
+        "status"
+      ],
+      "title": "ResponsiblePartyElement",
+      "type": "object"
+    },
+    "ReviewAction": {
+      "enum": [
+        "accepted",
+        "edited",
+        "cleared"
+      ],
+      "title": "ReviewAction",
+      "type": "string"
+    },
+    "ReviewInfo": {
+      "additionalProperties": false,
+      "properties": {
+        "action": {
+          "$ref": "#/$defs/ReviewAction"
+        },
+        "machine_value": {
+          "default": null,
+          "description": "审核前机器给出的值快照，便于比较人工修改率",
+          "title": "Machine Value"
+        },
+        "reason": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Reason"
+        },
+        "reviewed_at": {
+          "format": "date-time",
+          "title": "Reviewed At",
+          "type": "string"
+        },
+        "reviewer": {
+          "title": "Reviewer",
+          "type": "string"
+        }
+      },
+      "required": [
+        "action",
+        "reviewer",
+        "reviewed_at"
+      ],
+      "title": "ReviewInfo",
+      "type": "object"
+    },
+    "RunInfo": {
+      "additionalProperties": false,
+      "description": "结果绑定的输入快照与各组件版本（PRD §10：所有结果绑定版本）。",
+      "properties": {
+        "bundle_sha256": {
+          "description": "manifest.json 的哈希，代表输入快照",
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Bundle Sha256",
+          "type": "string"
+        },
+        "finished_at": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Finished At"
+        },
+        "pipeline_version": {
+          "title": "Pipeline Version",
+          "type": "string"
+        },
+        "prompt_version": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Prompt Version"
+        },
+        "provider": {
+          "description": "rules / replay / local / openai_compatible:<name>",
+          "title": "Provider",
+          "type": "string"
+        },
+        "rules_version": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Rules Version"
+        },
+        "schema_version": {
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "started_at": {
+          "title": "Started At",
+          "type": "string"
+        }
+      },
+      "required": [
+        "pipeline_version",
+        "schema_version",
+        "provider",
+        "bundle_sha256",
+        "started_at"
+      ],
+      "title": "RunInfo",
+      "type": "object"
+    },
+    "ServiceIdentifier": {
+      "additionalProperties": false,
+      "properties": {
+        "evidence_refs": {
+          "items": {
+            "pattern": "^M\\d{2,}/[A-Za-z0-9:_.\\-]+$",
+            "type": "string"
+          },
+          "title": "Evidence Refs",
+          "type": "array"
+        },
+        "note": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Note"
+        },
+        "role": {
+          "enum": [
+            "reported",
+            "old",
+            "new",
+            "current",
+            "other"
+          ],
+          "title": "Role",
+          "type": "string"
+        },
+        "value": {
+          "title": "Value",
+          "type": "string"
+        }
+      },
+      "required": [
+        "value",
+        "role"
+      ],
+      "title": "ServiceIdentifier",
+      "type": "object"
+    },
+    "ServiceIdentity": {
+      "additionalProperties": false,
+      "description": "本次报障到底对应哪条服务（S10 新旧编号、X01 运营商归属）。",
+      "properties": {
+        "identifiers": {
+          "items": {
+            "$ref": "#/$defs/ServiceIdentifier"
+          },
+          "title": "Identifiers",
+          "type": "array"
+        },
+        "note": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Note"
+        },
+        "status": {
+          "$ref": "#/$defs/IdentityStatus"
+        }
+      },
+      "required": [
+        "status"
+      ],
+      "title": "ServiceIdentity",
+      "type": "object"
+    },
+    "SevenElements": {
+      "additionalProperties": false,
+      "properties": {
+        "cause": {
+          "$ref": "#/$defs/CauseElement"
+        },
+        "end_time": {
+          "$ref": "#/$defs/TimeElement"
+        },
+        "handling_process": {
+          "$ref": "#/$defs/HandlingProcessElement"
+        },
+        "location": {
+          "$ref": "#/$defs/LocationElement"
+        },
+        "phenomenon": {
+          "$ref": "#/$defs/PhenomenonElement"
+        },
+        "responsible_party": {
+          "$ref": "#/$defs/ResponsiblePartyElement"
+        },
+        "start_time": {
+          "$ref": "#/$defs/TimeElement"
+        }
+      },
+      "required": [
+        "start_time",
+        "end_time",
+        "phenomenon",
+        "responsible_party",
+        "cause",
+        "handling_process",
+        "location"
+      ],
+      "title": "SevenElements",
+      "type": "object"
+    },
+    "Severity": {
+      "enum": [
+        "critical",
+        "warning",
+        "info"
+      ],
+      "title": "Severity",
+      "type": "string"
+    },
+    "SpanRole": {
+      "enum": [
+        "original",
+        "quoted",
+        "signature",
+        "derived_summary",
+        "ocr_text",
+        "visual_observation"
+      ],
+      "title": "SpanRole",
+      "type": "string"
+    },
+    "StepKind": {
+      "enum": [
+        "technical_action",
+        "check_result",
+        "communication",
+        "workflow",
+        "planned"
+      ],
+      "title": "StepKind",
+      "type": "string"
+    },
+    "TableReading": {
+      "additionalProperties": false,
+      "description": "表格读数（邮件里的资源映射表、PDF/DOCX 表格、图片中的表格）。",
+      "properties": {
+        "headers": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Headers",
+          "type": "array"
+        },
+        "rows": {
+          "items": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "title": "Rows",
+          "type": "array"
+        },
+        "type": {
+          "const": "table",
+          "default": "table",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "title": "TableReading",
+      "type": "object"
+    },
+    "TextRangeLocator": {
+      "additionalProperties": false,
+      "description": "纯文本材料中的字符区间。",
+      "properties": {
+        "char_end": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Char End"
+        },
+        "char_start": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Char Start"
+        },
+        "line": {
+          "anyOf": [
+            {
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Line"
+        },
+        "type": {
+          "const": "text_range",
+          "default": "text_range",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "title": "TextRangeLocator",
+      "type": "object"
+    },
+    "TimeCandidate": {
+      "additionalProperties": false,
+      "properties": {
+        "attribution": {
+          "$ref": "#/$defs/Attribution"
+        },
+        "evidence_refs": {
+          "description": "候选必须有证据，否则不能成为候选",
+          "items": {
+            "pattern": "^M\\d{2,}/[A-Za-z0-9:_.\\-]+$",
+            "type": "string"
+          },
+          "minItems": 1,
+          "title": "Evidence Refs",
+          "type": "array"
+        },
+        "id": {
+          "pattern": "^[A-Za-z][A-Za-z0-9_.\\-]*$",
+          "title": "Id",
+          "type": "string"
+        },
+        "note": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Note"
+        },
+        "time": {
+          "$ref": "#/$defs/TimeValue"
+        },
+        "time_kind": {
+          "$ref": "#/$defs/TimeKind"
+        }
+      },
+      "required": [
+        "id",
+        "evidence_refs",
+        "attribution",
+        "time",
+        "time_kind"
+      ],
+      "title": "TimeCandidate",
+      "type": "object"
+    },
+    "TimeElement": {
+      "additionalProperties": false,
+      "properties": {
+        "candidates": {
+          "items": {
+            "$ref": "#/$defs/TimeCandidate"
+          },
+          "title": "Candidates",
+          "type": "array"
+        },
+        "evidence_refs": {
+          "description": "支撑结论值的证据",
+          "items": {
+            "pattern": "^M\\d{2,}/[A-Za-z0-9:_.\\-]+$",
+            "type": "string"
+          },
+          "title": "Evidence Refs",
+          "type": "array"
+        },
+        "issues": {
+          "items": {
+            "$ref": "#/$defs/IssueCode"
+          },
+          "title": "Issues",
+          "type": "array"
+        },
+        "note": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "给报告和审核人员的说明，如“未见恢复确认”",
+          "title": "Note"
+        },
+        "review": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ReviewInfo"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "selected": {
+          "anyOf": [
+            {
+              "pattern": "^[A-Za-z][A-Za-z0-9_.\\-]*$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "结论值取自哪个候选",
+          "title": "Selected"
+        },
+        "status": {
+          "$ref": "#/$defs/ElementStatus"
+        },
+        "value": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/TimeValue"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "status"
+      ],
+      "title": "TimeElement",
+      "type": "object"
+    },
+    "TimeKind": {
+      "description": "时间语义。七要素里的时间候选必须标明自己是哪一种时间。",
+      "enum": [
+        "fault_start_field",
+        "recovery_field",
+        "customer_reported_start",
+        "customer_confirmed_recovery",
+        "vendor_reported",
+        "repair_completed",
+        "alarm_raised",
+        "alarm_cleared",
+        "warning_raised",
+        "observation",
+        "chart_first_nonzero",
+        "chart_window",
+        "ticket_created",
+        "ticket_returned",
+        "ticket_closed",
+        "ticket_cancelled",
+        "record_time",
+        "body_text_date",
+        "message_sent",
+        "planned",
+        "historical_service_event",
+        "other"
+      ],
+      "title": "TimeKind",
+      "type": "string"
+    },
+    "TimePrecision": {
+      "enum": [
+        "day",
+        "hour",
+        "minute",
+        "second"
+      ],
+      "title": "TimePrecision",
+      "type": "string"
+    },
+    "TimeValue": {
+      "additionalProperties": false,
+      "description": "一个时间点。\n\n- raw：原文，永远保留；\n- iso：归一化值。时区已知或已假设时带偏移（2026-09-30T02:40:00+08:00），\n  时区未知时不带偏移；原文无法解析（NA、占位符）时为空；\n- 精度只到日的时间，iso 只写日期（2026-09-03）。",
+      "properties": {
+        "iso": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Iso"
+        },
+        "placeholder": {
+          "default": false,
+          "title": "Placeholder",
+          "type": "boolean"
+        },
+        "precision": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/TimePrecision"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "raw": {
+          "title": "Raw",
+          "type": "string"
+        },
+        "tz_source": {
+          "$ref": "#/$defs/TimeZoneSource",
+          "default": "unknown"
+        },
+        "utc_offset": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Utc Offset"
+        }
+      },
+      "required": [
+        "raw"
+      ],
+      "title": "TimeValue",
+      "type": "object"
+    },
+    "TimeZoneSource": {
+      "enum": [
+        "explicit",
+        "assumed",
+        "unknown"
+      ],
+      "title": "TimeZoneSource",
+      "type": "string"
+    },
+    "ValidationIssue": {
+      "additionalProperties": false,
+      "properties": {
+        "candidate_ids": {
+          "items": {
+            "pattern": "^[A-Za-z][A-Za-z0-9_.\\-]*$",
+            "type": "string"
+          },
+          "title": "Candidate Ids",
+          "type": "array"
+        },
+        "code": {
+          "$ref": "#/$defs/IssueCode"
+        },
+        "element": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ElementName"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "影响的要素；整单级问题为空"
+        },
+        "evidence_refs": {
+          "items": {
+            "pattern": "^M\\d{2,}/[A-Za-z0-9:_.\\-]+$",
+            "type": "string"
+          },
+          "title": "Evidence Refs",
+          "type": "array"
+        },
+        "message": {
+          "description": "给审核人员看的中文说明",
+          "title": "Message",
+          "type": "string"
+        },
+        "resolution_note": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Resolution Note"
+        },
+        "resolved": {
+          "default": false,
+          "title": "Resolved",
+          "type": "boolean"
+        },
+        "rule_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "产生该问题的规则及版本，如 'r.time.order@1'",
+          "title": "Rule Id"
+        },
+        "severity": {
+          "$ref": "#/$defs/Severity"
+        }
+      },
+      "required": [
+        "code",
+        "severity",
+        "message"
+      ],
+      "title": "ValidationIssue",
+      "type": "object"
+    }
+  },
+  "$id": "noc7/analysis-result.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "bundle_id": {
+      "title": "Bundle Id",
+      "type": "string"
+    },
+    "data_class": {
+      "$ref": "#/$defs/DataClass"
+    },
+    "data_cutoff": {
+      "description": "数据截止时间（= 工单包 captured_at）",
+      "title": "Data Cutoff",
+      "type": "string"
+    },
+    "elements": {
+      "$ref": "#/$defs/SevenElements"
+    },
+    "events": {
+      "items": {
+        "$ref": "#/$defs/Event"
+      },
+      "title": "Events",
+      "type": "array"
+    },
+    "evidence": {
+      "items": {
+        "$ref": "#/$defs/EvidenceSpan"
+      },
+      "title": "Evidence",
+      "type": "array"
+    },
+    "issues": {
+      "items": {
+        "$ref": "#/$defs/ValidationIssue"
+      },
+      "title": "Issues",
+      "type": "array"
+    },
+    "materials": {
+      "items": {
+        "$ref": "#/$defs/Material"
+      },
+      "title": "Materials",
+      "type": "array"
+    },
+    "related_tickets": {
+      "items": {
+        "$ref": "#/$defs/RelatedTicket"
+      },
+      "title": "Related Tickets",
+      "type": "array"
+    },
+    "run": {
+      "$ref": "#/$defs/RunInfo"
+    },
+    "schema_version": {
+      "const": "1.0",
+      "default": "1.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "service_identity": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/ServiceIdentity"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "ticket_ref": {
+      "title": "Ticket Ref",
+      "type": "string"
+    }
+  },
+  "required": [
+    "bundle_id",
+    "ticket_ref",
+    "data_class",
+    "data_cutoff",
+    "materials",
+    "evidence",
+    "elements",
+    "run"
+  ],
+  "title": "AnalysisResult",
+  "type": "object"
+}

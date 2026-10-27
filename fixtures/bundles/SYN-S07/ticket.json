@@ -1,0 +1,23 @@
+{
+  "ticket_ref": "SYN-S07",
+  "title": "【合成】中继预警：新雅海缆中继 MS_AIS",
+  "ticket_family": "trunk",
+  "category": "中继",
+  "status": {"list_status": "待受理", "detail_status": "处理中"},
+  "fields": [
+    {"key": "ticket_no", "label": "工单编号", "value": "SYN-S07", "section": "故障受理"},
+    {"key": "trunk_name", "label": "中继名称", "value": "SYN-TRK-SG-JKT-01（海缆）", "section": "故障受理"},
+    {"key": "alarm_title", "label": "告警标题", "value": "MS_AIS", "section": "故障受理"},
+    {"key": "alarm_level", "label": "告警级别", "value": "紧急", "section": "故障受理"},
+    {"key": "alarm_time", "label": "设备告警时间", "value": "2026-09-26 22:10:33", "section": "故障受理"},
+    {"key": "warning_time", "label": "预警时间", "value": "2026-09-26 22:15:40", "section": "故障受理"},
+    {"key": "alarm_cleared_at", "label": "告警清除时间", "value": null, "section": "故障受理"},
+    {"key": "device_name", "label": "设备名称", "value": "SYN-SDH-SG-11", "section": "故障受理"},
+    {"key": "shelf_slot_port", "label": "槽位/端口", "value": "shelf 1 / slot 8 / port 1", "section": "故障受理"},
+    {"key": "device_location", "label": "位置信息", "value": "新加坡 示例登陆站（合成）", "section": "故障受理"},
+    {"key": "possible_causes", "label": "可能原因", "value": "1. 上游站点发送 MS_AIS；2. 上游线路板故障；3. 本站收发板故障；4. 交叉配置错误；5. 时钟板故障", "section": "故障受理"},
+    {"key": "cause", "label": "故障原因", "value": "1. 上游站点发送 MS_AIS；2. 上游线路板故障；3. 本站收发板故障；4. 交叉配置错误；5. 时钟板故障", "section": "故障受理"},
+    {"key": "created_at", "label": "建单时间", "value": "2026-09-26 22:16:02", "section": "故障受理"}
+  ],
+  "related_tickets": []
+}

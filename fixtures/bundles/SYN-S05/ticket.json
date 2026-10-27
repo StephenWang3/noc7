@@ -1,0 +1,28 @@
+{
+  "ticket_ref": "SYN-S05",
+  "title": "【合成】大客户电路 R_LOS 告警影响",
+  "ticket_family": "key_account",
+  "category": "自动大客户",
+  "status": {"list_status": "待受理", "detail_status": "处理中"},
+  "fields": [
+    {"key": "ticket_no", "label": "工单编号", "value": "SYN-S05", "section": "故障受理"},
+    {"key": "customer", "label": "影响客户", "value": "示例客户丙（合成）", "section": "故障受理"},
+    {"key": "circuit_id", "label": "影响电路", "value": "SYN-CKT-1005", "section": "故障受理"},
+    {"key": "alarm_serial", "label": "告警流水号", "value": "SYN-ALM-778812", "section": "故障受理"},
+    {"key": "alarm_title", "label": "告警标题", "value": "R_LOS", "section": "故障受理"},
+    {"key": "alarm_level", "label": "告警级别", "value": "紧急", "section": "故障受理"},
+    {"key": "alarm_time", "label": "告警时间", "value": "2026-09-22 03:17:45", "section": "故障受理"},
+    {"key": "alarm_cleared_at", "label": "告警清除时间", "value": null, "section": "故障受理"},
+    {"key": "device_name", "label": "设备名称", "value": "SYN-OTN-HK-03", "section": "故障受理"},
+    {"key": "shelf_slot_port", "label": "槽位/端口", "value": "shelf 1 / slot 5 / port 2", "section": "故障受理"},
+    {"key": "device_location", "label": "位置信息", "value": "中国香港 示例局站 2 楼 OTN 机房（合成）", "section": "故障受理"},
+    {"key": "region", "label": "国家/城市", "value": "中国香港", "section": "故障受理"},
+    {"key": "possible_causes", "label": "可能原因", "value": "1. 光纤断裂或损耗过大；2. 对端站光发送板故障；3. 本站光接收板故障；4. 光纤连接器松动或污染；5. 对端设备掉电；6. 上游业务配置错误", "section": "故障受理"},
+    {"key": "cause", "label": "故障原因", "value": "1. 光纤断裂或损耗过大；2. 对端站光发送板故障；3. 本站光接收板故障；4. 光纤连接器松动或污染；5. 对端设备掉电；6. 上游业务配置错误", "section": "故障受理"},
+    {"key": "vendor", "label": "设备厂家", "value": "设备厂商乙（合成）", "section": "故障受理"},
+    {"key": "created_at", "label": "建单时间", "value": "2026-09-22 03:19:02", "section": "故障受理"}
+  ],
+  "related_tickets": [
+    {"ticket_ref": "SYN-S08", "relation": "shared_alarm", "status": "处理中", "note": "告警流水号、设备位置和告警时间相同"}
+  ]
+}

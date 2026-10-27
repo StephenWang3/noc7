@@ -1,0 +1,20 @@
+{
+  "ticket_ref": "SYN-S09",
+  "title": "【合成】跨境专线远端丢包",
+  "ticket_family": "business",
+  "category": "业务性能-丢包",
+  "status": {"list_status": "索要报告/结单签收", "detail_status": "索要报告/结单签收"},
+  "fields": [
+    {"key": "ticket_no", "label": "工单编号", "value": "SYN-S09", "section": "基础信息"},
+    {"key": "customer", "label": "客户名称", "value": "Example Corp B（合成）", "section": "基础信息"},
+    {"key": "circuit_id", "label": "电路编号", "value": "SYN-CKT-1009", "section": "基础信息"},
+    {"key": "created_at", "label": "建单时间", "value": "2026-09-28 13:02:41", "section": "基础信息"},
+    {"key": "fault_type", "label": "故障类型", "value": "业务性能-丢包", "section": "故障信息"},
+    {"key": "occurred_at", "label": "故障发生时间", "value": "2026-09-28 13:00:00", "section": "故障信息"},
+    {"key": "recovered_at", "label": "故障恢复时间", "value": "2026-09-28 13:36:00", "section": "故障信息"},
+    {"key": "duration_returned", "label": "返单历时", "value": "18分钟", "section": "故障信息"},
+    {"key": "description", "label": "故障描述", "value": "Circuit ID: SYN-CKT-1009\nTime Circuit Failed: NA\nIssue: We see about 25% packet loss from our proxy 198.51.100.20 (Frankfurt) to target 203.0.113.50 (Hong Kong).\nNote: Intrusive testing is NOT approved. Please schedule a test window with us in advance.\n\nBest regards,\nJohn Doe | Network Operations | Example Corp B\nTel: +1-555-0100\nThis email and any attachments are confidential and intended solely for the addressee.", "section": "故障信息"},
+    {"key": "cause", "label": "故障原因", "value": "本端 ping 测试 100 发 100 收，无丢包，端口流量正常；请客户提供故障时的源/目的地址及 ping/trace 结果。", "section": "故障信息"}
+  ],
+  "related_tickets": []
+}

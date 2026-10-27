@@ -1,0 +1,55 @@
+{
+  "bundle_format_version": "1.0",
+  "bundle_id": "SYN-S10",
+  "data_class": "synthetic",
+  "source": {
+    "kind": "synthetic",
+    "tool": "hand-written + scripts/make_fixture_assets.py (A0)",
+    "note": "按调研样本 S10（监控截图、拆机、新旧编号、占位符）编写"
+  },
+  "captured_at": "2026-09-30T09:30:00+08:00",
+  "default_timezone": "+08:00",
+  "synthetic_notice": "合成数据：内容全部虚构，只保留调研样本 S10（监控截图、拆机、新旧编号、占位符）的问题模式，不含任何真实工单内容、编号、客户信息或附件。",
+  "materials": [
+    {
+      "id": "M01",
+      "kind": "ticket_fields",
+      "path": "ticket.json",
+      "sha256": "044442370d14876eceb320b9e08b1876fd60514eb081ac8ca016987dfff06ff1",
+      "size_bytes": 1760,
+      "media_type": "application/json"
+    },
+    {
+      "id": "M02",
+      "kind": "process_log",
+      "path": "process_log.json",
+      "sha256": "449af0dd203d87e185b765d25d781f9c2cb7bc50a9f12636dcbd900d2e18ed58",
+      "size_bytes": 2722,
+      "media_type": "application/json"
+    },
+    {
+      "id": "M03",
+      "kind": "email_html",
+      "path": "emails/M03-upstream-reply.html",
+      "sha256": "3ae1b8830bd61bd446f1f2edeca389ede52ce083250bb3188cbe2016d77fcd3c",
+      "size_bytes": 1555,
+      "media_type": "text/html",
+      "origin": {
+        "log_seq": 6
+      },
+      "description": "上游运营商回复邮件详情（含一层引用和资源映射表）"
+    },
+    {
+      "id": "M04",
+      "kind": "image",
+      "path": "attachments/M04-wan-loss-chart.png",
+      "sha256": "14e8aab81fedd123427503b26961f4ddf4e2950fd99702cded3c304118a29b95",
+      "size_bytes": 77397,
+      "media_type": "image/png",
+      "origin": {
+        "log_seq": 2
+      },
+      "description": "客户提供的 WAN 丢包监控截图"
+    }
+  ]
+}

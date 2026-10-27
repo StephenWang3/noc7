@@ -1,0 +1,331 @@
+{
+  "gold_version": "1.0",
+  "bundle_id": "SYN-S06",
+  "patterns": [
+    "S06"
+  ],
+  "summary": "客户确认恢复后供应商邮件才到：三次丢包观测并列；“自恢”是恢复方式；AI 追单总结与原邮件重复；起障字段晚于建单。",
+  "annotation": {
+    "annotator": "架构师（Claude，合成样本作者）",
+    "annotated_at": "2026-10-27",
+    "method": "合成样本作者按调研问题模式逐要素标注；正式评测前需业务人员复核"
+  },
+  "elements": {
+    "start_time": {
+      "status_in": [
+        "conflicted",
+        "documented"
+      ],
+      "rationale": "字段 09:40 晚于 09:20 建单，与客户原始邮件“09:15 GMT+8 起”矛盾。若裁定，应取客户明确带时区的 09:15，并保留字段候选。",
+      "key_points": [],
+      "required_candidates": [
+        {
+          "kind_in": [
+            "fault_start_field"
+          ],
+          "contains_any": [],
+          "evidence": [
+            {
+              "material_id": "M01",
+              "field_key": "occurred_at"
+            }
+          ],
+          "time": {
+            "iso": "2026-09-25T09:40:00+08:00",
+            "tolerance_minutes": 0
+          }
+        },
+        {
+          "kind_in": [
+            "customer_reported_start"
+          ],
+          "contains_any": [],
+          "evidence": [
+            {
+              "material_id": "M03",
+              "message_index": 2
+            },
+            {
+              "material_id": "M03",
+              "message_index": 1
+            }
+          ],
+          "time": {
+            "iso": "2026-09-25T09:15:00+08:00",
+            "tolerance_minutes": 1
+          },
+          "tz_source_in": [
+            "explicit"
+          ]
+        }
+      ],
+      "forbidden_values": [],
+      "evidence": [],
+      "expected_time": {
+        "iso": "2026-09-25T09:15:00+08:00",
+        "tolerance_minutes": 1
+      }
+    },
+    "end_time": {
+      "status_in": [
+        "documented",
+        "confirmed"
+      ],
+      "rationale": "恢复字段 10:01 与第 6 条客户来电确认 10:01 一致，有确认依据。之后供应商邮件只说明其仍在排查，不改变恢复时间。",
+      "key_points": [],
+      "required_candidates": [
+        {
+          "kind_in": [
+            "recovery_field"
+          ],
+          "contains_any": [],
+          "evidence": [
+            {
+              "material_id": "M01",
+              "field_key": "recovered_at"
+            }
+          ],
+          "time": {
+            "iso": "2026-09-25T10:01:00+08:00",
+            "tolerance_minutes": 0
+          }
+        },
+        {
+          "kind_in": [
+            "customer_confirmed_recovery"
+          ],
+          "contains_any": [],
+          "evidence": [
+            {
+              "material_id": "M02",
+              "log_seq": 6
+            }
+          ],
+          "time": {
+            "iso": "2026-09-25T10:01:00+08:00",
+            "tolerance_minutes": 0
+          }
+        }
+      ],
+      "forbidden_values": [],
+      "evidence": [
+        {
+          "material_id": "M01",
+          "field_key": "recovered_at"
+        },
+        {
+          "material_id": "M02",
+          "log_seq": 6
+        }
+      ],
+      "expected_time": {
+        "iso": "2026-09-25T10:01:00+08:00",
+        "tolerance_minutes": 1
+      }
+    },
+    "phenomenon": {
+      "status_in": [
+        "documented"
+      ],
+      "rationale": "客户报约 86% 丢包；第 3 条本端 ping 中断；第 5 条 09:50 自动拨测约 10%。来源、时刻不同，不能压成一个比例。",
+      "key_points": [
+        {
+          "any_of": [
+            "86"
+          ]
+        },
+        {
+          "any_of": [
+            "10%"
+          ]
+        },
+        {
+          "any_of": [
+            "ping"
+          ]
+        }
+      ],
+      "required_candidates": [
+        {
+          "kind_in": [
+            "customer"
+          ],
+          "contains_any": [
+            "86"
+          ],
+          "evidence": [
+            {
+              "material_id": "M01",
+              "field_key": "description"
+            }
+          ]
+        },
+        {
+          "kind_in": [
+            "noc_check"
+          ],
+          "contains_any": [
+            "10%"
+          ],
+          "evidence": [
+            {
+              "material_id": "M02",
+              "log_seq": 5
+            }
+          ]
+        },
+        {
+          "kind_in": [
+            "noc_check"
+          ],
+          "contains_any": [
+            "ping",
+            "中断"
+          ],
+          "evidence": [
+            {
+              "material_id": "M02",
+              "log_seq": 3
+            }
+          ]
+        }
+      ],
+      "forbidden_values": [],
+      "evidence": [
+        {
+          "material_id": "M01",
+          "field_key": "description"
+        }
+      ]
+    },
+    "responsible_party": {
+      "status_in": [
+        "unknown"
+      ],
+      "rationale": "上游运营商参与排查不等于承担责任；没有定责。",
+      "key_points": [],
+      "required_candidates": [],
+      "forbidden_values": [
+        "JP-Carrier"
+      ],
+      "evidence": []
+    },
+    "cause": {
+      "status_in": [
+        "unknown"
+      ],
+      "rationale": "原因栏“自恢”是恢复方式；供应商称设备 TYO-PE-02 宕机、登录超时，仍在调查，属于供应商陈述的观测，不是已确认根因。",
+      "key_points": [],
+      "required_candidates": [
+        {
+          "kind_in": [
+            "recovery_mode"
+          ],
+          "contains_any": [
+            "自恢"
+          ],
+          "evidence": [
+            {
+              "material_id": "M01",
+              "field_key": "cause"
+            }
+          ]
+        },
+        {
+          "kind_in": [
+            "root_cause_claimed",
+            "investigation_finding"
+          ],
+          "contains_any": [
+            "TYO-PE-02"
+          ],
+          "evidence": [
+            {
+              "material_id": "M03",
+              "message_index": 0
+            }
+          ]
+        }
+      ],
+      "forbidden_values": [
+        "自恢"
+      ],
+      "evidence": []
+    },
+    "handling_process": {
+      "status_in": [
+        "documented"
+      ],
+      "rationale": "本端 ping、报障上游、自动拨测、客户确认恢复、返单、收到供应商邮件；AI 总结是衍生内容，不是新的处理动作。",
+      "key_points": [
+        {
+          "any_of": [
+            "ping"
+          ]
+        },
+        {
+          "any_of": [
+            "上游",
+            "供应商",
+            "JP-Carrier"
+          ]
+        },
+        {
+          "any_of": [
+            "确认"
+          ]
+        }
+      ],
+      "required_candidates": [],
+      "forbidden_values": [],
+      "evidence": [
+        {
+          "material_id": "M02",
+          "log_seq": 3
+        },
+        {
+          "material_id": "M02",
+          "log_seq": 4
+        },
+        {
+          "material_id": "M02",
+          "log_seq": 6
+        }
+      ]
+    },
+    "location": {
+      "status_in": [
+        "unknown"
+      ],
+      "rationale": "邮件提到被测设备 TYO-PE-02，但没有确认实际故障位置。",
+      "key_points": [],
+      "required_candidates": [],
+      "forbidden_values": [],
+      "evidence": []
+    }
+  },
+  "expected_issues": [
+    {
+      "code": "DERIVED_SOURCE_DUPLICATE",
+      "note": "第 9 条 AI 追单总结复述 M03 邮件"
+    },
+    {
+      "code": "DURATION_BASIS_MISMATCH",
+      "note": "起止差 21 分钟，返单历时 63 分钟"
+    },
+    {
+      "code": "TIME_CANDIDATES_DIFFER",
+      "element": "start_time"
+    },
+    {
+      "code": "CAUSE_NOT_DIAGNOSIS",
+      "element": "cause"
+    },
+    {
+      "code": "RESPONSIBILITY_NO_BASIS",
+      "element": "responsible_party",
+      "note": "供应商字段和上游参与排查都不是定责依据，责任方保持未知"
+    }
+  ],
+  "attachment_dependent": []
+}

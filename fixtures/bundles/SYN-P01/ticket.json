@@ -1,0 +1,20 @@
+{
+  "ticket_ref": "SYN-P01",
+  "title": "【合成】城域光缆中断（恢复时间早于发生时间）",
+  "ticket_family": "business",
+  "category": "业务中断",
+  "status": {"list_status": "已结单", "detail_status": "已结单"},
+  "fields": [
+    {"key": "ticket_no", "label": "工单编号", "value": "SYN-P01", "section": "基础信息"},
+    {"key": "customer", "label": "客户名称", "value": "示例客户己（合成）", "section": "基础信息"},
+    {"key": "circuit_id", "label": "电路编号", "value": "SYN-CKT-1021", "section": "基础信息"},
+    {"key": "created_at", "label": "建单时间", "value": "2026-10-05 23:58:12", "section": "基础信息"},
+    {"key": "fault_type", "label": "故障类型", "value": "业务中断", "section": "故障信息"},
+    {"key": "occurred_at", "label": "故障发生时间", "value": "2026-10-05 23:50:00", "section": "故障信息"},
+    {"key": "recovered_at", "label": "故障恢复时间", "value": "2026-10-05 00:20:00", "section": "故障信息"},
+    {"key": "duration_returned", "label": "返单历时", "value": "-1410分钟", "section": "故障信息"},
+    {"key": "description", "label": "故障描述", "value": "客户报专线 SYN-CKT-1021 业务中断。", "section": "故障信息"},
+    {"key": "cause", "label": "故障原因", "value": "光缆中断，已熔接恢复。", "section": "故障信息"}
+  ],
+  "related_tickets": []
+}

@@ -1,0 +1,277 @@
+{
+  "gold_version": "1.0",
+  "bundle_id": "SYN-S01",
+  "patterns": [
+    "S01"
+  ],
+  "summary": "时延增加、排查未结束：结束时间、责任、原因、故障点都应留空；局部正常不能否定客户观测。",
+  "annotation": {
+    "annotator": "架构师（Claude，合成样本作者）",
+    "annotated_at": "2026-10-27",
+    "method": "合成样本作者按调研问题模式逐要素标注；正式评测前需业务人员复核"
+  },
+  "elements": {
+    "start_time": {
+      "status_in": [
+        "documented"
+      ],
+      "rationale": "故障发生时间字段为空；描述中客户称“自 2026-09-03 起”，只到日期粒度。建单时间 09-08 不是起障时间。",
+      "key_points": [],
+      "required_candidates": [
+        {
+          "kind_in": [
+            "customer_reported_start"
+          ],
+          "contains_any": [],
+          "evidence": [
+            {
+              "material_id": "M01",
+              "field_key": "description"
+            }
+          ],
+          "time": {
+            "iso": "2026-09-03",
+            "tolerance_minutes": 0
+          }
+        }
+      ],
+      "forbidden_values": [],
+      "evidence": [
+        {
+          "material_id": "M01",
+          "field_key": "description"
+        }
+      ],
+      "expected_time": {
+        "iso": "2026-09-03",
+        "tolerance_minutes": 0
+      }
+    },
+    "end_time": {
+      "status_in": [
+        "unknown"
+      ],
+      "rationale": "第 8—9 条仍在请客户确认时延，未见恢复，结束时间必须为空，不计算历时。",
+      "key_points": [],
+      "required_candidates": [],
+      "forbidden_values": [],
+      "evidence": []
+    },
+    "phenomenon": {
+      "status_in": [
+        "documented"
+      ],
+      "rationale": "客户观测 RTT 由约 22.6 ms 升至约 25.2 ms；国内段、境外段检查正常只是分段观测，与客户端到端观测并列。",
+      "key_points": [
+        {
+          "any_of": [
+            "时延",
+            "RTT",
+            "latency"
+          ]
+        },
+        {
+          "any_of": [
+            "25.2"
+          ]
+        },
+        {
+          "any_of": [
+            "22.6"
+          ]
+        }
+      ],
+      "required_candidates": [
+        {
+          "kind_in": [
+            "customer"
+          ],
+          "contains_any": [
+            "25.2"
+          ],
+          "evidence": [
+            {
+              "material_id": "M01",
+              "field_key": "description"
+            }
+          ]
+        },
+        {
+          "kind_in": [
+            "noc_check"
+          ],
+          "contains_any": [
+            "国内段",
+            "1.1 ms"
+          ],
+          "evidence": [
+            {
+              "material_id": "M02",
+              "log_seq": 4
+            }
+          ]
+        }
+      ],
+      "forbidden_values": [],
+      "evidence": [
+        {
+          "material_id": "M01",
+          "field_key": "description"
+        }
+      ]
+    },
+    "responsible_party": {
+      "status_in": [
+        "unknown"
+      ],
+      "rationale": "未见定责；处理部门（国际传输维护组）只是参与方。",
+      "key_points": [],
+      "required_candidates": [],
+      "forbidden_values": [
+        "国际传输维护组"
+      ],
+      "evidence": []
+    },
+    "cause": {
+      "status_in": [
+        "unknown"
+      ],
+      "rationale": "“长短路径切换”只是客户怀疑；原因栏“未发现倒换，无告警”是排查结论，不是根因。",
+      "key_points": [],
+      "required_candidates": [
+        {
+          "kind_in": [
+            "customer_suspicion"
+          ],
+          "contains_any": [
+            "路径",
+            "切换"
+          ],
+          "evidence": [
+            {
+              "material_id": "M01",
+              "field_key": "description"
+            }
+          ]
+        },
+        {
+          "kind_in": [
+            "investigation_finding"
+          ],
+          "contains_any": [
+            "倒换",
+            "无告警"
+          ],
+          "evidence": [
+            {
+              "material_id": "M01",
+              "field_key": "cause"
+            },
+            {
+              "material_id": "M02",
+              "log_seq": 5
+            },
+            {
+              "material_id": "M02",
+              "log_seq": 7
+            }
+          ]
+        }
+      ],
+      "forbidden_values": [],
+      "evidence": []
+    },
+    "handling_process": {
+      "status_in": [
+        "documented"
+      ],
+      "rationale": "实际动作：国内段检查、境外段检查、全程路由核对、倒换日志复查、请客户确认；受理和转派是流程事件。",
+      "key_points": [
+        {
+          "any_of": [
+            "国内段"
+          ]
+        },
+        {
+          "any_of": [
+            "境外段",
+            "海缆"
+          ]
+        },
+        {
+          "any_of": [
+            "确认"
+          ]
+        }
+      ],
+      "required_candidates": [],
+      "forbidden_values": [],
+      "evidence": [
+        {
+          "material_id": "M02",
+          "log_seq": 4
+        },
+        {
+          "material_id": "M02",
+          "log_seq": 5
+        },
+        {
+          "material_id": "M02",
+          "log_seq": 8
+        }
+      ]
+    },
+    "location": {
+      "status_in": [
+        "unknown"
+      ],
+      "rationale": "A/Z 端和途经节点只是业务端点与路由，没有定位到故障点。",
+      "key_points": [],
+      "required_candidates": [
+        {
+          "kind_in": [
+            "service_endpoint",
+            "transit_node"
+          ],
+          "contains_any": [
+            "香港",
+            "HK-A",
+            "新加坡",
+            "SG-B"
+          ],
+          "evidence": [
+            {
+              "material_id": "M01",
+              "field_key": "a_end"
+            },
+            {
+              "material_id": "M01",
+              "field_key": "z_end"
+            }
+          ]
+        }
+      ],
+      "forbidden_values": [],
+      "evidence": []
+    }
+  },
+  "expected_issues": [
+    {
+      "code": "ONGOING_NO_END",
+      "element": "end_time"
+    },
+    {
+      "code": "CAUSE_NOT_DIAGNOSIS",
+      "element": "cause"
+    },
+    {
+      "code": "OBSERVATION_SCOPE_DIFFERS",
+      "element": "phenomenon"
+    },
+    {
+      "code": "LOCATION_NOT_LOCATED",
+      "element": "location"
+    }
+  ],
+  "attachment_dependent": []
+}

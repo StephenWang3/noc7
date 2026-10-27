@@ -1,0 +1,21 @@
+{
+  "ticket_ref": "SYN-P04",
+  "title": "【合成】道路施工挖断光缆致专线中断",
+  "ticket_family": "business",
+  "category": "业务中断",
+  "status": {"list_status": "已结单", "detail_status": "已结单"},
+  "fields": [
+    {"key": "ticket_no", "label": "工单编号", "value": "SYN-P04", "section": "基础信息"},
+    {"key": "customer", "label": "客户名称", "value": "示例客户壬（合成）", "section": "基础信息"},
+    {"key": "circuit_id", "label": "电路编号", "value": "SYN-CKT-1024", "section": "基础信息"},
+    {"key": "created_at", "label": "建单时间", "value": "2026-10-10 15:50:08", "section": "基础信息"},
+    {"key": "fault_type", "label": "故障类型", "value": "业务中断", "section": "故障信息"},
+    {"key": "occurred_at", "label": "故障发生时间", "value": "2026-10-10 15:42:00", "section": "故障信息"},
+    {"key": "recovered_at", "label": "故障恢复时间", "value": "2026-10-10 19:08:00", "section": "故障信息"},
+    {"key": "duration_returned", "label": "返单历时", "value": "206分钟", "section": "故障信息"},
+    {"key": "description", "label": "故障描述", "value": "客户报专线 SYN-CKT-1024 业务中断。", "section": "故障信息"},
+    {"key": "cause", "label": "故障原因", "value": "市政道路施工挖断 24 芯光缆，已熔接恢复。", "section": "故障信息"},
+    {"key": "responsible_party", "label": "故障责任方", "value": "第三方施工单位：示例建设公司（合成）", "section": "故障信息"}
+  ],
+  "related_tickets": []
+}

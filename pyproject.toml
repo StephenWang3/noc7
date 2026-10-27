@@ -1,0 +1,37 @@
+[project]
+name = "noc7"
+version = "0.1.0"
+description = "NOC 故障七要素提取与报告生成（课题实现）"
+readme = "README.md"
+requires-python = ">=3.11"
+# 运行依赖在 A0 一次性声明，避免 A1/A2 并行开发时同时改 pyproject 和 uv.lock（见 docs/decisions/0003）
+dependencies = [
+    "pydantic>=2.7,<3",
+    "beautifulsoup4>=4.12",  # A1：邮件 HTML 切分
+    "jinja2>=3.1",  # A1：Markdown/HTML 报告模板
+    "pymupdf>=1.24",  # A2：PDF 文本层与页面渲染
+    "python-docx>=1.1",  # A2：DOCX 段落与表格
+    "pillow>=10.1",  # A2：图片读取与裁剪
+]
+
+[project.scripts]
+noc7 = "noc7.cli:main"
+
+[dependency-groups]
+dev = [
+    "pytest>=8",
+]
+# 只用于重新生成合成附件（scripts/make_fixture_assets.py），运行时不需要
+fixtures = [
+    "matplotlib>=3.8",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/noc7"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

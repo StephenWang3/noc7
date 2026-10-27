@@ -1,0 +1,5 @@
+{
+  "entries": [
+    {"seq": 1, "recorded_at": "2026-09-26 22:16:02", "actor": "中继监控系统", "action": "创建工单", "content": "【自动建单】2026-09-21 22:10 检测到中继 SYN-TRK-SG-JKT-01 MS_AIS 告警，影响海缆中继业务，请处理。", "entry_kind": "system"}
+  ]
+}

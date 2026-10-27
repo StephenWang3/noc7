@@ -1,0 +1,31 @@
+{
+  "bundle_format_version": "1.0",
+  "bundle_id": "SYN-S08",
+  "data_class": "synthetic",
+  "source": {
+    "kind": "synthetic",
+    "tool": "hand-written + scripts/make_fixture_assets.py (A0)",
+    "note": "按调研样本 S08（中继跨层告警、与 S05 共用告警）编写"
+  },
+  "captured_at": "2026-09-22T04:30:00+08:00",
+  "default_timezone": "+08:00",
+  "synthetic_notice": "合成数据：内容全部虚构，只保留调研样本 S08（中继跨层告警、与 S05 共用告警）的问题模式，不含任何真实工单内容、编号、客户信息或附件。",
+  "materials": [
+    {
+      "id": "M01",
+      "kind": "ticket_fields",
+      "path": "ticket.json",
+      "sha256": "3c98f0e434b6f61b2d7d149c5ae4245883942c33fa269966a1e17951475bd8b2",
+      "size_bytes": 2462,
+      "media_type": "application/json"
+    },
+    {
+      "id": "M02",
+      "kind": "process_log",
+      "path": "process_log.json",
+      "sha256": "3ab1a1f3ca0d8abbd0717dfb1b8e0aba8a1f127c63a09beeef9abdba6106d4bc",
+      "size_bytes": 308,
+      "media_type": "application/json"
+    }
+  ]
+}

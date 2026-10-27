@@ -1,0 +1,5 @@
+{
+  "entries": [
+    {"seq": 1, "recorded_at": "2026-09-22 03:19:02", "actor": "告警系统", "action": "创建工单", "content": "告警 SYN-ALM-778812（R_LOS，紧急）影响大客户电路 SYN-CKT-1005，自动创建大客户工单。", "entry_kind": "system"}
+  ]
+}

@@ -1,0 +1,27 @@
+{
+  "ticket_ref": "SYN-S08",
+  "title": "【合成】中继预警：港新中继 ISIS 中断",
+  "ticket_family": "trunk",
+  "category": "中继",
+  "status": {"list_status": "待受理", "detail_status": "处理中"},
+  "fields": [
+    {"key": "ticket_no", "label": "工单编号", "value": "SYN-S08", "section": "故障受理"},
+    {"key": "trunk_name", "label": "中继名称", "value": "SYN-TRK-HK-SG-02", "section": "故障受理"},
+    {"key": "warning_title", "label": "预警标题", "value": "中继预警", "section": "故障受理"},
+    {"key": "alarm_title", "label": "告警标题", "value": "ISIS中断", "section": "故障受理"},
+    {"key": "underlying_alarm", "label": "底层告警", "value": "R_LOS（SYN-OTN-HK-03 shelf 1 / slot 5 / port 2）", "section": "故障受理"},
+    {"key": "alarm_serial", "label": "告警流水号", "value": "SYN-ALM-778812", "section": "故障受理"},
+    {"key": "alarm_time", "label": "设备告警时间", "value": "2026-09-22 03:17:45", "section": "故障受理"},
+    {"key": "warning_time", "label": "预警时间", "value": "2026-09-22 03:58:10", "section": "故障受理"},
+    {"key": "alarm_cleared_at", "label": "告警清除时间", "value": null, "section": "故障受理"},
+    {"key": "device_name", "label": "设备名称", "value": "SYN-OTN-HK-03", "section": "故障受理"},
+    {"key": "shelf_slot_port", "label": "槽位/端口", "value": "shelf 1 / slot 5 / port 2", "section": "故障受理"},
+    {"key": "device_location", "label": "位置信息", "value": "中国香港 示例局站 2 楼 OTN 机房（合成）", "section": "故障受理"},
+    {"key": "possible_causes", "label": "可能原因", "value": "1. 光纤断裂或损耗过大；2. 对端站光发送板故障；3. 本站光接收板故障；4. 光纤连接器松动或污染；5. 对端设备掉电；6. 上游业务配置错误", "section": "故障受理"},
+    {"key": "cause", "label": "故障原因", "value": "1. 光纤断裂或损耗过大；2. 对端站光发送板故障；3. 本站光接收板故障；4. 光纤连接器松动或污染；5. 对端设备掉电；6. 上游业务配置错误", "section": "故障受理"},
+    {"key": "created_at", "label": "建单时间", "value": "2026-09-22 03:58:40", "section": "故障受理"}
+  ],
+  "related_tickets": [
+    {"ticket_ref": "SYN-S05", "relation": "shared_alarm", "status": "处理中", "note": "告警流水号、设备位置和告警时间相同"}
+  ]
+}

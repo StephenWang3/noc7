@@ -1,0 +1,31 @@
+{
+  "bundle_format_version": "1.0",
+  "bundle_id": "SYN-S07",
+  "data_class": "synthetic",
+  "source": {
+    "kind": "synthetic",
+    "tool": "hand-written + scripts/make_fixture_assets.py (A0)",
+    "note": "按调研样本 S07（正文日期与记录日期冲突）编写"
+  },
+  "captured_at": "2026-09-26T23:00:00+08:00",
+  "default_timezone": "+08:00",
+  "synthetic_notice": "合成数据：内容全部虚构，只保留调研样本 S07（正文日期与记录日期冲突）的问题模式，不含任何真实工单内容、编号、客户信息或附件。",
+  "materials": [
+    {
+      "id": "M01",
+      "kind": "ticket_fields",
+      "path": "ticket.json",
+      "sha256": "0ec87f09d23b2cf64aee77a2dc2032ff28545c07086f2fbefada5993edd2c02e",
+      "size_bytes": 1929,
+      "media_type": "application/json"
+    },
+    {
+      "id": "M02",
+      "kind": "process_log",
+      "path": "process_log.json",
+      "sha256": "fa95803c282f1864a755b85036579af0235c1f6caf7c92de443b0ef0f98fe6bd",
+      "size_bytes": 296,
+      "media_type": "application/json"
+    }
+  ]
+}

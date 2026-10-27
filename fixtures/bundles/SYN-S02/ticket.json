@@ -1,0 +1,21 @@
+{
+  "ticket_ref": "SYN-S02",
+  "title": "【合成】客户专线业务中断",
+  "ticket_family": "business",
+  "category": "业务中断",
+  "status": {"list_status": "已结单", "detail_status": "已结单"},
+  "fields": [
+    {"key": "ticket_no", "label": "工单编号", "value": "SYN-S02", "section": "基础信息"},
+    {"key": "customer", "label": "客户名称", "value": "示例客户乙（合成）", "section": "基础信息"},
+    {"key": "circuit_id", "label": "电路编号", "value": "SYN-CKT-1002", "section": "基础信息"},
+    {"key": "created_at", "label": "建单时间", "value": "2026-09-12 01:12:05", "section": "基础信息"},
+    {"key": "fault_type", "label": "故障类型", "value": "业务中断", "section": "故障信息"},
+    {"key": "occurred_at", "label": "故障发生时间", "value": "2026-09-12 01:05:00", "section": "故障信息"},
+    {"key": "recovered_at", "label": "故障恢复时间", "value": "2026-09-12 02:16:00", "section": "故障信息"},
+    {"key": "duration_returned", "label": "返单历时", "value": "40分钟", "section": "故障信息"},
+    {"key": "description", "label": "故障描述", "value": "北京时间 2026-09-12 01:06，自动报障系统检测到客户专线 SYN-CKT-1002 Z 端不通，客户业务中断。", "section": "故障信息"},
+    {"key": "cause", "label": "故障原因", "value": "客户 A 端接入设备按计划进行升级割接，Z 端自动报障系统未同步切换，产生中断报障。", "section": "故障信息"},
+    {"key": "handling_dept", "label": "处理部门", "value": "城域接入维护组（合成）", "section": "故障信息"}
+  ],
+  "related_tickets": []
+}

@@ -1,0 +1,14 @@
+{
+  "entries": [
+    {"seq": 1, "recorded_at": "2026-09-25 09:20:05", "actor": "系统", "action": "建单", "content": "根据客户邮件建单。", "entry_kind": "system"},
+    {"seq": 2, "recorded_at": "2026-09-25 09:22:40", "actor": "值班员L", "actor_org": "网管中心", "action": "受理", "content": "已受理。", "entry_kind": "human"},
+    {"seq": 3, "recorded_at": "2026-09-25 09:26:12", "actor": "值班员L", "actor_org": "网管中心", "action": "处理意见", "content": "本端 ping 对端 PE（东京侧）中断，100 发 0 收。", "entry_kind": "human"},
+    {"seq": 4, "recorded_at": "2026-09-25 09:35:30", "actor": "值班员L", "actor_org": "网管中心", "action": "处理意见", "content": "已邮件报障至上游运营商 JP-Carrier。", "entry_kind": "human"},
+    {"seq": 5, "recorded_at": "2026-09-25 09:52:08", "actor": "数字员工", "action": "信息追加", "content": "【自动拨测】09:50 对 SYN-CKT-1006 拨测，丢包率约 10%。", "entry_kind": "system"},
+    {"seq": 6, "recorded_at": "2026-09-25 10:05:44", "actor": "值班员L", "actor_org": "网管中心", "action": "处理意见", "content": "客户来电确认：10:01 起业务恢复正常，丢包消失。", "entry_kind": "human"},
+    {"seq": 7, "recorded_at": "2026-09-25 10:23:10", "actor": "值班员L", "actor_org": "网管中心", "action": "返单", "content": "返单。原因：自恢。", "entry_kind": "human"},
+    {"seq": 8, "recorded_at": "2026-09-25 10:49:31", "actor": "邮件系统", "action": "邮件", "content": "收到上游运营商 JP-Carrier 回复邮件，详见邮件详情。", "entry_kind": "email", "emails": ["M03"]},
+    {"seq": 9, "recorded_at": "2026-09-25 10:55:02", "actor": "AI 追单助手", "action": "AI追单总结", "content": "【AI 追单总结】上游运营商回复：其东京侧设备 TYO-PE-02 宕机，登录时连接超时，仍在排查。客户已确认 10:01 恢复。建议继续跟进上游根因。", "entry_kind": "ai_summary"},
+    {"seq": 10, "recorded_at": "2026-09-25 11:30:00", "actor": "值班员M", "actor_org": "网管中心", "action": "结单", "content": "结单。", "entry_kind": "system"}
+  ]
+}

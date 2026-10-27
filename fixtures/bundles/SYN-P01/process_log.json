@@ -1,0 +1,11 @@
+{
+  "entries": [
+    {"seq": 1, "recorded_at": "2026-10-05 23:58:12", "actor": "系统", "action": "建单", "content": "客户来电报障建单。", "entry_kind": "system"},
+    {"seq": 2, "recorded_at": "2026-10-06 00:01:30", "actor": "值班员X", "actor_org": "网管中心", "action": "受理", "content": "已受理。", "entry_kind": "human"},
+    {"seq": 3, "recorded_at": "2026-10-06 00:05:47", "actor": "值班员X", "actor_org": "网管中心", "action": "处理意见", "content": "查告警：23:50 起 SYN-CKT-1021 所在光缆段 R_LOS，派线路维护处理。", "entry_kind": "human"},
+    {"seq": 4, "recorded_at": "2026-10-06 00:16:02", "actor": "线路工程师Y", "actor_org": "线路维护部", "action": "处理意见", "content": "光缆中断点已熔接完成。", "entry_kind": "human"},
+    {"seq": 5, "recorded_at": "2026-10-06 00:24:40", "actor": "值班员X", "actor_org": "网管中心", "action": "处理意见", "content": "2026-10-06 00:20 告警清除，客户确认业务恢复。", "entry_kind": "human"},
+    {"seq": 6, "recorded_at": "2026-10-06 00:30:00", "actor": "值班员X", "actor_org": "网管中心", "action": "返单", "content": "返单。", "entry_kind": "human"},
+    {"seq": 7, "recorded_at": "2026-10-06 09:00:00", "actor": "值班员Z", "actor_org": "网管中心", "action": "结单", "content": "结单。", "entry_kind": "system"}
+  ]
+}

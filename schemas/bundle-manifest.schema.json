@@ -1,0 +1,256 @@
+{
+  "$defs": {
+    "BundleSource": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "enum": [
+            "synthetic",
+            "noc_export",
+            "upload"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "note": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Note"
+        },
+        "tool": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "生成工具及版本",
+          "title": "Tool"
+        }
+      },
+      "required": [
+        "kind"
+      ],
+      "title": "BundleSource",
+      "type": "object"
+    },
+    "DataClass": {
+      "description": "数据分级。决定数据能否发往外部服务（见 noc7.providers.gate）。",
+      "enum": [
+        "synthetic",
+        "real"
+      ],
+      "title": "DataClass",
+      "type": "string"
+    },
+    "ManifestMaterial": {
+      "additionalProperties": false,
+      "description": "工单包 manifest.json 里声明的一份材料。",
+      "properties": {
+        "derived": {
+          "default": false,
+          "description": "是否为衍生材料（如源系统生成的 AI 摘要）",
+          "title": "Derived",
+          "type": "boolean"
+        },
+        "derived_from": {
+          "items": {
+            "pattern": "^M\\d{2,}$",
+            "type": "string"
+          },
+          "title": "Derived From",
+          "type": "array"
+        },
+        "description": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Description"
+        },
+        "id": {
+          "pattern": "^M\\d{2,}$",
+          "title": "Id",
+          "type": "string"
+        },
+        "kind": {
+          "$ref": "#/$defs/MaterialKind"
+        },
+        "media_type": {
+          "title": "Media Type",
+          "type": "string"
+        },
+        "origin": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/MaterialOrigin"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "path": {
+          "description": "相对工单包根目录的路径",
+          "title": "Path",
+          "type": "string"
+        },
+        "sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Sha256",
+          "type": "string"
+        },
+        "size_bytes": {
+          "minimum": 0,
+          "title": "Size Bytes",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "id",
+        "kind",
+        "path",
+        "sha256",
+        "size_bytes",
+        "media_type"
+      ],
+      "title": "ManifestMaterial",
+      "type": "object"
+    },
+    "MaterialKind": {
+      "enum": [
+        "ticket_fields",
+        "process_log",
+        "email_html",
+        "email_eml",
+        "image",
+        "pdf",
+        "docx",
+        "text",
+        "other"
+      ],
+      "title": "MaterialKind",
+      "type": "string"
+    },
+    "MaterialOrigin": {
+      "additionalProperties": false,
+      "description": "材料在源系统中的位置，用于溯源和漏件检查。",
+      "properties": {
+        "log_seq": {
+          "anyOf": [
+            {
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "出自处理过程第几条",
+          "title": "Log Seq"
+        },
+        "note": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Note"
+        }
+      },
+      "title": "MaterialOrigin",
+      "type": "object"
+    }
+  },
+  "$id": "noc7/bundle-manifest.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "bundle_format_version": {
+      "const": "1.0",
+      "default": "1.0",
+      "title": "Bundle Format Version",
+      "type": "string"
+    },
+    "bundle_id": {
+      "minLength": 1,
+      "title": "Bundle Id",
+      "type": "string"
+    },
+    "captured_at": {
+      "description": "抓取/数据截止时间，带时区的 ISO 8601",
+      "title": "Captured At",
+      "type": "string"
+    },
+    "data_class": {
+      "$ref": "#/$defs/DataClass"
+    },
+    "default_timezone": {
+      "anyOf": [
+        {
+          "pattern": "^[+-]\\d{2}:\\d{2}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "源系统时间口径。原文无时区的时间按它解析并标记 assumed；为空表示口径未知",
+      "title": "Default Timezone"
+    },
+    "materials": {
+      "items": {
+        "$ref": "#/$defs/ManifestMaterial"
+      },
+      "title": "Materials",
+      "type": "array"
+    },
+    "source": {
+      "$ref": "#/$defs/BundleSource"
+    },
+    "synthetic_notice": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "合成数据声明；合成包必填",
+      "title": "Synthetic Notice"
+    }
+  },
+  "required": [
+    "bundle_id",
+    "data_class",
+    "source",
+    "captured_at",
+    "materials"
+  ],
+  "title": "BundleManifest",
+  "type": "object"
+}

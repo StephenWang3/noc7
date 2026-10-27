@@ -1,0 +1,43 @@
+{
+  "bundle_format_version": "1.0",
+  "bundle_id": "SYN-P02",
+  "data_class": "synthetic",
+  "source": {
+    "kind": "synthetic",
+    "tool": "hand-written + scripts/make_fixture_assets.py (A0)",
+    "note": "按PRD §7 必测：UTC 与 GMT+8 跨日、无时区海外设备记录；EML 原件编写"
+  },
+  "captured_at": "2026-10-07T09:30:00+08:00",
+  "default_timezone": "+08:00",
+  "synthetic_notice": "合成数据：内容全部虚构，只保留PRD §7 必测：UTC 与 GMT+8 跨日、无时区海外设备记录；EML 原件的问题模式，不含任何真实工单内容、编号、客户信息或附件。",
+  "materials": [
+    {
+      "id": "M01",
+      "kind": "ticket_fields",
+      "path": "ticket.json",
+      "sha256": "551e589aec73942120245100546ce85b74506e08e94ca51f222c9f88d6313dd7",
+      "size_bytes": 1797,
+      "media_type": "application/json"
+    },
+    {
+      "id": "M02",
+      "kind": "process_log",
+      "path": "process_log.json",
+      "sha256": "2889ce176d9dee811c545b041b48c5b0f26cb08fe103547e5fcf2ac8218e7ed9",
+      "size_bytes": 1665,
+      "media_type": "application/json"
+    },
+    {
+      "id": "M03",
+      "kind": "email_eml",
+      "path": "emails/M03-eu-carrier-closure.eml",
+      "sha256": "813910b0b9046533a2942c34e97160c7671aabd7d4ac83eb2ae0dafce4b95812",
+      "size_bytes": 764,
+      "media_type": "message/rfc822",
+      "origin": {
+        "log_seq": 5
+      },
+      "description": "上游运营商故障关闭通知 EML 原件"
+    }
+  ]
+}

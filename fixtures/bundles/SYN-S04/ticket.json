@@ -1,0 +1,23 @@
+{
+  "ticket_ref": "SYN-S04",
+  "title": "【合成】OTN 设备通信失败告警",
+  "ticket_family": "device",
+  "category": "设备-板卡故障",
+  "status": {"list_status": "待受理", "detail_status": "处理中"},
+  "fields": [
+    {"key": "ticket_no", "label": "工单编号", "value": "SYN-S04", "section": "开单信息"},
+    {"key": "alarm_title", "label": "告警标题", "value": "COMMUN_FAIL", "section": "开单信息"},
+    {"key": "alarm_level", "label": "告警级别", "value": "主要", "section": "开单信息"},
+    {"key": "device_type", "label": "设备类型", "value": "OTN", "section": "开单信息"},
+    {"key": "device_name", "label": "设备名称", "value": "SYN-OTN-SG-07", "section": "开单信息"},
+    {"key": "shelf_slot_port", "label": "槽位/端口", "value": "shelf 2 / slot 11", "section": "开单信息"},
+    {"key": "device_location", "label": "位置信息", "value": "新加坡 示例机房 3 楼 R12 机架（合成）", "section": "开单信息"},
+    {"key": "region", "label": "国家/城市", "value": "新加坡", "section": "开单信息"},
+    {"key": "alarm_time", "label": "告警时间", "value": "2026-09-20 14:31:08", "section": "开单信息"},
+    {"key": "alarm_cleared_at", "label": "告警清除时间", "value": null, "section": "开单信息"},
+    {"key": "vendor", "label": "供应商", "value": "设备厂商甲（合成）", "section": "开单信息"},
+    {"key": "handler", "label": "处理人", "value": "海外处理区-工程师K", "section": "海外处理区"},
+    {"key": "created_at", "label": "建单时间", "value": "2026-09-20 14:36:10", "section": "开单信息"}
+  ],
+  "related_tickets": []
+}

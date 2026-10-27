@@ -1,0 +1,261 @@
+{
+  "gold_version": "1.0",
+  "bundle_id": "SYN-S09",
+  "patterns": [
+    "S09"
+  ],
+  "summary": "远端丢包与本端正常并存：恢复字段没有客户确认；原因栏是排查结论；客户禁止中断性测试是注意事项，不是原因。",
+  "annotation": {
+    "annotator": "架构师（Claude，合成样本作者）",
+    "annotated_at": "2026-10-27",
+    "method": "合成样本作者按调研问题模式逐要素标注；正式评测前需业务人员复核"
+  },
+  "elements": {
+    "start_time": {
+      "status_in": [
+        "documented"
+      ],
+      "rationale": "系统字段 13:00；客户邮件写 Time Circuit Failed: NA，所以只是系统记载。",
+      "key_points": [],
+      "required_candidates": [
+        {
+          "kind_in": [
+            "fault_start_field"
+          ],
+          "contains_any": [],
+          "evidence": [
+            {
+              "material_id": "M01",
+              "field_key": "occurred_at"
+            }
+          ],
+          "time": {
+            "iso": "2026-09-28T13:00:00+08:00",
+            "tolerance_minutes": 0
+          }
+        }
+      ],
+      "forbidden_values": [],
+      "evidence": [
+        {
+          "material_id": "M01",
+          "field_key": "occurred_at"
+        }
+      ],
+      "expected_time": {
+        "iso": "2026-09-28T13:00:00+08:00",
+        "tolerance_minutes": 0
+      }
+    },
+    "end_time": {
+      "status_in": [
+        "documented"
+      ],
+      "rationale": "恢复字段 13:36 有值，但之后第 7—8 条仍在索要客户测试资料，没有客户确认；只能是 documented，不能 confirmed。",
+      "key_points": [],
+      "required_candidates": [
+        {
+          "kind_in": [
+            "recovery_field"
+          ],
+          "contains_any": [],
+          "evidence": [
+            {
+              "material_id": "M01",
+              "field_key": "recovered_at"
+            }
+          ],
+          "time": {
+            "iso": "2026-09-28T13:36:00+08:00",
+            "tolerance_minutes": 0
+          }
+        }
+      ],
+      "forbidden_values": [],
+      "evidence": [
+        {
+          "material_id": "M01",
+          "field_key": "recovered_at"
+        }
+      ],
+      "expected_time": {
+        "iso": "2026-09-28T13:36:00+08:00",
+        "tolerance_minutes": 0
+      }
+    },
+    "phenomenon": {
+      "status_in": [
+        "documented"
+      ],
+      "rationale": "客户代理（法兰克福）到目标（香港）约 25% 丢包；本端 ping 100 发 100 收。范围不同，本端正常不能否定客户观测。",
+      "key_points": [
+        {
+          "any_of": [
+            "25%",
+            "25 %"
+          ]
+        }
+      ],
+      "required_candidates": [
+        {
+          "kind_in": [
+            "customer"
+          ],
+          "contains_any": [
+            "25%"
+          ],
+          "evidence": [
+            {
+              "material_id": "M01",
+              "field_key": "description"
+            }
+          ]
+        },
+        {
+          "kind_in": [
+            "noc_check"
+          ],
+          "contains_any": [
+            "100 收",
+            "无丢包"
+          ],
+          "evidence": [
+            {
+              "material_id": "M02",
+              "log_seq": 3
+            }
+          ]
+        }
+      ],
+      "forbidden_values": [],
+      "evidence": [
+        {
+          "material_id": "M01",
+          "field_key": "description"
+        }
+      ]
+    },
+    "responsible_party": {
+      "status_in": [
+        "unknown"
+      ],
+      "rationale": "未见任何定责意见或责任认定材料。",
+      "key_points": [],
+      "required_candidates": [],
+      "forbidden_values": [],
+      "evidence": []
+    },
+    "cause": {
+      "status_in": [
+        "unknown"
+      ],
+      "rationale": "原因栏是本端测试正常与补资料要求，属于排查结论。",
+      "key_points": [],
+      "required_candidates": [
+        {
+          "kind_in": [
+            "investigation_finding"
+          ],
+          "contains_any": [
+            "无丢包"
+          ],
+          "evidence": [
+            {
+              "material_id": "M01",
+              "field_key": "cause"
+            }
+          ]
+        }
+      ],
+      "forbidden_values": [],
+      "evidence": []
+    },
+    "handling_process": {
+      "status_in": [
+        "documented"
+      ],
+      "rationale": "两次 ping、端口流量检查、返单并索要源/目的地址与 trace。",
+      "key_points": [
+        {
+          "any_of": [
+            "ping"
+          ]
+        },
+        {
+          "any_of": [
+            "流量"
+          ]
+        },
+        {
+          "any_of": [
+            "trace",
+            "资料"
+          ]
+        }
+      ],
+      "required_candidates": [],
+      "forbidden_values": [],
+      "evidence": [
+        {
+          "material_id": "M02",
+          "log_seq": 3
+        },
+        {
+          "material_id": "M02",
+          "log_seq": 5
+        },
+        {
+          "material_id": "M02",
+          "log_seq": 7
+        }
+      ]
+    },
+    "location": {
+      "status_in": [
+        "unknown"
+      ],
+      "rationale": "客户代理、测试目标是测试节点，未定位故障段。",
+      "key_points": [],
+      "required_candidates": [
+        {
+          "kind_in": [
+            "test_node"
+          ],
+          "contains_any": [
+            "198.51.100.20",
+            "203.0.113.50",
+            "Frankfurt"
+          ],
+          "evidence": [
+            {
+              "material_id": "M01",
+              "field_key": "description"
+            }
+          ]
+        }
+      ],
+      "forbidden_values": [],
+      "evidence": []
+    }
+  },
+  "expected_issues": [
+    {
+      "code": "RECOVERY_UNVERIFIED",
+      "element": "end_time"
+    },
+    {
+      "code": "OBSERVATION_SCOPE_DIFFERS",
+      "element": "phenomenon"
+    },
+    {
+      "code": "CAUSE_NOT_DIAGNOSIS",
+      "element": "cause"
+    },
+    {
+      "code": "DURATION_BASIS_MISMATCH",
+      "note": "起止差 36 分钟，返单历时 18 分钟"
+    }
+  ],
+  "attachment_dependent": [],
+  "notes": "客户邮件中“Intrusive testing is NOT approved”应作为注意事项进入报告，不是原因。"
+}

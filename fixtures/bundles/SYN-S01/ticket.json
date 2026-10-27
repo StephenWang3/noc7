@@ -1,0 +1,23 @@
+{
+  "ticket_ref": "SYN-S01",
+  "title": "【合成】港新专线时延增加",
+  "ticket_family": "business",
+  "category": "业务性能-时延",
+  "status": {"list_status": "处理中", "detail_status": "处理中"},
+  "fields": [
+    {"key": "ticket_no", "label": "工单编号", "value": "SYN-S01", "section": "基础信息"},
+    {"key": "customer", "label": "客户名称", "value": "示例客户甲（合成）", "section": "基础信息"},
+    {"key": "circuit_id", "label": "电路编号", "value": "SYN-CKT-1001", "section": "基础信息"},
+    {"key": "a_end", "label": "A 端", "value": "香港 示例数据中心 HK-A（合成）", "section": "基础信息"},
+    {"key": "z_end", "label": "Z 端", "value": "新加坡 示例数据中心 SG-B（合成）", "section": "基础信息"},
+    {"key": "created_at", "label": "建单时间", "value": "2026-09-08 10:12:30", "section": "基础信息"},
+    {"key": "fault_type", "label": "故障类型", "value": "业务性能-时延", "section": "故障信息"},
+    {"key": "occurred_at", "label": "故障发生时间", "value": null, "section": "故障信息"},
+    {"key": "recovered_at", "label": "故障恢复时间", "value": null, "section": "故障信息"},
+    {"key": "description", "label": "故障描述", "value": "客户反映：自 2026-09-03 起，香港至新加坡专线 SYN-CKT-1001 的往返时延（RTT）由一直以来的约 22.6 ms 上升到约 25.2 ms，持续至今。客户怀疑线路在长、短两条路径之间发生了切换，请协助核查当前路由并恢复到原先的时延水平。", "section": "故障信息"},
+    {"key": "cause", "label": "故障原因", "value": "国内段、境外段检查均未发现倒换，无告警。", "section": "故障信息"},
+    {"key": "duration_returned", "label": "返单历时", "value": null, "section": "故障信息"},
+    {"key": "handling_dept", "label": "处理部门", "value": "国际传输维护组（合成）", "section": "故障信息"}
+  ],
+  "related_tickets": []
+}

@@ -1,0 +1,43 @@
+{
+  "bundle_format_version": "1.0",
+  "bundle_id": "SYN-X01",
+  "data_class": "synthetic",
+  "source": {
+    "kind": "synthetic",
+    "tool": "hand-written + scripts/make_fixture_assets.py (A0)",
+    "note": "按调研样本 X01（已撤销、附件为历史交付材料）编写"
+  },
+  "captured_at": "2026-10-03T12:00:00+08:00",
+  "default_timezone": "+08:00",
+  "synthetic_notice": "合成数据：内容全部虚构，只保留调研样本 X01（已撤销、附件为历史交付材料）的问题模式，不含任何真实工单内容、编号、客户信息或附件。",
+  "materials": [
+    {
+      "id": "M01",
+      "kind": "ticket_fields",
+      "path": "ticket.json",
+      "sha256": "d6c8a52e734684ac4834c178b2a04f8a06bdb73f76521cd86646da5b03082d9f",
+      "size_bytes": 1310,
+      "media_type": "application/json"
+    },
+    {
+      "id": "M02",
+      "kind": "process_log",
+      "path": "process_log.json",
+      "sha256": "77d9fc0c5e37964c880d7cc7819657e182e4c3d53d9c66113a5103d043169ea8",
+      "size_bytes": 2616,
+      "media_type": "application/json"
+    },
+    {
+      "id": "M03",
+      "kind": "image",
+      "path": "attachments/M03-delivery-confirmation.png",
+      "sha256": "2cc36511053e9bf1ceff8a1fa0cb8cd062d1b5b24e53292c5037783ffd3a57d0",
+      "size_bytes": 89530,
+      "media_type": "image/png",
+      "origin": {
+        "log_seq": 5
+      },
+      "description": "客户补充的交付确认书长图"
+    }
+  ]
+}

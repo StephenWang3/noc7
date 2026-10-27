@@ -1,0 +1,31 @@
+{
+  "bundle_format_version": "1.0",
+  "bundle_id": "SYN-S03",
+  "data_class": "synthetic",
+  "source": {
+    "kind": "synthetic",
+    "tool": "hand-written + scripts/make_fixture_assets.py (A0)",
+    "note": "按调研样本 S03（挂起、重开历史单）编写"
+  },
+  "captured_at": "2026-09-16T16:00:00+08:00",
+  "default_timezone": "+08:00",
+  "synthetic_notice": "合成数据：内容全部虚构，只保留调研样本 S03（挂起、重开历史单）的问题模式，不含任何真实工单内容、编号、客户信息或附件。",
+  "materials": [
+    {
+      "id": "M01",
+      "kind": "ticket_fields",
+      "path": "ticket.json",
+      "sha256": "c323287a871daba34cc4a30469cb12706d293120a4d1d97a9fef2d721c311fbe",
+      "size_bytes": 1722,
+      "media_type": "application/json"
+    },
+    {
+      "id": "M02",
+      "kind": "process_log",
+      "path": "process_log.json",
+      "sha256": "fc37606fd6f946679d0091552776c13ac95f38452d2eacaf7d9961b0fa934a53",
+      "size_bytes": 1984,
+      "media_type": "application/json"
+    }
+  ]
+}

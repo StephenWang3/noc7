@@ -1,0 +1,179 @@
+{
+  "gold_version": "1.0",
+  "bundle_id": "SYN-S05",
+  "patterns": [
+    "S05",
+    "S08"
+  ],
+  "summary": "自动大客户单：原因栏是可能原因清单；与 SYN-S08 共用同一告警，不是独立证据。",
+  "annotation": {
+    "annotator": "架构师（Claude，合成样本作者）",
+    "annotated_at": "2026-10-27",
+    "method": "合成样本作者按调研问题模式逐要素标注；正式评测前需业务人员复核"
+  },
+  "elements": {
+    "start_time": {
+      "status_in": [
+        "documented"
+      ],
+      "rationale": "告警时间 03:17:45（系统口径）是唯一时间，作为设备事件时间记录。",
+      "key_points": [],
+      "required_candidates": [
+        {
+          "kind_in": [
+            "alarm_raised"
+          ],
+          "contains_any": [],
+          "evidence": [
+            {
+              "material_id": "M01",
+              "field_key": "alarm_time"
+            }
+          ],
+          "time": {
+            "iso": "2026-09-22T03:17:45+08:00",
+            "tolerance_minutes": 1
+          }
+        }
+      ],
+      "forbidden_values": [],
+      "evidence": [
+        {
+          "material_id": "M01",
+          "field_key": "alarm_time"
+        }
+      ],
+      "expected_time": {
+        "iso": "2026-09-22T03:17:45+08:00",
+        "tolerance_minutes": 1
+      }
+    },
+    "end_time": {
+      "status_in": [
+        "unknown"
+      ],
+      "rationale": "告警清除时间为空。",
+      "key_points": [],
+      "required_candidates": [],
+      "forbidden_values": [],
+      "evidence": []
+    },
+    "phenomenon": {
+      "status_in": [
+        "documented"
+      ],
+      "rationale": "R_LOS（接收信号丢失）影响大客户电路 SYN-CKT-1005。",
+      "key_points": [
+        {
+          "any_of": [
+            "R_LOS",
+            "接收信号丢失",
+            "信号丢失"
+          ]
+        }
+      ],
+      "required_candidates": [],
+      "forbidden_values": [],
+      "evidence": [
+        {
+          "material_id": "M01",
+          "field_key": "alarm_title"
+        }
+      ]
+    },
+    "responsible_party": {
+      "status_in": [
+        "unknown"
+      ],
+      "rationale": "设备厂家只是厂家，不是定责。",
+      "key_points": [],
+      "required_candidates": [],
+      "forbidden_values": [
+        "设备厂商乙"
+      ],
+      "evidence": []
+    },
+    "cause": {
+      "status_in": [
+        "unknown"
+      ],
+      "rationale": "六项可能原因并列，未确认哪项发生；不能自动选“光纤断裂”。",
+      "key_points": [],
+      "required_candidates": [
+        {
+          "kind_in": [
+            "candidate_list_item"
+          ],
+          "contains_any": [
+            "光纤断裂"
+          ],
+          "evidence": [
+            {
+              "material_id": "M01",
+              "field_key": "cause"
+            }
+          ]
+        }
+      ],
+      "forbidden_values": [
+        "光纤断裂",
+        "断纤"
+      ],
+      "evidence": []
+    },
+    "handling_process": {
+      "status_in": [
+        "documented",
+        "unknown"
+      ],
+      "rationale": "只有建单记录，没有排障动作。",
+      "key_points": [],
+      "required_candidates": [],
+      "forbidden_values": [],
+      "evidence": []
+    },
+    "location": {
+      "status_in": [
+        "unknown"
+      ],
+      "rationale": "设备/槽位/端口是告警位置，没有定位故障点。",
+      "key_points": [],
+      "required_candidates": [
+        {
+          "kind_in": [
+            "alarm_location"
+          ],
+          "contains_any": [
+            "SYN-OTN-HK-03"
+          ],
+          "evidence": [
+            {
+              "material_id": "M01",
+              "field_key": "device_name"
+            }
+          ]
+        }
+      ],
+      "forbidden_values": [],
+      "evidence": []
+    }
+  },
+  "expected_issues": [
+    {
+      "code": "CAUSE_CANDIDATE_LIST",
+      "element": "cause"
+    },
+    {
+      "code": "RELATED_TICKET_SHARED_SOURCE",
+      "note": "与 SYN-S08 共用 SYN-ALM-778812"
+    },
+    {
+      "code": "STATUS_VIEW_MISMATCH"
+    },
+    {
+      "code": "ONGOING_NO_END",
+      "element": "end_time"
+    }
+  ],
+  "attachment_dependent": []
+}

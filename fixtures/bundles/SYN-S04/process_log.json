@@ -1,0 +1,5 @@
+{
+  "entries": [
+    {"seq": 1, "recorded_at": "2026-09-20 14:36:10", "actor": "告警系统", "action": "创建工单", "content": "设备 SYN-OTN-SG-07 shelf 2 / slot 11 上报 COMMUN_FAIL（主要），自动创建设备工单。", "entry_kind": "system"}
+  ]
+}

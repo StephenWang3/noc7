@@ -1,0 +1,16 @@
+{
+  "entries": [
+    {"seq": 1, "recorded_at": "2026-10-02 11:20:16", "actor": "系统", "action": "建单", "content": "客户来电报障建单。", "entry_kind": "system"},
+    {"seq": 2, "recorded_at": "2026-10-02 11:25:40", "actor": "值班员T", "actor_org": "网管中心", "action": "受理", "content": "已受理。", "entry_kind": "human"},
+    {"seq": 3, "recorded_at": "2026-10-02 11:50:02", "actor": "值班员T", "actor_org": "网管中心", "action": "处理意见", "content": "已联系现场联系人，请其配合检查。", "entry_kind": "human"},
+    {"seq": 4, "recorded_at": "2026-10-02 12:10:35", "actor": "值班员T", "actor_org": "网管中心", "action": "处理意见", "content": "请客户提供丢包的源/目的地址及 trace 结果。", "entry_kind": "human"},
+    {"seq": 5, "recorded_at": "2026-10-02 14:02:48", "actor": "客户经理U", "actor_org": "客户服务部", "action": "信息追加", "content": "客户补充业务资料（交付确认书）。", "entry_kind": "human", "attachment_flag": true, "attachments": ["M03"]},
+    {"seq": 6, "recorded_at": "2026-10-02 15:30:11", "actor": "现场工程师V", "actor_org": "现场维护队", "action": "处理意见", "content": "现场反馈：机房内另一运营商的接入设备没有光，本方设备未见异常。", "entry_kind": "human"},
+    {"seq": 7, "recorded_at": "2026-10-02 15:45:00", "actor": "值班员T", "actor_org": "网管中心", "action": "挂起", "content": "挂起，等待核查业务归属。", "entry_kind": "human"},
+    {"seq": 8, "recorded_at": "2026-10-03 09:10:27", "actor": "值班员W", "actor_org": "网管中心", "action": "解挂", "content": "解挂。", "entry_kind": "human"},
+    {"seq": 9, "recorded_at": "2026-10-03 09:40:13", "actor": "值班员W", "actor_org": "网管中心", "action": "处理意见", "content": "按交付确认书中的业务 IP 192.0.2.10 查询，该地址段不属于本运营商。", "entry_kind": "human"},
+    {"seq": 10, "recorded_at": "2026-10-03 10:05:52", "actor": "值班员W", "actor_org": "网管中心", "action": "处理意见", "content": "核查结论：客户报障的线路非本运营商业务。", "entry_kind": "human"},
+    {"seq": 11, "recorded_at": "2026-10-03 11:20:09", "actor": "客户经理U", "actor_org": "客户服务部", "action": "撤单申请", "content": "客户确认报错了运营商，申请撤单，无需网管继续处理。", "entry_kind": "human"},
+    {"seq": 12, "recorded_at": "2026-10-03 11:25:30", "actor": "系统", "action": "撤销", "content": "工单已撤销。", "entry_kind": "system"}
+  ]
+}

@@ -1,0 +1,31 @@
+{
+  "bundle_format_version": "1.0",
+  "bundle_id": "SYN-P01",
+  "data_class": "synthetic",
+  "source": {
+    "kind": "synthetic",
+    "tool": "hand-written + scripts/make_fixture_assets.py (A0)",
+    "note": "按PRD §7 必测：恢复早于发生、负历时编写"
+  },
+  "captured_at": "2026-10-06T09:30:00+08:00",
+  "default_timezone": "+08:00",
+  "synthetic_notice": "合成数据：内容全部虚构，只保留PRD §7 必测：恢复早于发生、负历时的问题模式，不含任何真实工单内容、编号、客户信息或附件。",
+  "materials": [
+    {
+      "id": "M01",
+      "kind": "ticket_fields",
+      "path": "ticket.json",
+      "sha256": "0cea3c36b8e2e64d6cedf7224d910ffbdfd2e9473ea58b3582d7641d85abc42c",
+      "size_bytes": 1425,
+      "media_type": "application/json"
+    },
+    {
+      "id": "M02",
+      "kind": "process_log",
+      "path": "process_log.json",
+      "sha256": "398f9c50f984d085bac4008b5306a9ac0e0394e50d2df0ebb731fecaccdcd04b",
+      "size_bytes": 1398,
+      "media_type": "application/json"
+    }
+  ]
+}

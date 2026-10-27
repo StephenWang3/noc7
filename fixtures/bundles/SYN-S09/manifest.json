@@ -1,0 +1,31 @@
+{
+  "bundle_format_version": "1.0",
+  "bundle_id": "SYN-S09",
+  "data_class": "synthetic",
+  "source": {
+    "kind": "synthetic",
+    "tool": "hand-written + scripts/make_fixture_assets.py (A0)",
+    "note": "按调研样本 S09（远端丢包与本端正常、恢复无确认）编写"
+  },
+  "captured_at": "2026-09-29T10:30:00+08:00",
+  "default_timezone": "+08:00",
+  "synthetic_notice": "合成数据：内容全部虚构，只保留调研样本 S09（远端丢包与本端正常、恢复无确认）的问题模式，不含任何真实工单内容、编号、客户信息或附件。",
+  "materials": [
+    {
+      "id": "M01",
+      "kind": "ticket_fields",
+      "path": "ticket.json",
+      "sha256": "e502b47e27fdbcf351c07c8689852b746a631e4ac61fffb64bfbce58aa055cfb",
+      "size_bytes": 1923,
+      "media_type": "application/json"
+    },
+    {
+      "id": "M02",
+      "kind": "process_log",
+      "path": "process_log.json",
+      "sha256": "b1da27f9f0c55713a414038ae3a8964a93cb9f6ee603ae3d961f4646a1c71a33",
+      "size_bytes": 2078,
+      "media_type": "application/json"
+    }
+  ]
+}

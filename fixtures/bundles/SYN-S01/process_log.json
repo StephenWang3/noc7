@@ -1,0 +1,13 @@
+{
+  "entries": [
+    {"seq": 1, "recorded_at": "2026-09-08 10:12:30", "actor": "系统", "action": "建单", "content": "客户来电报障，值班台建单。", "entry_kind": "system"},
+    {"seq": 2, "recorded_at": "2026-09-08 10:15:02", "actor": "值班员A", "actor_org": "网管中心", "action": "受理", "content": "已受理，转国际传输维护组核查路由及时延。", "entry_kind": "human"},
+    {"seq": 3, "recorded_at": "2026-09-08 10:16:40", "actor": "值班员A", "actor_org": "网管中心", "action": "转派", "content": "转派至 国际传输维护组。", "entry_kind": "system"},
+    {"seq": 4, "recorded_at": "2026-09-08 11:02:18", "actor": "工程师B", "actor_org": "国际传输维护组", "action": "处理意见", "content": "国内段（HK-A 至香港出口局）检查：链路无告警，近 7 日性能数据正常，段内时延约 1.1 ms，与历史一致。", "entry_kind": "human"},
+    {"seq": 5, "recorded_at": "2026-09-08 11:40:55", "actor": "工程师C", "actor_org": "国际传输维护组", "action": "处理意见", "content": "境外段检查：海缆段在主用路由上运行，未发现保护倒换记录，无告警。", "entry_kind": "human"},
+    {"seq": 6, "recorded_at": "2026-09-08 14:20:11", "actor": "工程师C", "actor_org": "国际传输维护组", "action": "处理意见", "content": "全程路由说明：HK-A → 香港出口局 → 海缆 X 主用段 → 新加坡登陆站 → SG-B。当前即为长期使用的主用路由，未见路由变更。", "entry_kind": "human"},
+    {"seq": 7, "recorded_at": "2026-09-09 09:30:47", "actor": "工程师B", "actor_org": "国际传输维护组", "action": "处理意见", "content": "复查 9 月 1 日至今的倒换日志：无倒换、无告警。", "entry_kind": "human"},
+    {"seq": 8, "recorded_at": "2026-09-09 10:05:20", "actor": "值班员A", "actor_org": "网管中心", "action": "处理意见", "content": "已发邮件请客户确认当前时延是否仍为约 25 ms，并提供测试源、目的地址及测试方法。", "entry_kind": "human"},
+    {"seq": 9, "recorded_at": "2026-09-10 17:45:03", "actor": "值班员D", "actor_org": "网管中心", "action": "处理意见", "content": "客户暂未回复，继续跟进。", "entry_kind": "human"}
+  ]
+}

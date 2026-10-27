@@ -1,0 +1,489 @@
+{
+  "$defs": {
+    "Annotation": {
+      "additionalProperties": false,
+      "properties": {
+        "annotated_at": {
+          "title": "Annotated At",
+          "type": "string"
+        },
+        "annotator": {
+          "title": "Annotator",
+          "type": "string"
+        },
+        "method": {
+          "title": "Method",
+          "type": "string"
+        }
+      },
+      "required": [
+        "annotator",
+        "annotated_at",
+        "method"
+      ],
+      "title": "Annotation",
+      "type": "object"
+    },
+    "ElementName": {
+      "description": "七要素。顺序即报告中的展示顺序。",
+      "enum": [
+        "start_time",
+        "end_time",
+        "phenomenon",
+        "responsible_party",
+        "cause",
+        "handling_process",
+        "location"
+      ],
+      "title": "ElementName",
+      "type": "string"
+    },
+    "ElementStatus": {
+      "description": "要素状态（PRD §6）。模型自评置信度不能代替状态。",
+      "enum": [
+        "documented",
+        "confirmed",
+        "unknown",
+        "conflicted"
+      ],
+      "title": "ElementStatus",
+      "type": "string"
+    },
+    "EvidenceAnchor": {
+      "additionalProperties": false,
+      "properties": {
+        "field_key": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Field Key"
+        },
+        "log_seq": {
+          "anyOf": [
+            {
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Log Seq"
+        },
+        "material_id": {
+          "pattern": "^M\\d{2,}$",
+          "title": "Material Id",
+          "type": "string"
+        },
+        "message_index": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Message Index"
+        },
+        "note": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "图片区域等无法自动比对的位置说明",
+          "title": "Note"
+        },
+        "page": {
+          "anyOf": [
+            {
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Page"
+        }
+      },
+      "required": [
+        "material_id"
+      ],
+      "title": "EvidenceAnchor",
+      "type": "object"
+    },
+    "GoldCandidate": {
+      "additionalProperties": false,
+      "description": "系统必须保留的候选（即使它最终不是结论值）。",
+      "properties": {
+        "contains_any": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Contains Any",
+          "type": "array"
+        },
+        "evidence": {
+          "items": {
+            "$ref": "#/$defs/EvidenceAnchor"
+          },
+          "title": "Evidence",
+          "type": "array"
+        },
+        "kind_in": {
+          "description": "可接受的类别，取值来自 TimeKind / CauseKind / LocationRole / ResponsibilityBasis / StepKind / Attribution",
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1,
+          "title": "Kind In",
+          "type": "array"
+        },
+        "note": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Note"
+        },
+        "time": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/GoldTime"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "tz_source_in": {
+          "anyOf": [
+            {
+              "items": {
+                "$ref": "#/$defs/TimeZoneSource"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Tz Source In"
+        }
+      },
+      "required": [
+        "kind_in"
+      ],
+      "title": "GoldCandidate",
+      "type": "object"
+    },
+    "GoldElement": {
+      "additionalProperties": false,
+      "properties": {
+        "evidence": {
+          "description": "结论应引用的证据位置（任一）",
+          "items": {
+            "$ref": "#/$defs/EvidenceAnchor"
+          },
+          "title": "Evidence",
+          "type": "array"
+        },
+        "expected_time": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/GoldTime"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "forbidden_values": {
+          "description": "结论值里不得出现的内容",
+          "items": {
+            "type": "string"
+          },
+          "title": "Forbidden Values",
+          "type": "array"
+        },
+        "key_points": {
+          "items": {
+            "$ref": "#/$defs/KeyPoint"
+          },
+          "title": "Key Points",
+          "type": "array"
+        },
+        "rationale": {
+          "description": "标注理由",
+          "minLength": 8,
+          "title": "Rationale",
+          "type": "string"
+        },
+        "required_candidates": {
+          "items": {
+            "$ref": "#/$defs/GoldCandidate"
+          },
+          "title": "Required Candidates",
+          "type": "array"
+        },
+        "status_in": {
+          "items": {
+            "$ref": "#/$defs/ElementStatus"
+          },
+          "minItems": 1,
+          "title": "Status In",
+          "type": "array"
+        }
+      },
+      "required": [
+        "status_in",
+        "rationale"
+      ],
+      "title": "GoldElement",
+      "type": "object"
+    },
+    "GoldIssue": {
+      "additionalProperties": false,
+      "properties": {
+        "code": {
+          "$ref": "#/$defs/IssueCode"
+        },
+        "element": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ElementName"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "note": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Note"
+        }
+      },
+      "required": [
+        "code"
+      ],
+      "title": "GoldIssue",
+      "type": "object"
+    },
+    "GoldTime": {
+      "additionalProperties": false,
+      "properties": {
+        "iso": {
+          "description": "带偏移、不带偏移或只有日期，口径同 TimeValue.iso",
+          "title": "Iso",
+          "type": "string"
+        },
+        "tolerance_minutes": {
+          "default": 0,
+          "minimum": 0,
+          "title": "Tolerance Minutes",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "iso"
+      ],
+      "title": "GoldTime",
+      "type": "object"
+    },
+    "IdentityStatus": {
+      "enum": [
+        "verified",
+        "unverified",
+        "conflicting"
+      ],
+      "title": "IdentityStatus",
+      "type": "string"
+    },
+    "IssueCode": {
+      "enum": [
+        "TIME_ORDER_INVERTED",
+        "NEGATIVE_DURATION",
+        "TIME_PLACEHOLDER",
+        "TIME_TZ_MISSING",
+        "TIME_CANDIDATES_DIFFER",
+        "TIME_BODY_RECORD_MISMATCH",
+        "DURATION_BASIS_MISMATCH",
+        "ONGOING_NO_END",
+        "RECOVERY_UNVERIFIED",
+        "RECOVERY_SCOPE_LIMITED",
+        "CAUSE_NOT_DIAGNOSIS",
+        "CAUSE_CANDIDATE_LIST",
+        "RESPONSIBILITY_NO_BASIS",
+        "OBSERVATION_SCOPE_DIFFERS",
+        "LOCATION_NOT_LOCATED",
+        "SERVICE_IDENTITY_UNVERIFIED",
+        "RELATED_TICKET_SHARED_SOURCE",
+        "RELATED_TICKET_INVALID",
+        "RELATED_TICKET_REOPENED",
+        "TICKET_CANCELLED",
+        "STATUS_VIEW_MISMATCH",
+        "EVIDENCE_REF_MISSING",
+        "EVIDENCE_QUOTE_MISMATCH",
+        "DERIVED_SOURCE_DUPLICATE",
+        "DUPLICATE_CONTENT",
+        "MATERIAL_PARSE_FAILED",
+        "MATERIAL_LOW_QUALITY",
+        "MATERIAL_UNSUPPORTED",
+        "MATERIAL_MISSING",
+        "ATTACHMENT_FLAG_MISMATCH",
+        "EMBEDDED_INSTRUCTION"
+      ],
+      "title": "IssueCode",
+      "type": "string"
+    },
+    "KeyPoint": {
+      "additionalProperties": false,
+      "properties": {
+        "any_of": {
+          "description": "同义写法，命中任一即算覆盖该要点（不区分大小写）",
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1,
+          "title": "Any Of",
+          "type": "array"
+        }
+      },
+      "required": [
+        "any_of"
+      ],
+      "title": "KeyPoint",
+      "type": "object"
+    },
+    "TimeZoneSource": {
+      "enum": [
+        "explicit",
+        "assumed",
+        "unknown"
+      ],
+      "title": "TimeZoneSource",
+      "type": "string"
+    }
+  },
+  "$id": "noc7/gold-answer.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "annotation": {
+      "$ref": "#/$defs/Annotation"
+    },
+    "attachment_dependent": {
+      "description": "必须读懂附件才能答全的要素（用于有/无附件对照实验）",
+      "items": {
+        "$ref": "#/$defs/ElementName"
+      },
+      "title": "Attachment Dependent",
+      "type": "array"
+    },
+    "bundle_id": {
+      "title": "Bundle Id",
+      "type": "string"
+    },
+    "elements": {
+      "additionalProperties": {
+        "$ref": "#/$defs/GoldElement"
+      },
+      "propertyNames": {
+        "$ref": "#/$defs/ElementName"
+      },
+      "title": "Elements",
+      "type": "object"
+    },
+    "expected_issues": {
+      "items": {
+        "$ref": "#/$defs/GoldIssue"
+      },
+      "title": "Expected Issues",
+      "type": "array"
+    },
+    "gold_version": {
+      "const": "1.0",
+      "default": "1.0",
+      "title": "Gold Version",
+      "type": "string"
+    },
+    "notes": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Notes"
+    },
+    "patterns": {
+      "description": "对应的调研问题模式（S01…X01）或 PRD 必测用例",
+      "items": {
+        "type": "string"
+      },
+      "minItems": 1,
+      "title": "Patterns",
+      "type": "array"
+    },
+    "service_identity": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/IdentityStatus"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "summary": {
+      "title": "Summary",
+      "type": "string"
+    }
+  },
+  "required": [
+    "bundle_id",
+    "patterns",
+    "summary",
+    "annotation",
+    "elements"
+  ],
+  "title": "GoldAnswer",
+  "type": "object"
+}

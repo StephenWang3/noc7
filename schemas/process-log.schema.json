@@ -1,0 +1,130 @@
+{
+  "$defs": {
+    "LogEntryKind": {
+      "enum": [
+        "human",
+        "system",
+        "email",
+        "ai_summary"
+      ],
+      "title": "LogEntryKind",
+      "type": "string"
+    },
+    "ProcessLogEntry": {
+      "additionalProperties": false,
+      "properties": {
+        "action": {
+          "description": "源系统动作名：建单、受理、转派、处理意见、信息追加、挂起、返单、结单、撤单申请……",
+          "title": "Action",
+          "type": "string"
+        },
+        "actor": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Actor"
+        },
+        "actor_org": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Actor Org"
+        },
+        "attachment_flag": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "源系统日志顶层的 hasAttachments 原值，只留档。S10 证实它会与实际附件不符，不能据此判断有无附件",
+          "title": "Attachment Flag"
+        },
+        "attachments": {
+          "description": "逐条详情里实际枚举到的附件",
+          "items": {
+            "pattern": "^M\\d{2,}$",
+            "type": "string"
+          },
+          "title": "Attachments",
+          "type": "array"
+        },
+        "content": {
+          "title": "Content",
+          "type": "string"
+        },
+        "emails": {
+          "description": "该条记录对应的完整邮件",
+          "items": {
+            "pattern": "^M\\d{2,}$",
+            "type": "string"
+          },
+          "title": "Emails",
+          "type": "array"
+        },
+        "entry_kind": {
+          "$ref": "#/$defs/LogEntryKind",
+          "default": "human"
+        },
+        "recorded_at": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "记录时间原文",
+          "title": "Recorded At"
+        },
+        "seq": {
+          "description": "源系统显示的序号",
+          "minimum": 1,
+          "title": "Seq",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "seq",
+        "recorded_at",
+        "action",
+        "content"
+      ],
+      "title": "ProcessLogEntry",
+      "type": "object"
+    }
+  },
+  "$id": "noc7/process-log.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "entries": {
+      "items": {
+        "$ref": "#/$defs/ProcessLogEntry"
+      },
+      "title": "Entries",
+      "type": "array"
+    }
+  },
+  "required": [
+    "entries"
+  ],
+  "title": "ProcessLog",
+  "type": "object"
+}

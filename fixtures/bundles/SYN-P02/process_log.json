@@ -1,0 +1,12 @@
+{
+  "entries": [
+    {"seq": 1, "recorded_at": "2026-10-06 22:47:31", "actor": "系统", "action": "建单", "content": "客户来电报障建单。", "entry_kind": "system"},
+    {"seq": 2, "recorded_at": "2026-10-06 22:50:10", "actor": "值班员AA", "actor_org": "网管中心", "action": "受理", "content": "已受理。", "entry_kind": "human"},
+    {"seq": 3, "recorded_at": "2026-10-06 22:58:44", "actor": "值班员AA", "actor_org": "网管中心", "action": "处理意见", "content": "伦敦 PoP 设备 LON-PE-01 日志：2026-10-06 14:38:55 LINK DOWN ge-0/0/1（往 EU-Carrier 方向）。设备日志未标注时区。", "entry_kind": "human"},
+    {"seq": 4, "recorded_at": "2026-10-06 23:05:02", "actor": "值班员AA", "actor_org": "网管中心", "action": "处理意见", "content": "已报障至上游运营商 EU-Carrier。", "entry_kind": "human"},
+    {"seq": 5, "recorded_at": "2026-10-07 01:32:18", "actor": "邮件系统", "action": "邮件", "content": "收到 EU-Carrier 故障关闭通知（EML 原件见附件）。", "entry_kind": "email", "emails": ["M03"]},
+    {"seq": 6, "recorded_at": "2026-10-07 01:35:40", "actor": "值班员AB", "actor_org": "网管中心", "action": "处理意见", "content": "客户来电确认 01:20 起业务恢复正常。", "entry_kind": "human"},
+    {"seq": 7, "recorded_at": "2026-10-07 01:40:05", "actor": "值班员AB", "actor_org": "网管中心", "action": "返单", "content": "返单。", "entry_kind": "human"},
+    {"seq": 8, "recorded_at": "2026-10-07 09:00:00", "actor": "值班员AC", "actor_org": "网管中心", "action": "结单", "content": "结单。", "entry_kind": "system"}
+  ]
+}

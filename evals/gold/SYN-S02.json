@@ -1,0 +1,296 @@
+{
+  "gold_version": "1.0",
+  "bundle_id": "SYN-S02",
+  "patterns": [
+    "S02"
+  ],
+  "summary": "计划割接触发报障：原因有明确记载；同一结论重复五次要去重；返单历时与起止差口径不同；不能把“未同步”变成定责。",
+  "annotation": {
+    "annotator": "架构师（Claude，合成样本作者）",
+    "annotated_at": "2026-10-27",
+    "method": "合成样本作者按调研问题模式逐要素标注；正式评测前需业务人员复核"
+  },
+  "elements": {
+    "start_time": {
+      "status_in": [
+        "documented"
+      ],
+      "rationale": "字段 01:05（系统口径）与描述中北京时间 01:06 的自动报障时间相差 1 分钟，语义一致，不构成冲突。",
+      "key_points": [],
+      "required_candidates": [
+        {
+          "kind_in": [
+            "fault_start_field"
+          ],
+          "contains_any": [],
+          "evidence": [
+            {
+              "material_id": "M01",
+              "field_key": "occurred_at"
+            }
+          ],
+          "time": {
+            "iso": "2026-09-12T01:05:00+08:00",
+            "tolerance_minutes": 0
+          }
+        },
+        {
+          "kind_in": [
+            "alarm_raised",
+            "observation",
+            "customer_reported_start"
+          ],
+          "contains_any": [],
+          "evidence": [
+            {
+              "material_id": "M01",
+              "field_key": "description"
+            }
+          ],
+          "time": {
+            "iso": "2026-09-12T01:06:00+08:00",
+            "tolerance_minutes": 0
+          },
+          "tz_source_in": [
+            "explicit"
+          ]
+        }
+      ],
+      "forbidden_values": [],
+      "evidence": [
+        {
+          "material_id": "M01",
+          "field_key": "occurred_at"
+        },
+        {
+          "material_id": "M01",
+          "field_key": "description"
+        }
+      ],
+      "expected_time": {
+        "iso": "2026-09-12T01:05:00+08:00",
+        "tolerance_minutes": 1
+      }
+    },
+    "end_time": {
+      "status_in": [
+        "documented",
+        "confirmed"
+      ],
+      "rationale": "恢复字段 02:16；第 5 条 02:15 端口恢复 UP；第 6—10 条转述客户确认线路正常。确认是维护人员转述，documented/confirmed 都可接受。",
+      "key_points": [],
+      "required_candidates": [
+        {
+          "kind_in": [
+            "recovery_field"
+          ],
+          "contains_any": [],
+          "evidence": [
+            {
+              "material_id": "M01",
+              "field_key": "recovered_at"
+            }
+          ],
+          "time": {
+            "iso": "2026-09-12T02:16:00+08:00",
+            "tolerance_minutes": 0
+          }
+        }
+      ],
+      "forbidden_values": [],
+      "evidence": [
+        {
+          "material_id": "M01",
+          "field_key": "recovered_at"
+        },
+        {
+          "material_id": "M02",
+          "log_seq": 5
+        },
+        {
+          "material_id": "M02",
+          "log_seq": 6
+        }
+      ],
+      "expected_time": {
+        "iso": "2026-09-12T02:16:00+08:00",
+        "tolerance_minutes": 1
+      }
+    },
+    "phenomenon": {
+      "status_in": [
+        "documented"
+      ],
+      "rationale": "客户专线 Z 端不通、业务中断；后续“计划割接”的解释不能抹掉原始现象。",
+      "key_points": [
+        {
+          "any_of": [
+            "不通",
+            "中断"
+          ]
+        }
+      ],
+      "required_candidates": [],
+      "forbidden_values": [],
+      "evidence": [
+        {
+          "material_id": "M01",
+          "field_key": "description"
+        }
+      ]
+    },
+    "responsible_party": {
+      "status_in": [
+        "unknown"
+      ],
+      "rationale": "“Z 端自动报障未同步切换”是事件解释，不是组织定责。",
+      "key_points": [],
+      "required_candidates": [],
+      "forbidden_values": [
+        "自动报障",
+        "Z 端"
+      ],
+      "evidence": []
+    },
+    "cause": {
+      "status_in": [
+        "documented",
+        "confirmed"
+      ],
+      "rationale": "原因栏与第 4、6 条一致：客户 A 端计划升级割接，Z 端自动报障未同步切换。属于计划维护，类别 planned_work。",
+      "key_points": [
+        {
+          "any_of": [
+            "割接"
+          ]
+        },
+        {
+          "any_of": [
+            "未同步"
+          ]
+        }
+      ],
+      "required_candidates": [
+        {
+          "kind_in": [
+            "planned_work"
+          ],
+          "contains_any": [
+            "割接"
+          ],
+          "evidence": [
+            {
+              "material_id": "M01",
+              "field_key": "cause"
+            },
+            {
+              "material_id": "M02",
+              "log_seq": 4
+            }
+          ]
+        }
+      ],
+      "forbidden_values": [],
+      "evidence": [
+        {
+          "material_id": "M01",
+          "field_key": "cause"
+        },
+        {
+          "material_id": "M02",
+          "log_seq": 4
+        }
+      ]
+    },
+    "handling_process": {
+      "status_in": [
+        "documented"
+      ],
+      "rationale": "查告警、联系客户、确认割接、端口恢复、客户确认后结单；第 6—10 条为同一结论的重复，只算一次。",
+      "key_points": [
+        {
+          "any_of": [
+            "割接"
+          ]
+        },
+        {
+          "any_of": [
+            "恢复",
+            "UP"
+          ]
+        },
+        {
+          "any_of": [
+            "结单"
+          ]
+        }
+      ],
+      "required_candidates": [],
+      "forbidden_values": [],
+      "evidence": [
+        {
+          "material_id": "M02",
+          "log_seq": 3
+        },
+        {
+          "material_id": "M02",
+          "log_seq": 4
+        },
+        {
+          "material_id": "M02",
+          "log_seq": 5
+        }
+      ]
+    },
+    "location": {
+      "status_in": [
+        "documented",
+        "unknown"
+      ],
+      "rationale": "割接发生在客户 A 端接入设备，第 3 条告警也在 A 端接入端口；没有更精确的故障点证据，留空也可接受。",
+      "key_points": [
+        {
+          "any_of": [
+            "A 端"
+          ]
+        }
+      ],
+      "required_candidates": [
+        {
+          "kind_in": [
+            "located_fault_point",
+            "customer_site",
+            "alarm_location"
+          ],
+          "contains_any": [
+            "A 端"
+          ],
+          "evidence": [
+            {
+              "material_id": "M02",
+              "log_seq": 3
+            },
+            {
+              "material_id": "M01",
+              "field_key": "cause"
+            }
+          ]
+        }
+      ],
+      "forbidden_values": [],
+      "evidence": []
+    }
+  },
+  "expected_issues": [
+    {
+      "code": "DUPLICATE_CONTENT",
+      "element": "handling_process",
+      "note": "第 6—10 条重复同一结论"
+    },
+    {
+      "code": "DURATION_BASIS_MISMATCH",
+      "note": "起止差 71 分钟，返单历时 40 分钟"
+    }
+  ],
+  "attachment_dependent": []
+}

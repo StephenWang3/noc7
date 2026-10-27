@@ -1,0 +1,106 @@
+{
+  "entries": [
+    {
+      "seq": 1,
+      "recorded_at": "2026-10-10 15:50:08",
+      "actor": "系统",
+      "action": "建单",
+      "content": "客户来电报障建单。",
+      "entry_kind": "system"
+    },
+    {
+      "seq": 2,
+      "recorded_at": "2026-10-10 15:52:30",
+      "actor": "值班员AF",
+      "actor_org": "网管中心",
+      "action": "受理",
+      "content": "已受理。",
+      "entry_kind": "human"
+    },
+    {
+      "seq": 3,
+      "recorded_at": "2026-10-10 15:58:14",
+      "actor": "值班员AF",
+      "actor_org": "网管中心",
+      "action": "处理意见",
+      "content": "查告警：15:42 起 SYN-CKT-1024 所在光缆段 R_LOS；OTDR 测试显示断点距 A 端局站约 3.2 km。",
+      "entry_kind": "human"
+    },
+    {
+      "seq": 4,
+      "recorded_at": "2026-10-10 16:05:40",
+      "actor": "值班员AF",
+      "actor_org": "网管中心",
+      "action": "处理意见",
+      "content": "派线路维护部现场抢修。",
+      "entry_kind": "human"
+    },
+    {
+      "seq": 5,
+      "recorded_at": "2026-10-10 16:48:22",
+      "actor": "线路工程师AG",
+      "actor_org": "线路维护部",
+      "action": "处理意见",
+      "content": "现场确认：示例路与示例大道交叉口人井 SYN-MH-0102 东侧约 15 m 处，市政道路施工挖断 24 芯光缆，施工时间约 15:40。开始抢修。",
+      "entry_kind": "human"
+    },
+    {
+      "seq": 6,
+      "recorded_at": "2026-10-10 18:57:05",
+      "actor": "线路工程师AG",
+      "actor_org": "线路维护部",
+      "action": "处理意见",
+      "content": "18:55 熔接完成。",
+      "entry_kind": "human"
+    },
+    {
+      "seq": 7,
+      "recorded_at": "2026-10-10 19:16:31",
+      "actor": "值班员AF",
+      "actor_org": "网管中心",
+      "action": "处理意见",
+      "content": "19:08 告警清除，业务恢复；19:15 客户电话确认业务正常。",
+      "entry_kind": "human"
+    },
+    {
+      "seq": 8,
+      "recorded_at": "2026-10-10 19:18:00",
+      "actor": "值班员AF",
+      "actor_org": "网管中心",
+      "action": "返单",
+      "content": "返单。",
+      "entry_kind": "human"
+    },
+    {
+      "seq": 9,
+      "recorded_at": "2026-10-10 20:30:12",
+      "actor": "线路工程师AG",
+      "actor_org": "线路维护部",
+      "action": "信息追加",
+      "content": "上传现场抢修报告（PDF）。",
+      "entry_kind": "human",
+      "attachment_flag": true,
+      "attachments": [
+        "M03"
+      ]
+    },
+    {
+      "seq": 10,
+      "recorded_at": "2026-10-11 10:20:45",
+      "actor": "线路维护部主管AH",
+      "actor_org": "线路维护部",
+      "action": "处理意见",
+      "content": "责任认定：本次中断由第三方施工单位示例建设公司（合成）未按管线交底施工造成，责任方为该施工单位，已启动索赔。",
+      "entry_kind": "human"
+    },
+    {
+      "seq": 11,
+      "recorded_at": "2026-10-11 11:00:00",
+      "actor": "值班员AI",
+      "actor_org": "网管中心",
+      "action": "结单",
+      "content": "结单。",
+      "entry_kind": "system"
+    }
+  ]
+}

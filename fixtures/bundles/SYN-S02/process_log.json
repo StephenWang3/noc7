@@ -1,0 +1,111 @@
+{
+  "entries": [
+    {
+      "seq": 1,
+      "recorded_at": "2026-09-12 01:12:05",
+      "actor": "自动报障系统",
+      "action": "建单",
+      "content": "Z 端检测到 SYN-CKT-1002 不通，自动建单。",
+      "entry_kind": "system"
+    },
+    {
+      "seq": 2,
+      "recorded_at": "2026-09-12 01:14:30",
+      "actor": "值班员E",
+      "actor_org": "网管中心",
+      "action": "受理",
+      "content": "已受理。",
+      "entry_kind": "human"
+    },
+    {
+      "seq": 3,
+      "recorded_at": "2026-09-12 01:20:12",
+      "actor": "值班员E",
+      "actor_org": "网管中心",
+      "action": "处理意见",
+      "content": "查告警：A 端接入端口 01:04 出现 LINK DOWN 告警，Z 端随后上报业务中断。",
+      "entry_kind": "human"
+    },
+    {
+      "seq": 4,
+      "recorded_at": "2026-09-12 01:31:48",
+      "actor": "值班员E",
+      "actor_org": "网管中心",
+      "action": "处理意见",
+      "content": "电话联系客户维护人员，对方称正在进行计划割接，割接窗口 01:00—03:00。",
+      "entry_kind": "human"
+    },
+    {
+      "seq": 5,
+      "recorded_at": "2026-09-12 02:18:26",
+      "actor": "工程师F",
+      "actor_org": "城域接入维护组",
+      "action": "处理意见",
+      "content": "A 端接入端口 02:15 恢复 UP，业务流量恢复。",
+      "entry_kind": "human"
+    },
+    {
+      "seq": 6,
+      "recorded_at": "2026-09-12 02:31:05",
+      "actor": "工程师F",
+      "actor_org": "城域接入维护组",
+      "action": "处理意见",
+      "content": "经与客户维护人员电话确认：本次为客户 A 端接入设备计划升级割接（窗口 01:00—03:00），Z 端自动报障未同步切换；客户确认当前线路已正常，同意结单。",
+      "entry_kind": "human"
+    },
+    {
+      "seq": 7,
+      "recorded_at": "2026-09-12 02:33:40",
+      "actor": "工程师F",
+      "actor_org": "城域接入维护组",
+      "action": "处理意见",
+      "content": "经与客户维护人员电话确认：本次为客户 A 端接入设备计划升级割接（窗口 01:00—03:00），Z 端自动报障未同步切换；客户确认当前线路已正常，同意结单。",
+      "entry_kind": "human"
+    },
+    {
+      "seq": 8,
+      "recorded_at": "2026-09-12 02:36:12",
+      "actor": "工程师F",
+      "actor_org": "城域接入维护组",
+      "action": "处理意见",
+      "content": "经与客户维护人员电话确认：本次为客户 A 端接入设备计划升级割接（窗口 01:00—03:00），Z 端自动报障未同步切换；客户确认当前线路已正常，同意结单。",
+      "entry_kind": "human"
+    },
+    {
+      "seq": 9,
+      "recorded_at": "2026-09-12 02:40:59",
+      "actor": "工程师F",
+      "actor_org": "城域接入维护组",
+      "action": "处理意见",
+      "content": "经与客户维护人员电话确认：本次为客户 A 端接入设备计划升级割接（窗口 01:00—03:00），Z 端自动报障未同步切换；客户确认当前线路已正常，同意结单。",
+      "entry_kind": "human"
+    },
+    {
+      "seq": 10,
+      "recorded_at": "2026-09-12 02:44:21",
+      "actor": "工程师F",
+      "actor_org": "城域接入维护组",
+      "action": "处理意见",
+      "content": "经与客户维护人员电话确认：本次为客户 A 端接入设备计划升级割接（窗口 01:00—03:00），Z 端自动报障未同步切换；客户确认当前线路已正常，同意结单。",
+      "entry_kind": "human"
+    },
+    {
+      "seq": 11,
+      "recorded_at": "2026-09-12 02:52:00",
+      "actor": "工程师F",
+      "actor_org": "城域接入维护组",
+      "action": "返单",
+      "content": "返单。",
+      "entry_kind": "system"
+    },
+    {
+      "seq": 12,
+      "recorded_at": "2026-09-12 08:30:15",
+      "actor": "值班员G",
+      "actor_org": "网管中心",
+      "action": "结单",
+      "content": "结单。",
+      "entry_kind": "system"
+    }
+  ]
+}

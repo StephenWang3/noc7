@@ -1,0 +1,171 @@
+{
+  "gold_version": "1.0",
+  "bundle_id": "SYN-S04",
+  "patterns": [
+    "S04"
+  ],
+  "summary": "设备通信失败告警：工单分类“板卡故障”不等于诊断；告警位置不等于故障点；列表与详情状态不一致。",
+  "annotation": {
+    "annotator": "架构师（Claude，合成样本作者）",
+    "annotated_at": "2026-10-27",
+    "method": "合成样本作者按调研问题模式逐要素标注；正式评测前需业务人员复核"
+  },
+  "elements": {
+    "start_time": {
+      "status_in": [
+        "documented"
+      ],
+      "rationale": "只有设备告警时间 14:31:08（无时区，按系统口径假设 +08:00）；它是设备事件时间，业务起障另未知。",
+      "key_points": [],
+      "required_candidates": [
+        {
+          "kind_in": [
+            "alarm_raised"
+          ],
+          "contains_any": [],
+          "evidence": [
+            {
+              "material_id": "M01",
+              "field_key": "alarm_time"
+            }
+          ],
+          "time": {
+            "iso": "2026-09-20T14:31:08+08:00",
+            "tolerance_minutes": 1
+          },
+          "tz_source_in": [
+            "assumed",
+            "unknown"
+          ]
+        }
+      ],
+      "forbidden_values": [],
+      "evidence": [
+        {
+          "material_id": "M01",
+          "field_key": "alarm_time"
+        }
+      ],
+      "expected_time": {
+        "iso": "2026-09-20T14:31:08+08:00",
+        "tolerance_minutes": 1
+      }
+    },
+    "end_time": {
+      "status_in": [
+        "unknown"
+      ],
+      "rationale": "告警清除时间为空，没有恢复验证。",
+      "key_points": [],
+      "required_candidates": [],
+      "forbidden_values": [],
+      "evidence": []
+    },
+    "phenomenon": {
+      "status_in": [
+        "documented"
+      ],
+      "rationale": "OTN 设备上报 COMMUN_FAIL（主要）。不能扩写为板卡硬件损坏。",
+      "key_points": [
+        {
+          "any_of": [
+            "COMMUN_FAIL",
+            "通信失败"
+          ]
+        }
+      ],
+      "required_candidates": [],
+      "forbidden_values": [
+        "板卡损坏",
+        "板卡故障",
+        "硬件故障"
+      ],
+      "evidence": [
+        {
+          "material_id": "M01",
+          "field_key": "alarm_title"
+        }
+      ]
+    },
+    "responsible_party": {
+      "status_in": [
+        "unknown"
+      ],
+      "rationale": "供应商（设备厂商甲）和处理人都不是定责结论。",
+      "key_points": [],
+      "required_candidates": [],
+      "forbidden_values": [
+        "设备厂商甲"
+      ],
+      "evidence": []
+    },
+    "cause": {
+      "status_in": [
+        "unknown"
+      ],
+      "rationale": "未见诊断或维修结论；分类“设备-板卡故障”是工单类别，不是原因。",
+      "key_points": [],
+      "required_candidates": [],
+      "forbidden_values": [
+        "板卡"
+      ],
+      "evidence": []
+    },
+    "handling_process": {
+      "status_in": [
+        "documented",
+        "unknown"
+      ],
+      "rationale": "唯一记录是告警系统建单，只有流程事件，没有排障动作；给出这一步或留空都可接受。",
+      "key_points": [],
+      "required_candidates": [],
+      "forbidden_values": [],
+      "evidence": []
+    },
+    "location": {
+      "status_in": [
+        "unknown"
+      ],
+      "rationale": "设备、槽位、机房位置是告警位置（alarm_location），不是已定位的故障点。",
+      "key_points": [],
+      "required_candidates": [
+        {
+          "kind_in": [
+            "alarm_location"
+          ],
+          "contains_any": [
+            "SYN-OTN-SG-07",
+            "slot 11"
+          ],
+          "evidence": [
+            {
+              "material_id": "M01",
+              "field_key": "device_name"
+            },
+            {
+              "material_id": "M01",
+              "field_key": "shelf_slot_port"
+            }
+          ]
+        }
+      ],
+      "forbidden_values": [],
+      "evidence": []
+    }
+  },
+  "expected_issues": [
+    {
+      "code": "ONGOING_NO_END",
+      "element": "end_time"
+    },
+    {
+      "code": "STATUS_VIEW_MISMATCH",
+      "note": "列表“待受理”，详情“处理中”"
+    },
+    {
+      "code": "LOCATION_NOT_LOCATED",
+      "element": "location"
+    }
+  ],
+  "attachment_dependent": []
+}

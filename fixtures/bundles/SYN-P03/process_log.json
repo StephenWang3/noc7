@@ -1,0 +1,12 @@
+{
+  "entries": [
+    {"seq": 1, "recorded_at": "2026-10-08 08:21:40", "actor": "系统", "action": "建单", "content": "客户来电报障建单。", "entry_kind": "system"},
+    {"seq": 2, "recorded_at": "2026-10-08 08:24:05", "actor": "值班员AD", "actor_org": "网管中心", "action": "受理", "content": "已受理。", "entry_kind": "human"},
+    {"seq": 3, "recorded_at": "2026-10-08 08:30:52", "actor": "值班员AD", "actor_org": "网管中心", "action": "处理意见", "content": "查告警：客户侧接入端口 08:14 起 R_LOS，收光过低。", "entry_kind": "human"},
+    {"seq": 4, "recorded_at": "2026-10-08 08:33:10", "actor": "值班员AD", "actor_org": "网管中心", "action": "处理意见", "content": "发现同电路工单 SYN-P03-OLD，为重复建单，已作废，其处理记录不作为本单依据。", "entry_kind": "human"},
+    {"seq": 5, "recorded_at": "2026-10-08 09:02:27", "actor": "邮件系统", "action": "邮件", "content": "收到客户邮件，详见邮件详情。", "entry_kind": "email", "emails": ["M03"]},
+    {"seq": 6, "recorded_at": "2026-10-08 09:40:51", "actor": "客户经理AE", "actor_org": "客户服务部", "action": "信息追加", "content": "客户提供现场测试记录（DOCX）。", "entry_kind": "human", "attachment_flag": true, "attachments": ["M04"]},
+    {"seq": 7, "recorded_at": "2026-10-08 10:05:33", "actor": "值班员AD", "actor_org": "网管中心", "action": "处理意见", "content": "已派现场，预计 2026-10-08 14:00 到达客户机房检查光路。", "entry_kind": "human"},
+    {"seq": 8, "recorded_at": "2026-10-08 12:00:00", "actor": "值班员AD", "actor_org": "网管中心", "action": "处理意见", "content": "现场尚未到达，继续跟进。", "entry_kind": "human"}
+  ]
+}

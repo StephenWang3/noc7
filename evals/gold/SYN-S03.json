@@ -1,0 +1,202 @@
+{
+  "gold_version": "1.0",
+  "bundle_id": "SYN-S03",
+  "patterns": [
+    "S03"
+  ],
+  "summary": "挂起中的重开单：没有起障时间，未来上门时间不是结束时间，缺联系人是处理阻塞而非原因。",
+  "annotation": {
+    "annotator": "架构师（Claude，合成样本作者）",
+    "annotated_at": "2026-10-27",
+    "method": "合成样本作者按调研问题模式逐要素标注；正式评测前需业务人员复核"
+  },
+  "elements": {
+    "start_time": {
+      "status_in": [
+        "unknown"
+      ],
+      "rationale": "故障发生时间字段为空；客户邮件只要求重开旧单，没有给出本次起障时间；建单时间不能替代。",
+      "key_points": [],
+      "required_candidates": [],
+      "forbidden_values": [],
+      "evidence": []
+    },
+    "end_time": {
+      "status_in": [
+        "unknown"
+      ],
+      "rationale": "仍在挂起；第 8 条 2026-09-17 10:00 是计划上门时间（planned），不能当结束时间。",
+      "key_points": [],
+      "required_candidates": [],
+      "forbidden_values": [],
+      "evidence": []
+    },
+    "phenomenon": {
+      "status_in": [
+        "documented"
+      ],
+      "rationale": "客户称线路仍不通；网管侧第 5 条为“无告警但双向无流量”，两种观测并列。",
+      "key_points": [
+        {
+          "any_of": [
+            "不通",
+            "not working",
+            "中断"
+          ]
+        },
+        {
+          "any_of": [
+            "无流量"
+          ]
+        }
+      ],
+      "required_candidates": [
+        {
+          "kind_in": [
+            "customer"
+          ],
+          "contains_any": [
+            "not working",
+            "不通"
+          ],
+          "evidence": [
+            {
+              "material_id": "M01",
+              "field_key": "description"
+            }
+          ]
+        },
+        {
+          "kind_in": [
+            "noc_check"
+          ],
+          "contains_any": [
+            "无流量"
+          ],
+          "evidence": [
+            {
+              "material_id": "M02",
+              "log_seq": 5
+            }
+          ]
+        }
+      ],
+      "forbidden_values": [],
+      "evidence": [
+        {
+          "material_id": "M01",
+          "field_key": "description"
+        },
+        {
+          "material_id": "M02",
+          "log_seq": 5
+        }
+      ]
+    },
+    "responsible_party": {
+      "status_in": [
+        "unknown"
+      ],
+      "rationale": "未见定责；现场维护队和处理部门只是参与方。",
+      "key_points": [],
+      "required_candidates": [],
+      "forbidden_values": [],
+      "evidence": []
+    },
+    "cause": {
+      "status_in": [
+        "unknown"
+      ],
+      "rationale": "未确诊。缺联系人、待上门属于处理阻塞（process_blocker）。",
+      "key_points": [],
+      "required_candidates": [
+        {
+          "kind_in": [
+            "process_blocker"
+          ],
+          "contains_any": [
+            "联系人"
+          ],
+          "evidence": [
+            {
+              "material_id": "M02",
+              "log_seq": 4
+            }
+          ]
+        }
+      ],
+      "forbidden_values": [],
+      "evidence": []
+    },
+    "handling_process": {
+      "status_in": [
+        "documented"
+      ],
+      "rationale": "挂起等联系人、网管检查、补联系人、派延伸单、约定上门；上门是计划动作，尚未发生。",
+      "key_points": [
+        {
+          "any_of": [
+            "挂起"
+          ]
+        },
+        {
+          "any_of": [
+            "上门"
+          ]
+        }
+      ],
+      "required_candidates": [
+        {
+          "kind_in": [
+            "planned"
+          ],
+          "contains_any": [
+            "上门"
+          ],
+          "evidence": [
+            {
+              "material_id": "M02",
+              "log_seq": 8
+            }
+          ]
+        }
+      ],
+      "forbidden_values": [],
+      "evidence": [
+        {
+          "material_id": "M02",
+          "log_seq": 4
+        },
+        {
+          "material_id": "M02",
+          "log_seq": 5
+        },
+        {
+          "material_id": "M02",
+          "log_seq": 8
+        }
+      ]
+    },
+    "location": {
+      "status_in": [
+        "unknown"
+      ],
+      "rationale": "客户现场只是待检查范围，没有定位故障点。",
+      "key_points": [],
+      "required_candidates": [],
+      "forbidden_values": [],
+      "evidence": []
+    }
+  },
+  "expected_issues": [
+    {
+      "code": "ONGOING_NO_END",
+      "element": "end_time"
+    },
+    {
+      "code": "RELATED_TICKET_REOPENED",
+      "note": "旧单 SYN-OLD-0315 已结，但客户称未恢复"
+    }
+  ],
+  "attachment_dependent": []
+}

@@ -1,0 +1,55 @@
+{
+  "bundle_format_version": "1.0",
+  "bundle_id": "SYN-P03",
+  "data_class": "synthetic",
+  "source": {
+    "kind": "synthetic",
+    "tool": "hand-written + scripts/make_fixture_assets.py (A0)",
+    "note": "按PRD §7 必测：附件/邮件夹带指令、同电路作废单；DOCX 附件编写"
+  },
+  "captured_at": "2026-10-08T12:30:00+08:00",
+  "default_timezone": "+08:00",
+  "synthetic_notice": "合成数据：内容全部虚构，只保留PRD §7 必测：附件/邮件夹带指令、同电路作废单；DOCX 附件的问题模式，不含任何真实工单内容、编号、客户信息或附件。",
+  "materials": [
+    {
+      "id": "M01",
+      "kind": "ticket_fields",
+      "path": "ticket.json",
+      "sha256": "aca7801b3d22f00f5a0a63766cc941d897d00533c92165c0bfab942ced0a3dd2",
+      "size_bytes": 1404,
+      "media_type": "application/json"
+    },
+    {
+      "id": "M02",
+      "kind": "process_log",
+      "path": "process_log.json",
+      "sha256": "59cb4c8663bfd73118038e89b6a94ba8b998b7063f139ad8f9e5a89fafe02ae1",
+      "size_bytes": 1789,
+      "media_type": "application/json"
+    },
+    {
+      "id": "M03",
+      "kind": "email_html",
+      "path": "emails/M03-customer-mail.html",
+      "sha256": "f249549a9ce6912ad85e8799a48e70809093ce05ca7fd7ab825d514fa6bc9d79",
+      "size_bytes": 888,
+      "media_type": "text/html",
+      "origin": {
+        "log_seq": 5
+      },
+      "description": "客户邮件详情"
+    },
+    {
+      "id": "M04",
+      "kind": "docx",
+      "path": "attachments/M04-site-test-record.docx",
+      "sha256": "8bdfcbb8056e5a9cd1b0b0e1823402470fa6106a7788a1d8cd21d9829fca160e",
+      "size_bytes": 37262,
+      "media_type": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      "origin": {
+        "log_seq": 6
+      },
+      "description": "客户现场测试记录"
+    }
+  ]
+}

@@ -1,0 +1,13 @@
+{
+  "entries": [
+    {"seq": 1, "recorded_at": "2026-09-28 13:02:41", "actor": "系统", "action": "建单", "content": "根据客户邮件建单。", "entry_kind": "system"},
+    {"seq": 2, "recorded_at": "2026-09-28 13:05:10", "actor": "值班员N", "actor_org": "网管中心", "action": "受理", "content": "已受理。", "entry_kind": "human"},
+    {"seq": 3, "recorded_at": "2026-09-28 13:09:55", "actor": "值班员N", "actor_org": "网管中心", "action": "处理意见", "content": "本端 PE ping 客户 CE 互联地址：100 发 100 收，无丢包，平均 RTT 2 ms。", "entry_kind": "human"},
+    {"seq": 4, "recorded_at": "2026-09-28 13:14:20", "actor": "值班员N", "actor_org": "网管中心", "action": "处理意见", "content": "本端 PE ping 香港侧目标网段网关：100 发 100 收，无丢包，平均 RTT 3 ms。", "entry_kind": "human"},
+    {"seq": 5, "recorded_at": "2026-09-28 13:18:02", "actor": "值班员N", "actor_org": "网管中心", "action": "处理意见", "content": "检查 PE 端口流量与错包计数：流量正常，无 CRC 错包。", "entry_kind": "human"},
+    {"seq": 6, "recorded_at": "2026-09-28 13:20:47", "actor": "值班员N", "actor_org": "网管中心", "action": "返单", "content": "返单：本端 ping 测试 100 发 100 收，无丢包，端口流量正常；请客户提供故障时的源/目的地址及 ping/trace 结果。", "entry_kind": "human"},
+    {"seq": 7, "recorded_at": "2026-09-28 13:40:30", "actor": "客户经理P", "actor_org": "客户服务部", "action": "处理意见", "content": "已转告客户，请其提供故障时源/目的地址及 ping/trace 结果。", "entry_kind": "human"},
+    {"seq": 8, "recorded_at": "2026-09-29 10:00:12", "actor": "客户经理P", "actor_org": "客户服务部", "action": "处理意见", "content": "客户暂未提供测试资料。", "entry_kind": "human"},
+    {"seq": 9, "recorded_at": "2026-09-29 10:02:00", "actor": "系统", "action": "索要报告", "content": "工单进入索要报告/结单签收环节。", "entry_kind": "system"}
+  ]
+}

@@ -1,0 +1,205 @@
+{
+  "$defs": {
+    "RelatedTicket": {
+      "additionalProperties": false,
+      "properties": {
+        "note": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Note"
+        },
+        "relation": {
+          "$ref": "#/$defs/RelationKind"
+        },
+        "status": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "关联单在源系统中的状态，如 已作废、已结单",
+          "title": "Status"
+        },
+        "ticket_ref": {
+          "title": "Ticket Ref",
+          "type": "string"
+        }
+      },
+      "required": [
+        "ticket_ref",
+        "relation"
+      ],
+      "title": "RelatedTicket",
+      "type": "object"
+    },
+    "RelationKind": {
+      "enum": [
+        "shared_alarm",
+        "reopened_from",
+        "same_circuit",
+        "parent_child",
+        "other"
+      ],
+      "title": "RelationKind",
+      "type": "string"
+    },
+    "StatusView": {
+      "additionalProperties": false,
+      "description": "列表与详情状态可能不一致（S04、S05），两者都保留，不互相覆盖。",
+      "properties": {
+        "detail_status": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Detail Status"
+        },
+        "list_status": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "List Status"
+        }
+      },
+      "title": "StatusView",
+      "type": "object"
+    },
+    "TicketFamily": {
+      "description": "工单大类：业务单与自动大客户/中继/设备单在源系统里是两套详情布局。",
+      "enum": [
+        "business",
+        "key_account",
+        "trunk",
+        "device",
+        "other"
+      ],
+      "title": "TicketFamily",
+      "type": "string"
+    },
+    "TicketField": {
+      "additionalProperties": false,
+      "properties": {
+        "key": {
+          "pattern": "^[a-z][a-z0-9_]*$",
+          "title": "Key",
+          "type": "string"
+        },
+        "label": {
+          "description": "源系统显示的字段名",
+          "title": "Label",
+          "type": "string"
+        },
+        "section": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "所在页签/分区，如 基础信息、故障信息",
+          "title": "Section"
+        },
+        "value": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "原文；空字段为 null，不填“无”“正常”",
+          "title": "Value"
+        }
+      },
+      "required": [
+        "key",
+        "label",
+        "value"
+      ],
+      "title": "TicketField",
+      "type": "object"
+    }
+  },
+  "$id": "noc7/ticket.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "category": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "源系统分类原文，如 业务性能-丢包",
+      "title": "Category"
+    },
+    "fields": {
+      "items": {
+        "$ref": "#/$defs/TicketField"
+      },
+      "title": "Fields",
+      "type": "array"
+    },
+    "related_tickets": {
+      "items": {
+        "$ref": "#/$defs/RelatedTicket"
+      },
+      "title": "Related Tickets",
+      "type": "array"
+    },
+    "status": {
+      "$ref": "#/$defs/StatusView"
+    },
+    "ticket_family": {
+      "$ref": "#/$defs/TicketFamily"
+    },
+    "ticket_ref": {
+      "minLength": 1,
+      "title": "Ticket Ref",
+      "type": "string"
+    },
+    "title": {
+      "title": "Title",
+      "type": "string"
+    }
+  },
+  "required": [
+    "ticket_ref",
+    "title",
+    "ticket_family",
+    "status",
+    "fields"
+  ],
+  "title": "TicketRecord",
+  "type": "object"
+}

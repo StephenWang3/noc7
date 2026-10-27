@@ -1,0 +1,22 @@
+{
+  "ticket_ref": "SYN-S03",
+  "title": "【合成】客户要求重开：专线不通",
+  "ticket_family": "business",
+  "category": "业务中断",
+  "status": {"list_status": "已挂起", "detail_status": "已挂起"},
+  "fields": [
+    {"key": "ticket_no", "label": "工单编号", "value": "SYN-S03", "section": "基础信息"},
+    {"key": "customer", "label": "客户名称", "value": "Example Trading Ltd.（合成）", "section": "基础信息"},
+    {"key": "circuit_id", "label": "电路编号", "value": "SYN-CKT-1003", "section": "基础信息"},
+    {"key": "created_at", "label": "建单时间", "value": "2026-09-15 09:40:22", "section": "基础信息"},
+    {"key": "fault_type", "label": "故障类型", "value": "业务中断", "section": "故障信息"},
+    {"key": "occurred_at", "label": "故障发生时间", "value": null, "section": "故障信息"},
+    {"key": "recovered_at", "label": "故障恢复时间", "value": null, "section": "故障信息"},
+    {"key": "description", "label": "故障描述", "value": "From: it-ops@example.com\nSubject: Re: Circuit SYN-CKT-1003 down\n\nHi team,\nPlease reopen ticket SYN-OLD-0315. The circuit is still not working on our side, the issue was NOT resolved when the previous ticket was closed.\n\nRegards,\nIT Operations | Example Trading Ltd.", "section": "故障信息"},
+    {"key": "cause", "label": "故障原因", "value": null, "section": "故障信息"},
+    {"key": "handling_dept", "label": "处理部门", "value": "城域接入维护组（合成）", "section": "故障信息"}
+  ],
+  "related_tickets": [
+    {"ticket_ref": "SYN-OLD-0315", "relation": "reopened_from", "status": "已结单", "note": "客户要求重开的历史单"}
+  ]
+}

@@ -1,0 +1,31 @@
+{
+  "bundle_format_version": "1.0",
+  "bundle_id": "SYN-S04",
+  "data_class": "synthetic",
+  "source": {
+    "kind": "synthetic",
+    "tool": "hand-written + scripts/make_fixture_assets.py (A0)",
+    "note": "按调研样本 S04（设备分类不等于诊断、状态不一致）编写"
+  },
+  "captured_at": "2026-09-20T15:00:00+08:00",
+  "default_timezone": "+08:00",
+  "synthetic_notice": "合成数据：内容全部虚构，只保留调研样本 S04（设备分类不等于诊断、状态不一致）的问题模式，不含任何真实工单内容、编号、客户信息或附件。",
+  "materials": [
+    {
+      "id": "M01",
+      "kind": "ticket_fields",
+      "path": "ticket.json",
+      "sha256": "16f6dfd98d02d7ae5493267dafad12fc9636c359f7ef8f464173e594a7953e1d",
+      "size_bytes": 1685,
+      "media_type": "application/json"
+    },
+    {
+      "id": "M02",
+      "kind": "process_log",
+      "path": "process_log.json",
+      "sha256": "3b68fbf7aa1dbc279aa182d6a24690f5fc16ab133031903fdadd4de7d139f4d2",
+      "size_bytes": 265,
+      "media_type": "application/json"
+    }
+  ]
+}

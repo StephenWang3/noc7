@@ -1,0 +1,23 @@
+From: EU-Carrier NOC <noc@eu-carrier.example.net>
+To: noc@example.com
+Subject: [EU-INC-55120] Closure - Outage on SYN-CKT-1022 (synthetic)
+Date: Tue, 06 Oct 2026 17:30:00 +0000
+Message-ID: <eu-inc-55120-closure@eu-carrier.example.net>
+MIME-Version: 1.0
+Content-Type: text/plain; charset="utf-8"
+Content-Transfer-Encoding: 8bit
+
+Dear NOC,
+
+Incident EU-INC-55120 (synthetic) is now closed.
+
+Impact start : 06 Oct 2026 14:39 UTC
+Fiber spliced: 06 Oct 2026 17:05 UTC
+Service up   : 06 Oct 2026 17:20 UTC
+
+Fault location: fiber cut on our London - Frankfurt segment, between LON-POP-2
+and FRA-POP-1, approx. 3 km south of Calais (FR).
+Reason for outage: the cable was damaged by third-party civil works.
+
+Best regards,
+EU-Carrier NOC (synthetic)

@@ -1,0 +1,21 @@
+{
+  "ticket_ref": "SYN-S10",
+  "title": "【合成】客户 WAN 丢包（转卖线路）",
+  "ticket_family": "business",
+  "category": "业务性能-丢包",
+  "status": {"list_status": "已结单", "detail_status": "已结单"},
+  "fields": [
+    {"key": "ticket_no", "label": "工单编号", "value": "SYN-S10", "section": "基础信息"},
+    {"key": "customer", "label": "客户名称", "value": "Example Logistics（合成）", "section": "基础信息"},
+    {"key": "circuit_id", "label": "电路编号", "value": "SYN-CKT-1010", "section": "基础信息"},
+    {"key": "bandwidth", "label": "带宽", "value": "100M", "section": "基础信息"},
+    {"key": "vendor", "label": "供应商", "value": "上游运营商 UP-Carrier（合成，转卖线路）", "section": "基础信息"},
+    {"key": "created_at", "label": "建单时间", "value": "2026-09-30 03:10:22", "section": "基础信息"},
+    {"key": "fault_type", "label": "故障类型", "value": "业务性能-丢包", "section": "故障信息"},
+    {"key": "occurred_at", "label": "故障发生时间", "value": "2026-09-30 03:02:00", "section": "故障信息"},
+    {"key": "recovered_at", "label": "故障恢复时间", "value": "2026-09-30 07:30:00", "section": "故障信息"},
+    {"key": "description", "label": "故障描述", "value": "Dear NOC,\n\nOur WAN monitoring shows packet loss on circuit SYN-CKT-1010 (100M) since 2026-09-30 02:40 (GMT+8). Service was restored at {{end_time}}.\nPlease find the monitoring screenshot attached.\n\nBest regards,\nNetwork Team | Example Logistics (synthetic)\nTel: +852-0000-0000", "section": "故障信息"},
+    {"key": "cause", "label": "故障原因", "value": "线路已拆机", "section": "故障信息"}
+  ],
+  "related_tickets": []
+}

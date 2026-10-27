@@ -1,0 +1,234 @@
+{
+  "gold_version": "1.0",
+  "bundle_id": "SYN-P01",
+  "patterns": [
+    "PRD §7 恢复早于发生、负历时"
+  ],
+  "summary": "恢复字段日期写错（早于发生）且返单历时为负：必须报关键冲突、保留原值，不能静默修正。",
+  "annotation": {
+    "annotator": "架构师（Claude，合成样本作者）",
+    "annotated_at": "2026-10-27",
+    "method": "合成样本作者按调研问题模式逐要素标注；正式评测前需业务人员复核"
+  },
+  "elements": {
+    "start_time": {
+      "status_in": [
+        "documented"
+      ],
+      "rationale": "字段 23:50 与第 3 条告警 23:50 一致。",
+      "key_points": [],
+      "required_candidates": [
+        {
+          "kind_in": [
+            "fault_start_field"
+          ],
+          "contains_any": [],
+          "evidence": [
+            {
+              "material_id": "M01",
+              "field_key": "occurred_at"
+            }
+          ],
+          "time": {
+            "iso": "2026-10-05T23:50:00+08:00",
+            "tolerance_minutes": 0
+          }
+        },
+        {
+          "kind_in": [
+            "alarm_raised"
+          ],
+          "contains_any": [],
+          "evidence": [
+            {
+              "material_id": "M02",
+              "log_seq": 3
+            }
+          ],
+          "time": {
+            "iso": "2026-10-05T23:50:00+08:00",
+            "tolerance_minutes": 0
+          }
+        }
+      ],
+      "forbidden_values": [],
+      "evidence": [
+        {
+          "material_id": "M01",
+          "field_key": "occurred_at"
+        }
+      ],
+      "expected_time": {
+        "iso": "2026-10-05T23:50:00+08:00",
+        "tolerance_minutes": 0
+      }
+    },
+    "end_time": {
+      "status_in": [
+        "conflicted"
+      ],
+      "rationale": "恢复字段 2026-10-05 00:20 早于发生时间；第 5 条写明 2026-10-06 00:20 客户确认恢复。看起来是日期录错，但系统不能自行改正，只能并列候选、报关键冲突，由人工裁定。",
+      "key_points": [],
+      "required_candidates": [
+        {
+          "kind_in": [
+            "recovery_field"
+          ],
+          "contains_any": [],
+          "evidence": [
+            {
+              "material_id": "M01",
+              "field_key": "recovered_at"
+            }
+          ],
+          "time": {
+            "iso": "2026-10-05T00:20:00+08:00",
+            "tolerance_minutes": 0
+          }
+        },
+        {
+          "kind_in": [
+            "customer_confirmed_recovery",
+            "alarm_cleared"
+          ],
+          "contains_any": [],
+          "evidence": [
+            {
+              "material_id": "M02",
+              "log_seq": 5
+            }
+          ],
+          "time": {
+            "iso": "2026-10-06T00:20:00+08:00",
+            "tolerance_minutes": 0
+          }
+        }
+      ],
+      "forbidden_values": [],
+      "evidence": []
+    },
+    "phenomenon": {
+      "status_in": [
+        "documented"
+      ],
+      "rationale": "客户报专线业务中断。",
+      "key_points": [
+        {
+          "any_of": [
+            "中断"
+          ]
+        }
+      ],
+      "required_candidates": [],
+      "forbidden_values": [],
+      "evidence": [
+        {
+          "material_id": "M01",
+          "field_key": "description"
+        }
+      ]
+    },
+    "responsible_party": {
+      "status_in": [
+        "unknown"
+      ],
+      "rationale": "未见任何定责意见或责任认定材料。",
+      "key_points": [],
+      "required_candidates": [],
+      "forbidden_values": [],
+      "evidence": []
+    },
+    "cause": {
+      "status_in": [
+        "documented",
+        "confirmed"
+      ],
+      "rationale": "原因栏“光缆中断，已熔接恢复”，第 4 条线路工程师确认熔接完成。",
+      "key_points": [
+        {
+          "any_of": [
+            "光缆"
+          ]
+        }
+      ],
+      "required_candidates": [
+        {
+          "kind_in": [
+            "root_cause_claimed",
+            "root_cause_confirmed"
+          ],
+          "contains_any": [
+            "光缆"
+          ],
+          "evidence": [
+            {
+              "material_id": "M01",
+              "field_key": "cause"
+            }
+          ]
+        }
+      ],
+      "forbidden_values": [],
+      "evidence": [
+        {
+          "material_id": "M01",
+          "field_key": "cause"
+        },
+        {
+          "material_id": "M02",
+          "log_seq": 4
+        }
+      ]
+    },
+    "handling_process": {
+      "status_in": [
+        "documented"
+      ],
+      "rationale": "查告警、派线路维护、熔接、告警清除与客户确认。",
+      "key_points": [
+        {
+          "any_of": [
+            "熔接"
+          ]
+        }
+      ],
+      "required_candidates": [],
+      "forbidden_values": [],
+      "evidence": [
+        {
+          "material_id": "M02",
+          "log_seq": 3
+        },
+        {
+          "material_id": "M02",
+          "log_seq": 4
+        },
+        {
+          "material_id": "M02",
+          "log_seq": 5
+        }
+      ]
+    },
+    "location": {
+      "status_in": [
+        "unknown"
+      ],
+      "rationale": "没有给出断点位置。",
+      "key_points": [],
+      "required_candidates": [],
+      "forbidden_values": [],
+      "evidence": []
+    }
+  },
+  "expected_issues": [
+    {
+      "code": "TIME_ORDER_INVERTED",
+      "element": "end_time"
+    },
+    {
+      "code": "NEGATIVE_DURATION",
+      "note": "返单历时 -1410 分钟"
+    }
+  ],
+  "attachment_dependent": []
+}

@@ -1,0 +1,342 @@
+{
+  "gold_version": "1.0",
+  "bundle_id": "SYN-P04",
+  "patterns": [
+    "正向对照"
+  ],
+  "summary": "完整结案：七个要素都有直接依据，用来检验系统不会因为过度保守而把能确认的结论也留空。",
+  "annotation": {
+    "annotator": "架构师（Claude，合成样本作者）",
+    "annotated_at": "2026-10-27",
+    "method": "合成样本作者按调研问题模式逐要素标注；正式评测前需业务人员复核"
+  },
+  "elements": {
+    "start_time": {
+      "status_in": [
+        "documented",
+        "confirmed"
+      ],
+      "rationale": "字段 15:42、第 3 条告警 15:42、抢修报告一致；施工约 15:40 是现场估计。",
+      "key_points": [],
+      "required_candidates": [
+        {
+          "kind_in": [
+            "fault_start_field"
+          ],
+          "contains_any": [],
+          "evidence": [
+            {
+              "material_id": "M01",
+              "field_key": "occurred_at"
+            }
+          ],
+          "time": {
+            "iso": "2026-10-10T15:42:00+08:00",
+            "tolerance_minutes": 0
+          }
+        },
+        {
+          "kind_in": [
+            "alarm_raised"
+          ],
+          "contains_any": [],
+          "evidence": [
+            {
+              "material_id": "M02",
+              "log_seq": 3
+            }
+          ],
+          "time": {
+            "iso": "2026-10-10T15:42:00+08:00",
+            "tolerance_minutes": 0
+          }
+        }
+      ],
+      "forbidden_values": [],
+      "evidence": [
+        {
+          "material_id": "M01",
+          "field_key": "occurred_at"
+        },
+        {
+          "material_id": "M02",
+          "log_seq": 3
+        }
+      ],
+      "expected_time": {
+        "iso": "2026-10-10T15:42:00+08:00",
+        "tolerance_minutes": 1
+      }
+    },
+    "end_time": {
+      "status_in": [
+        "confirmed"
+      ],
+      "rationale": "19:08 告警清除、业务恢复，19:15 客户电话确认，有确认依据。",
+      "key_points": [],
+      "required_candidates": [
+        {
+          "kind_in": [
+            "recovery_field"
+          ],
+          "contains_any": [],
+          "evidence": [
+            {
+              "material_id": "M01",
+              "field_key": "recovered_at"
+            }
+          ],
+          "time": {
+            "iso": "2026-10-10T19:08:00+08:00",
+            "tolerance_minutes": 0
+          }
+        },
+        {
+          "kind_in": [
+            "alarm_cleared",
+            "customer_confirmed_recovery"
+          ],
+          "contains_any": [],
+          "evidence": [
+            {
+              "material_id": "M02",
+              "log_seq": 7
+            }
+          ],
+          "time": {
+            "iso": "2026-10-10T19:08:00+08:00",
+            "tolerance_minutes": 0
+          }
+        }
+      ],
+      "forbidden_values": [],
+      "evidence": [
+        {
+          "material_id": "M01",
+          "field_key": "recovered_at"
+        },
+        {
+          "material_id": "M02",
+          "log_seq": 7
+        }
+      ],
+      "expected_time": {
+        "iso": "2026-10-10T19:08:00+08:00",
+        "tolerance_minutes": 1
+      }
+    },
+    "phenomenon": {
+      "status_in": [
+        "documented",
+        "confirmed"
+      ],
+      "rationale": "客户报专线中断，告警 R_LOS。",
+      "key_points": [
+        {
+          "any_of": [
+            "中断"
+          ]
+        }
+      ],
+      "required_candidates": [],
+      "forbidden_values": [],
+      "evidence": [
+        {
+          "material_id": "M01",
+          "field_key": "description"
+        }
+      ]
+    },
+    "responsible_party": {
+      "status_in": [
+        "documented",
+        "confirmed"
+      ],
+      "rationale": "第 10 条线路维护部出具责任认定：第三方施工单位示例建设公司；责任方字段一致。basis = formal_determination。",
+      "key_points": [
+        {
+          "any_of": [
+            "示例建设公司",
+            "第三方施工"
+          ]
+        }
+      ],
+      "required_candidates": [
+        {
+          "kind_in": [
+            "formal_determination"
+          ],
+          "contains_any": [
+            "示例建设公司"
+          ],
+          "evidence": [
+            {
+              "material_id": "M02",
+              "log_seq": 10
+            },
+            {
+              "material_id": "M01",
+              "field_key": "responsible_party"
+            }
+          ]
+        }
+      ],
+      "forbidden_values": [],
+      "evidence": [
+        {
+          "material_id": "M02",
+          "log_seq": 10
+        },
+        {
+          "material_id": "M01",
+          "field_key": "responsible_party"
+        }
+      ]
+    },
+    "cause": {
+      "status_in": [
+        "documented",
+        "confirmed"
+      ],
+      "rationale": "现场确认市政道路施工挖断 24 芯光缆，抢修报告一致。",
+      "key_points": [
+        {
+          "any_of": [
+            "挖断"
+          ]
+        },
+        {
+          "any_of": [
+            "光缆"
+          ]
+        }
+      ],
+      "required_candidates": [
+        {
+          "kind_in": [
+            "root_cause_confirmed"
+          ],
+          "contains_any": [
+            "挖断"
+          ],
+          "evidence": [
+            {
+              "material_id": "M02",
+              "log_seq": 5
+            },
+            {
+              "material_id": "M01",
+              "field_key": "cause"
+            },
+            {
+              "material_id": "M03",
+              "page": 1
+            }
+          ]
+        }
+      ],
+      "forbidden_values": [],
+      "evidence": [
+        {
+          "material_id": "M02",
+          "log_seq": 5
+        },
+        {
+          "material_id": "M01",
+          "field_key": "cause"
+        }
+      ]
+    },
+    "handling_process": {
+      "status_in": [
+        "documented",
+        "confirmed"
+      ],
+      "rationale": "查告警与 OTDR 测距、派现场、现场确认、熔接、告警清除与客户确认、责任认定。",
+      "key_points": [
+        {
+          "any_of": [
+            "OTDR"
+          ]
+        },
+        {
+          "any_of": [
+            "熔接"
+          ]
+        },
+        {
+          "any_of": [
+            "确认"
+          ]
+        }
+      ],
+      "required_candidates": [],
+      "forbidden_values": [],
+      "evidence": [
+        {
+          "material_id": "M02",
+          "log_seq": 3
+        },
+        {
+          "material_id": "M02",
+          "log_seq": 5
+        },
+        {
+          "material_id": "M02",
+          "log_seq": 6
+        },
+        {
+          "material_id": "M02",
+          "log_seq": 7
+        }
+      ]
+    },
+    "location": {
+      "status_in": [
+        "documented",
+        "confirmed"
+      ],
+      "rationale": "第 5 条与抢修报告给出故障点：人井 SYN-MH-0102 东侧约 15 m，粒度到线路段/站点。",
+      "key_points": [
+        {
+          "any_of": [
+            "SYN-MH-0102"
+          ]
+        }
+      ],
+      "required_candidates": [
+        {
+          "kind_in": [
+            "located_fault_point"
+          ],
+          "contains_any": [
+            "SYN-MH-0102"
+          ],
+          "evidence": [
+            {
+              "material_id": "M02",
+              "log_seq": 5
+            },
+            {
+              "material_id": "M03",
+              "page": 1
+            }
+          ]
+        }
+      ],
+      "forbidden_values": [],
+      "evidence": [
+        {
+          "material_id": "M02",
+          "log_seq": 5
+        },
+        {
+          "material_id": "M03",
+          "page": 1
+        }
+      ]
+    }
+  },
+  "expected_issues": [],
+  "attachment_dependent": []
+}

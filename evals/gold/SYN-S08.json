@@ -1,0 +1,200 @@
+{
+  "gold_version": "1.0",
+  "bundle_id": "SYN-S08",
+  "patterns": [
+    "S08",
+    "S05"
+  ],
+  "summary": "中继预警：上层 ISIS 中断与底层 R_LOS 分层记录；预警晚于设备告警约 40 分钟；与 SYN-S05 共用告警。",
+  "annotation": {
+    "annotator": "架构师（Claude，合成样本作者）",
+    "annotated_at": "2026-10-27",
+    "method": "合成样本作者按调研问题模式逐要素标注；正式评测前需业务人员复核"
+  },
+  "elements": {
+    "start_time": {
+      "status_in": [
+        "documented",
+        "conflicted"
+      ],
+      "rationale": "设备告警 03:17:45 与中继预警 03:58:10 语义不同，都要保留；不能只取最早或最晚后丢弃另一个。若给结论，取设备告警时间。",
+      "key_points": [],
+      "required_candidates": [
+        {
+          "kind_in": [
+            "alarm_raised"
+          ],
+          "contains_any": [],
+          "evidence": [
+            {
+              "material_id": "M01",
+              "field_key": "alarm_time"
+            }
+          ],
+          "time": {
+            "iso": "2026-09-22T03:17:45+08:00",
+            "tolerance_minutes": 1
+          }
+        },
+        {
+          "kind_in": [
+            "warning_raised"
+          ],
+          "contains_any": [],
+          "evidence": [
+            {
+              "material_id": "M01",
+              "field_key": "warning_time"
+            }
+          ],
+          "time": {
+            "iso": "2026-09-22T03:58:10+08:00",
+            "tolerance_minutes": 1
+          }
+        }
+      ],
+      "forbidden_values": [],
+      "evidence": [],
+      "expected_time": {
+        "iso": "2026-09-22T03:17:45+08:00",
+        "tolerance_minutes": 1
+      }
+    },
+    "end_time": {
+      "status_in": [
+        "unknown"
+      ],
+      "rationale": "告警清除时间为空。",
+      "key_points": [],
+      "required_candidates": [],
+      "forbidden_values": [],
+      "evidence": []
+    },
+    "phenomenon": {
+      "status_in": [
+        "documented"
+      ],
+      "rationale": "中继 SYN-TRK-HK-SG-02 ISIS 中断，底层为光层 R_LOS；两层都要写明。",
+      "key_points": [
+        {
+          "any_of": [
+            "ISIS"
+          ]
+        },
+        {
+          "any_of": [
+            "R_LOS"
+          ]
+        }
+      ],
+      "required_candidates": [],
+      "forbidden_values": [],
+      "evidence": [
+        {
+          "material_id": "M01",
+          "field_key": "alarm_title"
+        },
+        {
+          "material_id": "M01",
+          "field_key": "underlying_alarm"
+        }
+      ]
+    },
+    "responsible_party": {
+      "status_in": [
+        "unknown"
+      ],
+      "rationale": "未见任何定责意见或责任认定材料。",
+      "key_points": [],
+      "required_candidates": [],
+      "forbidden_values": [],
+      "evidence": []
+    },
+    "cause": {
+      "status_in": [
+        "unknown"
+      ],
+      "rationale": "六项可能原因并列，未确认哪项发生；不能自动选“光纤断裂”。",
+      "key_points": [],
+      "required_candidates": [
+        {
+          "kind_in": [
+            "candidate_list_item"
+          ],
+          "contains_any": [
+            "光纤断裂"
+          ],
+          "evidence": [
+            {
+              "material_id": "M01",
+              "field_key": "cause"
+            }
+          ]
+        }
+      ],
+      "forbidden_values": [
+        "光纤断裂",
+        "断纤"
+      ],
+      "evidence": []
+    },
+    "handling_process": {
+      "status_in": [
+        "documented",
+        "unknown"
+      ],
+      "rationale": "只有系统建单记录，没有排障动作；给出这一步或留空都可接受。",
+      "key_points": [],
+      "required_candidates": [],
+      "forbidden_values": [],
+      "evidence": []
+    },
+    "location": {
+      "status_in": [
+        "unknown"
+      ],
+      "rationale": "底层设备端口是告警位置。",
+      "key_points": [],
+      "required_candidates": [
+        {
+          "kind_in": [
+            "alarm_location"
+          ],
+          "contains_any": [
+            "SYN-OTN-HK-03"
+          ],
+          "evidence": [
+            {
+              "material_id": "M01",
+              "field_key": "device_name"
+            }
+          ]
+        }
+      ],
+      "forbidden_values": [],
+      "evidence": []
+    }
+  },
+  "expected_issues": [
+    {
+      "code": "RELATED_TICKET_SHARED_SOURCE",
+      "note": "与 SYN-S05 共用 SYN-ALM-778812"
+    },
+    {
+      "code": "TIME_CANDIDATES_DIFFER",
+      "element": "start_time"
+    },
+    {
+      "code": "CAUSE_CANDIDATE_LIST",
+      "element": "cause"
+    },
+    {
+      "code": "STATUS_VIEW_MISMATCH"
+    },
+    {
+      "code": "ONGOING_NO_END",
+      "element": "end_time"
+    }
+  ],
+  "attachment_dependent": []
+}

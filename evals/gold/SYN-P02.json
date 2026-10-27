@@ -1,0 +1,336 @@
+{
+  "gold_version": "1.0",
+  "bundle_id": "SYN-P02",
+  "patterns": [
+    "PRD §7 UTC 与 GMT+8 跨日",
+    "PRD §7 无时区海外设备记录"
+  ],
+  "summary": "上游 EML 用 UTC，与本地 GMT+8 跨日；伦敦设备日志无时区，不能按城市猜；故障点只在 EML 里。",
+  "annotation": {
+    "annotator": "架构师（Claude，合成样本作者）",
+    "annotated_at": "2026-10-27",
+    "method": "合成样本作者按调研问题模式逐要素标注；正式评测前需业务人员复核"
+  },
+  "elements": {
+    "start_time": {
+      "status_in": [
+        "documented",
+        "confirmed"
+      ],
+      "rationale": "字段 22:40（系统口径）与 EML“14:39 UTC”（= 22:39 +08:00）一致。第 3 条伦敦设备日志 14:38:55 没有时区：按系统口径假设会差 8 小时，不能按城市猜，必须标记。",
+      "key_points": [],
+      "required_candidates": [
+        {
+          "kind_in": [
+            "fault_start_field"
+          ],
+          "contains_any": [],
+          "evidence": [
+            {
+              "material_id": "M01",
+              "field_key": "occurred_at"
+            }
+          ],
+          "time": {
+            "iso": "2026-10-06T22:40:00+08:00",
+            "tolerance_minutes": 0
+          }
+        },
+        {
+          "kind_in": [
+            "vendor_reported"
+          ],
+          "contains_any": [],
+          "evidence": [
+            {
+              "material_id": "M03"
+            }
+          ],
+          "time": {
+            "iso": "2026-10-06T14:39:00+00:00",
+            "tolerance_minutes": 0
+          },
+          "tz_source_in": [
+            "explicit"
+          ]
+        },
+        {
+          "kind_in": [
+            "alarm_raised",
+            "observation"
+          ],
+          "contains_any": [
+            "14:38:55"
+          ],
+          "evidence": [
+            {
+              "material_id": "M02",
+              "log_seq": 3
+            }
+          ],
+          "tz_source_in": [
+            "assumed",
+            "unknown"
+          ]
+        }
+      ],
+      "forbidden_values": [],
+      "evidence": [
+        {
+          "material_id": "M01",
+          "field_key": "occurred_at"
+        },
+        {
+          "material_id": "M03"
+        }
+      ],
+      "expected_time": {
+        "iso": "2026-10-06T14:39:00+00:00",
+        "tolerance_minutes": 2
+      }
+    },
+    "end_time": {
+      "status_in": [
+        "documented",
+        "confirmed"
+      ],
+      "rationale": "EML“Service up 17:20 UTC”= 2026-10-07 01:20 +08:00，与恢复字段及第 6 条客户确认一致（跨日）。",
+      "key_points": [],
+      "required_candidates": [
+        {
+          "kind_in": [
+            "recovery_field"
+          ],
+          "contains_any": [],
+          "evidence": [
+            {
+              "material_id": "M01",
+              "field_key": "recovered_at"
+            }
+          ],
+          "time": {
+            "iso": "2026-10-07T01:20:00+08:00",
+            "tolerance_minutes": 0
+          }
+        },
+        {
+          "kind_in": [
+            "customer_confirmed_recovery"
+          ],
+          "contains_any": [],
+          "evidence": [
+            {
+              "material_id": "M02",
+              "log_seq": 6
+            }
+          ],
+          "time": {
+            "iso": "2026-10-07T01:20:00+08:00",
+            "tolerance_minutes": 0
+          }
+        },
+        {
+          "kind_in": [
+            "vendor_reported"
+          ],
+          "contains_any": [],
+          "evidence": [
+            {
+              "material_id": "M03"
+            }
+          ],
+          "time": {
+            "iso": "2026-10-06T17:20:00+00:00",
+            "tolerance_minutes": 0
+          },
+          "tz_source_in": [
+            "explicit"
+          ]
+        }
+      ],
+      "forbidden_values": [],
+      "evidence": [
+        {
+          "material_id": "M01",
+          "field_key": "recovered_at"
+        },
+        {
+          "material_id": "M02",
+          "log_seq": 6
+        }
+      ],
+      "expected_time": {
+        "iso": "2026-10-06T17:20:00+00:00",
+        "tolerance_minutes": 1
+      }
+    },
+    "phenomenon": {
+      "status_in": [
+        "documented"
+      ],
+      "rationale": "客户报港德电路业务中断。",
+      "key_points": [
+        {
+          "any_of": [
+            "中断"
+          ]
+        }
+      ],
+      "required_candidates": [],
+      "forbidden_values": [],
+      "evidence": [
+        {
+          "material_id": "M01",
+          "field_key": "description"
+        }
+      ]
+    },
+    "responsible_party": {
+      "status_in": [
+        "unknown"
+      ],
+      "rationale": "供应商称“third-party civil works”，属于一方陈述，没有正式定责。",
+      "key_points": [],
+      "required_candidates": [
+        {
+          "kind_in": [
+            "claimed"
+          ],
+          "contains_any": [
+            "third-party",
+            "第三方"
+          ],
+          "evidence": [
+            {
+              "material_id": "M03"
+            }
+          ]
+        }
+      ],
+      "forbidden_values": [],
+      "evidence": []
+    },
+    "cause": {
+      "status_in": [
+        "documented"
+      ],
+      "rationale": "供应商关闭通知说明伦敦—法兰克福段光缆被挖断；本方未独立核实，所以是 documented。",
+      "key_points": [
+        {
+          "any_of": [
+            "光缆",
+            "fiber cut",
+            "断纤",
+            "fiber"
+          ]
+        }
+      ],
+      "required_candidates": [
+        {
+          "kind_in": [
+            "root_cause_claimed"
+          ],
+          "contains_any": [
+            "fiber",
+            "光缆"
+          ],
+          "evidence": [
+            {
+              "material_id": "M03"
+            }
+          ]
+        }
+      ],
+      "forbidden_values": [],
+      "evidence": [
+        {
+          "material_id": "M03"
+        },
+        {
+          "material_id": "M01",
+          "field_key": "cause"
+        }
+      ]
+    },
+    "handling_process": {
+      "status_in": [
+        "documented"
+      ],
+      "rationale": "查伦敦设备日志、报障上游、收到关闭通知、客户确认恢复。",
+      "key_points": [
+        {
+          "any_of": [
+            "EU-Carrier",
+            "上游"
+          ]
+        },
+        {
+          "any_of": [
+            "确认"
+          ]
+        }
+      ],
+      "required_candidates": [],
+      "forbidden_values": [],
+      "evidence": [
+        {
+          "material_id": "M02",
+          "log_seq": 3
+        },
+        {
+          "material_id": "M02",
+          "log_seq": 4
+        },
+        {
+          "material_id": "M02",
+          "log_seq": 6
+        }
+      ]
+    },
+    "location": {
+      "status_in": [
+        "documented"
+      ],
+      "rationale": "故障点只在 EML：伦敦—法兰克福段，加来以南约 3 km（供应商陈述）。Z 端法兰克福 PoP 是业务端点，不是故障点。",
+      "key_points": [
+        {
+          "any_of": [
+            "Calais",
+            "加来"
+          ]
+        }
+      ],
+      "required_candidates": [
+        {
+          "kind_in": [
+            "located_fault_point"
+          ],
+          "contains_any": [
+            "Calais"
+          ],
+          "evidence": [
+            {
+              "material_id": "M03"
+            }
+          ]
+        }
+      ],
+      "forbidden_values": [],
+      "evidence": [
+        {
+          "material_id": "M03"
+        }
+      ]
+    }
+  },
+  "expected_issues": [
+    {
+      "code": "TIME_TZ_MISSING",
+      "element": "start_time",
+      "note": "第 3 条伦敦设备日志未标注时区"
+    }
+  ],
+  "attachment_dependent": [
+    "location"
+  ]
+}

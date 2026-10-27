@@ -1,0 +1,329 @@
+{
+  "gold_version": "1.0",
+  "bundle_id": "SYN-S10",
+  "patterns": [
+    "S10"
+  ],
+  "summary": "监控截图 + 线路已拆机 + 新旧编号：三个起障候选；{{end_time}} 占位符；分类别丢包只在截图里；服务身份待核。",
+  "annotation": {
+    "annotator": "架构师（Claude，合成样本作者）",
+    "annotated_at": "2026-10-27",
+    "method": "合成样本作者按调研问题模式逐要素标注；正式评测前需业务人员复核"
+  },
+  "elements": {
+    "start_time": {
+      "status_in": [
+        "conflicted",
+        "documented"
+      ],
+      "rationale": "字段 03:02（系统口径）、客户邮件 02:40（GMT+8 明确）、截图中 BE 类 02:12 首次非零（图上无时区）语义各不相同。若裁定，取客户明确时间 02:40；截图首个非零不能直接当起障。",
+      "key_points": [],
+      "required_candidates": [
+        {
+          "kind_in": [
+            "fault_start_field"
+          ],
+          "contains_any": [],
+          "evidence": [
+            {
+              "material_id": "M01",
+              "field_key": "occurred_at"
+            }
+          ],
+          "time": {
+            "iso": "2026-09-30T03:02:00+08:00",
+            "tolerance_minutes": 0
+          }
+        },
+        {
+          "kind_in": [
+            "customer_reported_start"
+          ],
+          "contains_any": [],
+          "evidence": [
+            {
+              "material_id": "M01",
+              "field_key": "description"
+            }
+          ],
+          "time": {
+            "iso": "2026-09-30T02:40:00+08:00",
+            "tolerance_minutes": 0
+          },
+          "tz_source_in": [
+            "explicit"
+          ]
+        },
+        {
+          "kind_in": [
+            "chart_first_nonzero"
+          ],
+          "contains_any": [],
+          "evidence": [
+            {
+              "material_id": "M04",
+              "note": "BE 曲线 02:12 起非零"
+            }
+          ],
+          "time": {
+            "iso": "2026-09-30T02:12:00",
+            "tolerance_minutes": 1
+          },
+          "tz_source_in": [
+            "unknown",
+            "assumed"
+          ]
+        }
+      ],
+      "forbidden_values": [],
+      "evidence": [],
+      "expected_time": {
+        "iso": "2026-09-30T02:40:00+08:00",
+        "tolerance_minutes": 1
+      }
+    },
+    "end_time": {
+      "status_in": [
+        "documented",
+        "conflicted"
+      ],
+      "rationale": "恢复字段 07:30，第 9 条网管检查“07:30 起未见丢包”；描述里 {{end_time}} 是未替换占位符，必须报出；第 10 条 07:45“同意结单”不是恢复确认。",
+      "key_points": [],
+      "required_candidates": [
+        {
+          "kind_in": [
+            "recovery_field"
+          ],
+          "contains_any": [],
+          "evidence": [
+            {
+              "material_id": "M01",
+              "field_key": "recovered_at"
+            }
+          ],
+          "time": {
+            "iso": "2026-09-30T07:30:00+08:00",
+            "tolerance_minutes": 0
+          }
+        },
+        {
+          "kind_in": [
+            "ticket_closed"
+          ],
+          "contains_any": [],
+          "evidence": [
+            {
+              "material_id": "M02",
+              "log_seq": 10
+            }
+          ],
+          "time": {
+            "iso": "2026-09-30T07:45:00+08:00",
+            "tolerance_minutes": 1
+          }
+        }
+      ],
+      "forbidden_values": [],
+      "evidence": [
+        {
+          "material_id": "M01",
+          "field_key": "recovered_at"
+        },
+        {
+          "material_id": "M02",
+          "log_seq": 9
+        }
+      ],
+      "expected_time": {
+        "iso": "2026-09-30T07:30:00+08:00",
+        "tolerance_minutes": 1
+      }
+    },
+    "phenomenon": {
+      "status_in": [
+        "documented"
+      ],
+      "rationale": "客户报 WAN 丢包；截图给出六类 QoS 分项（BE 最大 21.8%，AF11 14.3%……），正文完全没有这些细节。",
+      "key_points": [
+        {
+          "any_of": [
+            "丢包",
+            "packet loss"
+          ]
+        }
+      ],
+      "required_candidates": [
+        {
+          "kind_in": [
+            "customer"
+          ],
+          "contains_any": [
+            "packet loss",
+            "丢包"
+          ],
+          "evidence": [
+            {
+              "material_id": "M01",
+              "field_key": "description"
+            }
+          ]
+        },
+        {
+          "kind_in": [
+            "monitoring_chart"
+          ],
+          "contains_any": [
+            "21.8"
+          ],
+          "evidence": [
+            {
+              "material_id": "M04",
+              "note": "统计表 BE 行 Max 21.8%"
+            }
+          ]
+        }
+      ],
+      "forbidden_values": [],
+      "evidence": [
+        {
+          "material_id": "M01",
+          "field_key": "description"
+        }
+      ]
+    },
+    "responsible_party": {
+      "status_in": [
+        "unknown"
+      ],
+      "rationale": "上游称已拆机，不足以定责。",
+      "key_points": [],
+      "required_candidates": [],
+      "forbidden_values": [
+        "UP-Carrier"
+      ],
+      "evidence": []
+    },
+    "cause": {
+      "status_in": [
+        "unknown"
+      ],
+      "rationale": "原因栏“线路已拆机”是资源状态；客户实际在用新编号 SYN-CKT-2010，旧编号拆机不能解释新线路上的丢包。",
+      "key_points": [],
+      "required_candidates": [
+        {
+          "kind_in": [
+            "resource_state"
+          ],
+          "contains_any": [
+            "拆机"
+          ],
+          "evidence": [
+            {
+              "material_id": "M01",
+              "field_key": "cause"
+            },
+            {
+              "material_id": "M02",
+              "log_seq": 5
+            },
+            {
+              "material_id": "M03",
+              "message_index": 0
+            }
+          ]
+        }
+      ],
+      "forbidden_values": [
+        "拆机"
+      ],
+      "evidence": []
+    },
+    "handling_process": {
+      "status_in": [
+        "documented"
+      ],
+      "rationale": "报障上游、查资源、核对新旧编号、检查新线路、客户同意结单；身份核对和技术排障要分开。",
+      "key_points": [
+        {
+          "any_of": [
+            "拆机"
+          ]
+        },
+        {
+          "any_of": [
+            "客户经理"
+          ]
+        },
+        {
+          "any_of": [
+            "SYN-CKT-2010",
+            "新编号"
+          ]
+        }
+      ],
+      "required_candidates": [],
+      "forbidden_values": [],
+      "evidence": [
+        {
+          "material_id": "M02",
+          "log_seq": 4
+        },
+        {
+          "material_id": "M02",
+          "log_seq": 5
+        },
+        {
+          "material_id": "M02",
+          "log_seq": 8
+        },
+        {
+          "material_id": "M02",
+          "log_seq": 9
+        }
+      ]
+    },
+    "location": {
+      "status_in": [
+        "unknown"
+      ],
+      "rationale": "客户端点与截图中的被测对象只是服务范围，没有定位故障点。",
+      "key_points": [],
+      "required_candidates": [],
+      "forbidden_values": [],
+      "evidence": []
+    }
+  },
+  "expected_issues": [
+    {
+      "code": "TIME_PLACEHOLDER",
+      "element": "end_time",
+      "note": "描述中的 {{end_time}}"
+    },
+    {
+      "code": "SERVICE_IDENTITY_UNVERIFIED",
+      "note": "旧编号 SYN-CKT-1010 已拆机，新编号 SYN-CKT-2010；带宽 100M 与映射表 50M 不一致"
+    },
+    {
+      "code": "CAUSE_NOT_DIAGNOSIS",
+      "element": "cause"
+    },
+    {
+      "code": "ATTACHMENT_FLAG_MISMATCH",
+      "note": "第 2 条附件标志为 false，实际有截图"
+    },
+    {
+      "code": "TIME_CANDIDATES_DIFFER",
+      "element": "start_time"
+    },
+    {
+      "code": "RECOVERY_UNVERIFIED",
+      "element": "end_time"
+    }
+  ],
+  "attachment_dependent": [
+    "start_time",
+    "phenomenon"
+  ],
+  "service_identity": "conflicting",
+  "notes": "截图统计表：EF 1.4/0.20/0.0，AF41 3.1/0.46/0.0，AF31 6.2/1.03/0.0，AF21 9.6/1.68/0.0，AF11 14.3/2.75/0.0，BE 21.8/4.76/0.0（Max/Avg/Min，%）；横轴 01:55—02:47，无时区。"
+}

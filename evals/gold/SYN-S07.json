@@ -1,0 +1,200 @@
+{
+  "gold_version": "1.0",
+  "bundle_id": "SYN-S07",
+  "patterns": [
+    "S07"
+  ],
+  "summary": "中继 MS_AIS：建单正文写的日期比记录日期早 5 天；设备告警与预警相差约 5 分钟；原因栏是可能原因清单。",
+  "annotation": {
+    "annotator": "架构师（Claude，合成样本作者）",
+    "annotated_at": "2026-10-27",
+    "method": "合成样本作者按调研问题模式逐要素标注；正式评测前需业务人员复核"
+  },
+  "elements": {
+    "start_time": {
+      "status_in": [
+        "conflicted",
+        "documented"
+      ],
+      "rationale": "设备告警 22:10:33、预警 22:15:40、建单正文“2026-09-21 22:10”三者不能混用；正文日期与记录日期冲突必须报出。若裁定，取设备告警时间。",
+      "key_points": [],
+      "required_candidates": [
+        {
+          "kind_in": [
+            "alarm_raised"
+          ],
+          "contains_any": [],
+          "evidence": [
+            {
+              "material_id": "M01",
+              "field_key": "alarm_time"
+            }
+          ],
+          "time": {
+            "iso": "2026-09-26T22:10:33+08:00",
+            "tolerance_minutes": 1
+          }
+        },
+        {
+          "kind_in": [
+            "warning_raised"
+          ],
+          "contains_any": [],
+          "evidence": [
+            {
+              "material_id": "M01",
+              "field_key": "warning_time"
+            }
+          ],
+          "time": {
+            "iso": "2026-09-26T22:15:40+08:00",
+            "tolerance_minutes": 1
+          }
+        },
+        {
+          "kind_in": [
+            "body_text_date"
+          ],
+          "contains_any": [],
+          "evidence": [
+            {
+              "material_id": "M02",
+              "log_seq": 1
+            }
+          ],
+          "time": {
+            "iso": "2026-09-21T22:10:00+08:00",
+            "tolerance_minutes": 1
+          }
+        }
+      ],
+      "forbidden_values": [],
+      "evidence": [],
+      "expected_time": {
+        "iso": "2026-09-26T22:10:33+08:00",
+        "tolerance_minutes": 1
+      }
+    },
+    "end_time": {
+      "status_in": [
+        "unknown"
+      ],
+      "rationale": "告警清除时间为空。",
+      "key_points": [],
+      "required_candidates": [],
+      "forbidden_values": [],
+      "evidence": []
+    },
+    "phenomenon": {
+      "status_in": [
+        "documented"
+      ],
+      "rationale": "海缆中继 MS_AIS（紧急）告警。",
+      "key_points": [
+        {
+          "any_of": [
+            "MS_AIS"
+          ]
+        }
+      ],
+      "required_candidates": [],
+      "forbidden_values": [],
+      "evidence": [
+        {
+          "material_id": "M01",
+          "field_key": "alarm_title"
+        }
+      ]
+    },
+    "responsible_party": {
+      "status_in": [
+        "unknown"
+      ],
+      "rationale": "未见任何定责意见或责任认定材料。",
+      "key_points": [],
+      "required_candidates": [],
+      "forbidden_values": [],
+      "evidence": []
+    },
+    "cause": {
+      "status_in": [
+        "unknown"
+      ],
+      "rationale": "五项可能原因并列，不是现场确诊。",
+      "key_points": [],
+      "required_candidates": [
+        {
+          "kind_in": [
+            "candidate_list_item"
+          ],
+          "contains_any": [
+            "MS_AIS",
+            "线路板"
+          ],
+          "evidence": [
+            {
+              "material_id": "M01",
+              "field_key": "cause"
+            }
+          ]
+        }
+      ],
+      "forbidden_values": [],
+      "evidence": []
+    },
+    "handling_process": {
+      "status_in": [
+        "documented",
+        "unknown"
+      ],
+      "rationale": "只有系统建单记录，没有排障动作；给出这一步或留空都可接受。",
+      "key_points": [],
+      "required_candidates": [],
+      "forbidden_values": [],
+      "evidence": []
+    },
+    "location": {
+      "status_in": [
+        "unknown"
+      ],
+      "rationale": "登陆站设备与槽位是告警位置。",
+      "key_points": [],
+      "required_candidates": [
+        {
+          "kind_in": [
+            "alarm_location"
+          ],
+          "contains_any": [
+            "SYN-SDH-SG-11"
+          ],
+          "evidence": [
+            {
+              "material_id": "M01",
+              "field_key": "device_name"
+            }
+          ]
+        }
+      ],
+      "forbidden_values": [],
+      "evidence": []
+    }
+  },
+  "expected_issues": [
+    {
+      "code": "TIME_BODY_RECORD_MISMATCH",
+      "element": "start_time"
+    },
+    {
+      "code": "CAUSE_CANDIDATE_LIST",
+      "element": "cause"
+    },
+    {
+      "code": "STATUS_VIEW_MISMATCH"
+    },
+    {
+      "code": "ONGOING_NO_END",
+      "element": "end_time"
+    }
+  ],
+  "attachment_dependent": []
+}

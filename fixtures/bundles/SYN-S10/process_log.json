@@ -1,0 +1,16 @@
+{
+  "entries": [
+    {"seq": 1, "recorded_at": "2026-09-30 03:10:22", "actor": "系统", "action": "建单", "content": "根据客户邮件建单。", "entry_kind": "system"},
+    {"seq": 2, "recorded_at": "2026-09-30 03:12:40", "actor": "值班员Q", "actor_org": "网管中心", "action": "信息追加", "content": "客户补充 WAN 监控截图。", "entry_kind": "human", "attachment_flag": false, "attachments": ["M04"]},
+    {"seq": 3, "recorded_at": "2026-09-30 03:15:05", "actor": "值班员Q", "actor_org": "网管中心", "action": "受理", "content": "已受理。", "entry_kind": "human"},
+    {"seq": 4, "recorded_at": "2026-09-30 03:40:18", "actor": "值班员Q", "actor_org": "网管中心", "action": "处理意见", "content": "该电路为转卖线路，已邮件报障至上游运营商 UP-Carrier。", "entry_kind": "human"},
+    {"seq": 5, "recorded_at": "2026-09-30 04:20:51", "actor": "值班员Q", "actor_org": "网管中心", "action": "处理意见", "content": "查资源资料：SYN-CKT-1010 资源状态为“已拆机”（2026-07）。", "entry_kind": "human"},
+    {"seq": 6, "recorded_at": "2026-09-30 05:02:33", "actor": "邮件系统", "action": "邮件", "content": "收到上游运营商 UP-Carrier 回复邮件，详见邮件详情。", "entry_kind": "email", "emails": ["M03"]},
+    {"seq": 7, "recorded_at": "2026-09-30 05:30:10", "actor": "值班员Q", "actor_org": "网管中心", "action": "处理意见", "content": "上游称线路已于 7 月拆机，与客户报障不符；已咨询客户经理，核实客户当前在用的服务编号。", "entry_kind": "human"},
+    {"seq": 8, "recorded_at": "2026-09-30 06:45:00", "actor": "客户经理R", "actor_org": "客户服务部", "action": "处理意见", "content": "客户在用的应为新编号 SYN-CKT-2010，旧编号 SYN-CKT-1010 已迁移；客户报障时仍使用旧编号。", "entry_kind": "human"},
+    {"seq": 9, "recorded_at": "2026-09-30 07:32:15", "actor": "值班员S", "actor_org": "网管中心", "action": "处理意见", "content": "检查 SYN-CKT-2010：无告警，07:30 起监控未见丢包。", "entry_kind": "human"},
+    {"seq": 10, "recorded_at": "2026-09-30 07:45:20", "actor": "客户经理R", "actor_org": "客户服务部", "action": "处理意见", "content": "客户同意结单。", "entry_kind": "human"},
+    {"seq": 11, "recorded_at": "2026-09-30 07:50:02", "actor": "值班员S", "actor_org": "网管中心", "action": "返单", "content": "返单。原因：线路已拆机。", "entry_kind": "human"},
+    {"seq": 12, "recorded_at": "2026-09-30 09:00:00", "actor": "值班员S", "actor_org": "网管中心", "action": "结单", "content": "结单。", "entry_kind": "system"}
+  ]
+}

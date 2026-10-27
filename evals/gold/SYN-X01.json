@@ -1,0 +1,199 @@
+{
+  "gold_version": "1.0",
+  "bundle_id": "SYN-X01",
+  "patterns": [
+    "X01"
+  ],
+  "summary": "已撤销单：附件是历史交付材料；“非本运营商业务”是归属排查，不是定责或根因；不能计算历时。",
+  "annotation": {
+    "annotator": "架构师（Claude，合成样本作者）",
+    "annotated_at": "2026-10-27",
+    "method": "合成样本作者按调研问题模式逐要素标注；正式评测前需业务人员复核"
+  },
+  "elements": {
+    "start_time": {
+      "status_in": [
+        "unknown"
+      ],
+      "rationale": "没有起障时间；附件里 2025-03-14 是历史交付日期（historical_service_event），不能当起障。",
+      "key_points": [],
+      "required_candidates": [],
+      "forbidden_values": [],
+      "evidence": []
+    },
+    "end_time": {
+      "status_in": [
+        "unknown"
+      ],
+      "rationale": "撤单时间不是恢复时间，未见恢复证据。",
+      "key_points": [],
+      "required_candidates": [],
+      "forbidden_values": [],
+      "evidence": []
+    },
+    "phenomenon": {
+      "status_in": [
+        "documented"
+      ],
+      "rationale": "客户报丢包；现场称另一运营商接入设备没光，是不同层面的观测。",
+      "key_points": [
+        {
+          "any_of": [
+            "丢包"
+          ]
+        }
+      ],
+      "required_candidates": [
+        {
+          "kind_in": [
+            "customer"
+          ],
+          "contains_any": [
+            "丢包"
+          ],
+          "evidence": [
+            {
+              "material_id": "M01",
+              "field_key": "description"
+            }
+          ]
+        },
+        {
+          "kind_in": [
+            "field_engineer"
+          ],
+          "contains_any": [
+            "没有光",
+            "没光"
+          ],
+          "evidence": [
+            {
+              "material_id": "M02",
+              "log_seq": 6
+            }
+          ]
+        }
+      ],
+      "forbidden_values": [],
+      "evidence": [
+        {
+          "material_id": "M01",
+          "field_key": "description"
+        }
+      ]
+    },
+    "responsible_party": {
+      "status_in": [
+        "unknown"
+      ],
+      "rationale": "“非本运营商业务”是归属核查，不是正式责任认定。",
+      "key_points": [],
+      "required_candidates": [],
+      "forbidden_values": [
+        "本运营商",
+        "OtherNet"
+      ],
+      "evidence": []
+    },
+    "cause": {
+      "status_in": [
+        "unknown"
+      ],
+      "rationale": "未确诊；业务归属不匹配是资源状态。",
+      "key_points": [],
+      "required_candidates": [
+        {
+          "kind_in": [
+            "resource_state"
+          ],
+          "contains_any": [
+            "非本运营商"
+          ],
+          "evidence": [
+            {
+              "material_id": "M02",
+              "log_seq": 10
+            }
+          ]
+        }
+      ],
+      "forbidden_values": [],
+      "evidence": []
+    },
+    "handling_process": {
+      "status_in": [
+        "documented"
+      ],
+      "rationale": "联系现场、索要 trace、收到交付材料、现场检查、核查归属、撤单。",
+      "key_points": [
+        {
+          "any_of": [
+            "归属",
+            "非本运营商"
+          ]
+        },
+        {
+          "any_of": [
+            "撤单",
+            "撤销"
+          ]
+        }
+      ],
+      "required_candidates": [],
+      "forbidden_values": [],
+      "evidence": [
+        {
+          "material_id": "M02",
+          "log_seq": 9
+        },
+        {
+          "material_id": "M02",
+          "log_seq": 10
+        },
+        {
+          "material_id": "M02",
+          "log_seq": 11
+        }
+      ]
+    },
+    "location": {
+      "status_in": [
+        "unknown"
+      ],
+      "rationale": "示例大厦 18 楼是报障地址/服务地点，不是故障点。",
+      "key_points": [],
+      "required_candidates": [
+        {
+          "kind_in": [
+            "customer_site",
+            "service_endpoint"
+          ],
+          "contains_any": [
+            "示例大厦",
+            "Example Tower"
+          ],
+          "evidence": [
+            {
+              "material_id": "M01",
+              "field_key": "description"
+            }
+          ]
+        }
+      ],
+      "forbidden_values": [],
+      "evidence": []
+    }
+  },
+  "expected_issues": [
+    {
+      "code": "TICKET_CANCELLED"
+    },
+    {
+      "code": "SERVICE_IDENTITY_UNVERIFIED",
+      "note": "报障线路实际属于其他运营商"
+    }
+  ],
+  "attachment_dependent": [],
+  "service_identity": "conflicting",
+  "notes": "附件 M03 测速 23.92/22.79 Mbps 是 2025-03-14 交付验收数据，不是本次故障测试。"
+}
