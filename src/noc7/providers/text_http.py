@@ -11,12 +11,12 @@ import urllib.request
 
 from pydantic import ValidationError
 
-from ..extract.baseline import conclusion_observations
 from ..extract.types import Extraction, ExtractionContext
 from ..rules import ExtractionRejected, issue, validate_extraction
-from ..schema.common import ATTRIBUTION_LABELS_ZH, DataClass, ElementStatus
+from ..schema.common import DataClass
 from .gate import ensure_allowed
 from .text_config import TextModelConfig, TextProviderError
+from .text_ground import ground_extraction, normalize_model_payload
 from .text_prompt import PROMPT_VERSION, SYSTEM_PROMPT, prepare_evidence
 
 
@@ -125,19 +125,13 @@ class OpenAICompatibleTextProvider:
         except (ValueError, RecursionError):
             raise TextProviderError("模型输出不是有效 JSON，已拒绝且未保存远端正文。") from None
         try:
-            data = Extraction.model_validate(parsed)
+            data = Extraction.model_validate(normalize_model_payload(
+                parsed, ctx.bundle.manifest.default_timezone
+            ))
         except (ValidationError, RecursionError):
             raise TextProviderError("模型七要素结构不合格，已拒绝且未保存远端正文。") from None
-        # 现象概述是候选的确定性展示，复用规则链路的来源选择和拼接方式。
-        # 不修改候选、状态或引用；有错误引用/无依据候选仍由后面的校验拒绝。
-        phenomenon = data.elements.phenomenon
-        if phenomenon.status in {ElementStatus.DOCUMENTED, ElementStatus.CONFIRMED}:
-            observations = conclusion_observations(phenomenon.candidates, ctx.evidence)
-            refs = {r for observation in observations for r in observation.evidence_refs}
-            if observations and refs == set(phenomenon.evidence_refs):
-                phenomenon.value = "；".join(
-                    f"{ATTRIBUTION_LABELS_ZH[o.attribution]}：{o.description}" for o in observations
-                )
+        # 语义标签、现象概述和归一时间都以本地规则为准；无依据摘录仍由后面的校验拒绝。
+        data = ground_extraction(ctx, data)
         try:
             validate_extraction(ctx, data)
         except ExtractionRejected as exc:

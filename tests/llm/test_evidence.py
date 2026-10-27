@@ -20,27 +20,30 @@ def empty_extraction():
     return dict(elements=elements, quotes=[])
 
 
-@pytest.mark.parametrize("party,location,text", [
-    ("SYN-运营商甲", "SYN-节点甲至 SYN-节点乙 光缆段", "责任认定：SYN-运营商甲；故障定位在 SYN-节点甲至 SYN-节点乙 光缆段。"),
-    ("SYN-Carrier-A", "SYN-Site-A to SYN-Site-B fiber segment", "Responsibility: SYN-Carrier-A; fault located in SYN-Site-A to SYN-Site-B fiber segment."),
-])
-def test_explicit_party_and_fault_point_can_be_extracted(server, sample, party, location, text):
+def test_explicit_party_and_fault_point_can_be_extracted(server, sample):
+    party = "责任认定：SYN-运营商甲"
+    location = "故障点位于 SYN-节点甲至 SYN-节点乙 光缆段"
+    text = f"{party}。{location}。"
     span = EvidenceSpan(id="M01/f:diagnosis", material_id="M01", locator=FieldLocator(field_key="diagnosis"),
                         text=text, extractor="synthetic")
     ctx = ExtractionContext(sample[0].bundle, [span])
     data = empty_extraction()
     for name, attr, value, semantic in [
-        ("responsible_party", "party", party, {"basis": "formal_determination"}),
+        ("responsible_party", "party", party, {"basis": "claimed"}),
         ("location", "description", location, {"role": "located_fault_point"}),
     ]:
         candidate = dict(id="C1", evidence_refs=[span.id], attribution="internal_staff", **{attr: value}, **semantic)
         data["elements"][name] = dict(status="documented", value=value, selected="C1",
                                       evidence_refs=[span.id], candidates=[candidate])
+    data["elements"]["responsible_party"]["status"] = "confirmed"
     data["quotes"] = [dict(evidence_id=span.id, quote=text)]
     server.default = envelope(data)
     result = OpenAICompatibleTextProvider(qwen_config(server)).extract(ctx)
     assert result.elements.responsible_party.value == party
+    assert result.elements.responsible_party.status == "confirmed"
+    assert result.elements.responsible_party.candidates[0].basis == "formal_determination"
     assert result.elements.location.value == location
+    assert result.elements.location.candidates[0].role == "located_fault_point"
     assert result.elements.cause.status == "unknown"
 
 
@@ -60,21 +63,22 @@ def test_conflicting_claims_remain_candidates(server, sample):
     assert len(result.elements.responsible_party.candidates) == 2
 
 
-@pytest.mark.parametrize("name,field,attr,tag,code", [
-    ("responsible_party", "vendor", "party", {"basis": "claimed"}, IssueCode.RESPONSIBILITY_NO_BASIS),
-    ("location", "device_location", "description", {"role": "located_fault_point"}, IssueCode.LOCATION_NOT_LOCATED),
+@pytest.mark.parametrize("name,field,attr,tag,corrected", [
+    ("responsible_party", "vendor", "party", {"basis": "formal_determination"}, ("basis", "inferred_from_role")),
+    ("location", "device_location", "description", {"role": "located_fault_point"}, ("role", "alarm_location")),
 ])
-def test_vendor_and_alarm_location_cannot_be_relabelled_as_conclusions(server, sample, name, field, attr, tag, code):
+def test_vendor_and_alarm_location_cannot_be_relabelled_as_conclusions(server, sample, name, field, attr, tag, corrected):
     span = EvidenceSpan(id=f"M01/f:{field}", material_id="M01", locator=FieldLocator(field_key=field),
                         text="SYN-value", extractor="synthetic")
     data = empty_extraction()
-    data["elements"][name] = dict(status="documented", value=span.text, selected="C1", evidence_refs=[span.id],
+    data["elements"][name] = dict(status="confirmed", value=span.text, selected="C1", evidence_refs=[span.id],
         candidates=[dict(id="C1", evidence_refs=[span.id], attribution="system_field", **{attr: span.text}, **tag)])
     data["quotes"] = [dict(evidence_id=span.id, quote=span.text)]
     server.default = envelope(data)
-    with pytest.raises(ExtractionRejected) as caught:
-        OpenAICompatibleTextProvider(qwen_config(server)).extract(ExtractionContext(sample[0].bundle, [span]))
-    assert code in {issue.code for issue in caught.value.issues}
+    result = OpenAICompatibleTextProvider(qwen_config(server)).extract(ExtractionContext(sample[0].bundle, [span]))
+    element = getattr(result.elements, name)
+    assert element.status == "unknown" and element.value is None and element.selected is None
+    assert getattr(element.candidates[0], corrected[0]) == corrected[1]
 
 
 def test_model_cannot_cite_forged_evidence_or_original_text(server, sample):
@@ -95,6 +99,102 @@ def test_model_quote_must_be_present_in_evidence(server, sample):
         OpenAICompatibleTextProvider(qwen_config(server)).extract(sample[0])
     assert IssueCode.EVIDENCE_QUOTE_MISMATCH in {issue.code for issue in caught.value.issues}
     assert "SENSITIVE_INVENTED_FACT" not in str(caught.value)
+
+
+def test_free_text_cannot_upgrade_party_location_cause_or_time(server, sample):
+    text = "请联系 SYN-运营商甲 处理。告警位置在 SYN-节点甲机房。建单时间 2026-03-01 10:00:00。"
+    span = EvidenceSpan(id="M01/f:diagnosis", material_id="M01", locator=FieldLocator(field_key="diagnosis"),
+                        text=text, extractor="synthetic")
+    data = empty_extraction()
+    data["elements"]["responsible_party"] = dict(
+        status="confirmed", value="SYN-运营商甲", selected="C1", evidence_refs=[span.id], note="模型编写的责任旁白",
+        candidates=[dict(id="C1", evidence_refs=[span.id], attribution="internal_staff",
+                         party="SYN-运营商甲", basis="formal_determination")])
+    data["elements"]["location"] = dict(
+        status="documented", value="SYN-节点甲机房", selected="C1", evidence_refs=[span.id], note="模型编写的地点旁白",
+        candidates=[dict(id="C1", evidence_refs=[span.id], attribution="alarm_system",
+                         description="SYN-节点甲机房", role="located_fault_point")])
+    data["elements"]["cause"] = dict(
+        status="confirmed", value="处理", selected="C1", evidence_refs=[span.id],
+        candidates=[dict(id="C1", evidence_refs=[span.id], attribution="internal_staff",
+                         statement="处理", cause_kind="root_cause_confirmed")])
+    data["elements"]["start_time"] = dict(
+        status="documented", selected="C1", evidence_refs=[span.id],
+        value={"raw": "2026-03-01 10:00:00", "iso": "2026-03-01T10:00:00+08:00"},
+        candidates=[dict(id="C1", evidence_refs=[span.id], attribution="system_field", time_kind="fault_start_field",
+                         time={"raw": "2026-03-01 10:00:00", "iso": "2026-03-01T10:00:00+08:00"})])
+    data["events"] = [dict(
+        id="EV1", attribution="internal_staff", action="请联系 SYN-运营商甲 处理",
+        actor="并不存在的执行人", result="已经恢复", target="虚构目标",
+        event_kind="communication", evidence_refs=[span.id])]
+    data["service_identity"] = dict(
+        status="verified", note="已独立核实",
+        identifiers=[dict(value="SYN-CKT-FAKE", role="current", evidence_refs=[])])
+    data["quotes"] = [dict(evidence_id=span.id, quote=text)]
+    server.default = envelope(data)
+    result = OpenAICompatibleTextProvider(qwen_config(server)).extract(ExtractionContext(sample[0].bundle, [span]))
+    party, location = result.elements.responsible_party, result.elements.location
+    cause, start = result.elements.cause, result.elements.start_time
+    assert party.status == "unknown" and party.value is None and party.note is None
+    assert party.candidates[0].basis == "inferred_from_role"
+    assert location.status == "unknown" and location.value is None and location.note is None
+    assert location.candidates == []
+    assert cause.status == "unknown" and cause.value is None and cause.candidates == []
+    assert start.status == "unknown" and start.value is None
+    assert start.candidates[0].time_kind == "observation"
+    assert start.candidates[0].time.precision == "second"
+    assert start.candidates[0].time.utc_offset == "+08:00"
+    event = result.events[0]
+    assert event.actor is None and event.result is None and event.target is None
+    assert event.action == "请联系 SYN-运营商甲 处理"
+    assert result.service_identity is None
+
+
+def test_time_raw_is_normalized_locally(server, sample):
+    text = "客户反映：自 2026-09-03 起专线中断。"
+    span = EvidenceSpan(id="M01/f:description", material_id="M01", locator=FieldLocator(field_key="description"),
+                        text=text, extractor="synthetic")
+    data = empty_extraction()
+    data["elements"]["start_time"] = dict(
+        status="documented", selected="C1", evidence_refs=[span.id],
+        value={"raw": "2026-09-03", "iso": "2026-09-03"},
+        candidates=[dict(id="C1", evidence_refs=[span.id], attribution="customer", time_kind="other",
+                         time={"raw": "2026-09-03"})])
+    server.default = envelope(data)
+    result = OpenAICompatibleTextProvider(qwen_config(server)).extract(ExtractionContext(sample[0].bundle, [span]))
+    value = result.elements.start_time.value
+    assert result.elements.start_time.status == "documented"
+    assert result.elements.start_time.candidates[0].time_kind == "customer_reported_start"
+    assert (value.raw, value.iso, value.precision, value.tz_source) == ("2026-09-03", "2026-09-03", "day", "unknown")
+
+
+def test_phenomenon_refs_follow_local_selection(server, sample):
+    data = deepcopy(sample[1])
+    phenomenon = data["elements"]["phenomenon"]
+    original_refs = list(phenomenon["evidence_refs"])
+    original_value = phenomenon["value"]
+    extra = next(span.id for span in sample[0].evidence if span.id not in original_refs)
+    phenomenon["evidence_refs"] = original_refs + [extra]
+    phenomenon["value"] = "多带一条引用也不应整单失败"
+    server.default = envelope(data)
+    result = OpenAICompatibleTextProvider(qwen_config(server)).extract(sample[0])
+    assert result.elements.phenomenon.value == original_value
+    assert set(result.elements.phenomenon.evidence_refs) == set(original_refs)
+
+    data = deepcopy(sample[1])
+    data["elements"]["phenomenon"]["evidence_refs"] = original_refs[:-1]
+    server.default = envelope(data)
+    result = OpenAICompatibleTextProvider(qwen_config(server)).extract(sample[0])
+    assert set(result.elements.phenomenon.evidence_refs) == set(original_refs)
+
+    data = deepcopy(sample[1])
+    data["elements"]["phenomenon"] = dict(
+        status="documented", value="没有观测却写了概述", evidence_refs=original_refs[:1], candidates=[])
+    server.default = envelope(data)
+    result = OpenAICompatibleTextProvider(qwen_config(server)).extract(sample[0])
+    assert result.elements.phenomenon.status == "unknown"
+    assert result.elements.phenomenon.value is None
+    assert result.elements.phenomenon.evidence_refs == []
 
 
 def test_phenomenon_display_is_rebuilt_from_grounded_observations(server, sample):
