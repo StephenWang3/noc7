@@ -799,40 +799,6 @@
             "placeholder": false
           },
           "time_kind": "alarm_raised"
-        },
-        {
-          "id": "C5",
-          "evidence_refs": [
-            "M02/log:5"
-          ],
-          "attribution": "field_engineer",
-          "note": "仅有时刻，日期按同条记录/邮件头补齐；跨日需复核。",
-          "time": {
-            "raw": "15:40",
-            "iso": "2026-10-10T15:40:00+08:00",
-            "tz_source": "assumed",
-            "utc_offset": "+08:00",
-            "precision": "minute",
-            "placeholder": false
-          },
-          "time_kind": "observation"
-        },
-        {
-          "id": "C6",
-          "evidence_refs": [
-            "M02/log:7"
-          ],
-          "attribution": "noc_check",
-          "note": "仅有时刻，日期按同条记录/邮件头补齐；跨日需复核。",
-          "time": {
-            "raw": "19:15",
-            "iso": "2026-10-10T19:15:00+08:00",
-            "tz_source": "assumed",
-            "utc_offset": "+08:00",
-            "precision": "minute",
-            "placeholder": false
-          },
-          "time_kind": "observation"
         }
       ]
     },
@@ -906,10 +872,27 @@
             "precision": "minute",
             "placeholder": false
           },
-          "time_kind": "customer_confirmed_recovery"
+          "time_kind": "alarm_cleared"
         },
         {
           "id": "C4",
+          "evidence_refs": [
+            "M02/log:7"
+          ],
+          "attribution": "noc_check",
+          "note": "客户确认时刻，仅表示此时已正常，不替代实际恢复时刻。",
+          "time": {
+            "raw": "19:15",
+            "iso": "2026-10-10T19:15:00+08:00",
+            "tz_source": "assumed",
+            "utc_offset": "+08:00",
+            "precision": "minute",
+            "placeholder": false
+          },
+          "time_kind": "customer_confirmed_recovery"
+        },
+        {
+          "id": "C5",
           "evidence_refs": [
             "M02/log:8"
           ],
@@ -926,7 +909,7 @@
           "time_kind": "ticket_returned"
         },
         {
-          "id": "C5",
+          "id": "C6",
           "evidence_refs": [
             "M02/log:11"
           ],
@@ -949,15 +932,12 @@
       "evidence_refs": [
         "M01/f:description",
         "M02/log:3",
-        "M02/log:7",
-        "M02/log:10"
+        "M02/log:7"
       ],
-      "issues": [
-        "OBSERVATION_SCOPE_DIFFERS"
-      ],
+      "issues": [],
       "review": null,
       "note": null,
-      "value": "客户反馈：客户报专线 SYN-CKT-1024 业务中断。；检查显示：查告警：15:42 起 SYN-CKT-1024 所在光缆段 R_LOS；OTDR 测试显示断点距 A 端局站约 3.2 km。；检查显示：19:08 告警清除，业务恢复；19:15 客户电话确认业务正常。；检查显示：责任认定：本次中断由第三方施工单位示例建设公司（合成）未按管线交底施工造成，责任方为该施工单位，已启动索赔。",
+      "value": "客户反馈：客户报专线 SYN-CKT-1024 业务中断。；检查显示：查告警：15:42 起 SYN-CKT-1024 所在光缆段 R_LOS；OTDR 测试显示断点距 A 端局站约 3.2 km。；检查显示：19:08 告警清除，业务恢复；19:15 客户电话确认业务正常。",
       "candidates": [
         {
           "id": "C1",
@@ -1002,21 +982,6 @@
           "value_text": null,
           "unit": null,
           "scope": "19:08 告警清除，业务恢复；19:15 客户电话确认业务正常。",
-          "observed_at": null
-        },
-        {
-          "id": "C4",
-          "evidence_refs": [
-            "M02/log:10"
-          ],
-          "attribution": "noc_check",
-          "note": null,
-          "description": "责任认定：本次中断由第三方施工单位示例建设公司（合成）未按管线交底施工造成，责任方为该施工单位，已启动索赔。",
-          "metric": "告警/状态",
-          "value": null,
-          "value_text": null,
-          "unit": null,
-          "scope": "责任认定：本次中断由第三方施工单位示例建设公司（合成）未按管线交底施工造成，责任方为该施工单位，已启动索赔。",
           "observed_at": null
         }
       ]
@@ -1396,9 +1361,7 @@
         "M01/f:created_at",
         "M01/f:occurred_at",
         "M02/log:1",
-        "M02/log:3",
-        "M02/log:5",
-        "M02/log:7"
+        "M02/log:3"
       ],
       "candidate_ids": [],
       "rule_id": "r.time_candidates_differ@1",
@@ -1421,22 +1384,6 @@
       "rule_id": "r.time_candidates_differ@1",
       "resolved": false,
       "resolution_note": null
-    },
-    {
-      "code": "OBSERVATION_SCOPE_DIFFERS",
-      "severity": "warning",
-      "message": "客户感知与网管观测来源、时刻或范围不同，分别保留。",
-      "element": "phenomenon",
-      "evidence_refs": [
-        "M01/f:description",
-        "M02/log:3",
-        "M02/log:7",
-        "M02/log:10"
-      ],
-      "candidate_ids": [],
-      "rule_id": "r.observation_scope_differs@1",
-      "resolved": false,
-      "resolution_note": null
     }
   ],
   "service_identity": {
@@ -1455,13 +1402,13 @@
   },
   "related_tickets": [],
   "run": {
-    "pipeline_version": "a1.1.0",
+    "pipeline_version": "a1.1.1",
     "schema_version": "1.0",
     "provider": "rules",
     "prompt_version": null,
-    "rules_version": "1.0",
+    "rules_version": "1.1",
     "bundle_sha256": "5eabd404b4c678cdb1be0876c3e4db396a5f06514cd0b86b696303eed9d500b1",
-    "started_at": "2026-10-27T13:05:01.528538+00:00",
-    "finished_at": "2026-10-27T13:05:01.533317+00:00"
+    "started_at": "2026-10-27T13:35:09.031696+00:00",
+    "finished_at": "2026-10-27T13:35:09.037828+00:00"
   }
 }

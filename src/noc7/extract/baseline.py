@@ -45,11 +45,14 @@ from .types import QUALITY_REVIEW_THRESHOLD, Extraction, ExtractionContext
 
 DATE = r"\d{4}[-/.年]\d{1,2}[-/.月]\d{1,2}日?"
 CLOCK = r"\d{1,2}:\d{2}(?::\d{2})?"
-ZONE = r"(?:\s*\(?\s*(?:(?:GMT|UTC)(?:\s*[+-]\s*\d{1,2}(?::?\d{2})?)?|[+-]\d{2}:?\d{2}|北京时间|香港时间)\s*\)?)?"
-TIME_RE = re.compile(
-    rf"(?:北京时间\s*)?{DATE}(?:[ T]+{CLOCK})?{ZONE}|(?<![\d:.]){CLOCK}{ZONE}|\{{\{{\s*[\w.]+\s*\}}\}}",
+ZONE_RE = re.compile(
+    r"\b(?:GMT|UTC)\b(?:\s*[+-]\s*\d{1,2}(?::?\d{2})?)?|(?<![\w-])[+-](?:0\d|1[0-4]):?[0-5]\d(?!\d)|北京时间|香港时间",
     re.I,
 )
+TIME_RE = re.compile(
+    rf"{DATE}(?:[ T]+{CLOCK})?|(?<![\d:.]){CLOCK}|\{{\{{\s*[\w.]+\s*\}}\}}", re.I
+)
+CONFIRMATION_TIME_NOTE = "客户确认时刻，仅表示此时已正常，不替代实际恢复时刻。"
 METRIC = re.compile(
     r"丢包|时延|告警|中断|不通|宕机|无流量|收光|没有光|没光|packet loss|latency|down|timed? out|not working|RTT",
     re.I,
@@ -188,57 +191,177 @@ def cause_kind(text: str, key: str = "") -> CauseKind | None:
     return None
 
 
+def _time_matches(text: str):
+    zones = list(ZONE_RE.finditer(text))
+    return [
+        m
+        for m in TIME_RE.finditer(text)
+        if not any(z.start() <= m.start() < z.end() for z in zones)
+    ]
+
+
+def _time_bounds(text: str, start: int, end: int) -> tuple[int, int]:
+    """分号/句号/换行及相邻时刻构成语义边界，不借用下一时刻的动作。"""
+    left, right = 0, len(text)
+    for boundary in re.finditer(r"[。；;!?！？\n]|\.(?=\s+[A-Za-z])", text):
+        if boundary.end() <= start:
+            left = boundary.end()
+        elif boundary.start() >= end:
+            right = boundary.start()
+            break
+    for other in _time_matches(text):
+        if other.end() <= start:
+            left = max(left, other.end())
+        elif other.start() >= end:
+            right = min(right, other.start())
+            break
+    return left, right
+
+
+def time_phrase(raw: str, offset: str | None, record: str | None = None) -> TimeValue:
+    """解析含间隔词的时间短语；归一时去掉间隔词，raw 始终保留原文。"""
+    match = next(iter(_time_matches(raw)), None)
+    if not match:
+        return TimeValue(raw=raw)
+    core = match.group()
+    zone = ZONE_RE.search(raw)
+    value = core + (" " + zone.group() if zone else "")
+    clock_only = bool(re.fullmatch(CLOCK, core))
+    if clock_only and record:
+        value = record[:10] + " " + value
+    tv = parse_time(value, offset)
+    if clock_only and record and tv.as_datetime() and tv.as_datetime().tzinfo:
+        anchor = datetime.fromisoformat(record)
+        if anchor.tzinfo:
+            local_date = anchor.astimezone(tv.as_datetime().tzinfo).date().isoformat()
+            tv = parse_time(
+                local_date + " " + core + (" " + zone.group() if zone else ""), offset
+            )
+    return tv.model_copy(update={"raw": raw})
+
+
 def _time_kind(text: str, start: int, end: int, planned: bool) -> TimeKind:
-    before, after = text[max(0, start - 35) : start], text[end : end + 35]
-    near = before + after
-    clause = re.split(r"[。；;\n]", before)[-1] + after.split("；")[0].split(";")[0]
+    left, right = _time_bounds(text, start, end)
+    before = text[left:start]
+    clause = text[left:right]
     if planned:
         return TimeKind.PLANNED
-    if re.search(r"未标注时区|时区未知", text):
-        return TimeKind.ALARM_RAISED
-    if re.search(r"起业务恢复|起恢复|业务恢复", after[:18]) and re.search(
-        r"客户.{0,10}确认", text
-    ):
+    if confirms_recovery(clause):
         return TimeKind.CUSTOMER_CONFIRMED_RECOVERY
-    if re.search(r"告警清除|恢复 UP", after[:18]):
+    if re.search(r"告警清除|恢复 UP", clause, re.I):
         return TimeKind.ALARM_CLEARED
-    if re.search(r"熔接完成|修复完成", after[:18]):
+    if re.search(r"熔接完成|修复完成", clause):
         return TimeKind.REPAIR_COMPLETED
-    if re.search(r"(?:客户|customer).*(?:自|since)|since|down since", before, re.I):
-        return TimeKind.CUSTOMER_REPORTED_START
-    if re.search(r"告警|LINK DOWN|R_LOS", clause, re.I):
-        return TimeKind.ALARM_RAISED
-    if re.search(r"检测到|自动建单", near):
+    if re.search(r"restored|业务恢复|恢复正常|未见丢包|无丢包|主用正常", clause, re.I):
         return TimeKind.OBSERVATION
+    if re.search(r"since|down since|客户.*自", before, re.I):
+        return TimeKind.CUSTOMER_REPORTED_START
+    positive_alarm = re.sub(
+        r"(?:无|没有|未见|未发现)\s*(?:任何|相关)?\s*告警|no alarms?",
+        "",
+        clause,
+        flags=re.I,
+    )
+    positive_alarm = re.sub(r"查告警[：:]?", "", positive_alarm)
+    if re.search(r"告警|LINK DOWN|R_LOS", positive_alarm, re.I):
+        return TimeKind.ALARM_RAISED
     return TimeKind.OBSERVATION
+
+
+def _time_side(kind: TimeKind, text: str) -> str | None:
+    """只把有起止语义的时间送入对应要素，其余时间留在原文/事件。"""
+    if kind in {
+        TimeKind.CUSTOMER_CONFIRMED_RECOVERY,
+        TimeKind.ALARM_CLEARED,
+        TimeKind.REPAIR_COMPLETED,
+    }:
+        return "end"
+    if kind in {
+        TimeKind.CUSTOMER_REPORTED_START,
+        TimeKind.ALARM_RAISED,
+        TimeKind.BODY_TEXT_DATE,
+    }:
+        return "start"
+    if kind == TimeKind.OBSERVATION:
+        if re.search(
+            r"restored|恢复|正常|未见丢包|无丢包|(?:无|没有|未见|未发现)告警",
+            text,
+            re.I,
+        ):
+            return "end"
+        if re.search(r"检测到.*(?:不通|中断)", text):
+            return "start"
+    return None
 
 
 def text_times(
     text: str, record: str | None, offset: str | None, planned: bool = False
 ):
-    for m in TIME_RE.finditer(text):
-        raw = m.group().strip()
-        # 裸时刻只在同一日志/消息有日期锚点时归一；保留原文并披露日期补齐。
+    for m in _time_matches(text):
+        left, right = _time_bounds(text, m.start(), m.end())
+        zone = ZONE_RE.search(text, left, right)
+        start, end = m.start(), m.end()
+        if zone:
+            start, end = min(start, zone.start()), max(end, zone.end())
+            if text[end : end + 1] in {")", "）"}:
+                end += 1
+        raw = text[start:end].strip()
         default = None if re.search(r"未标注时区|时区未知", text) else offset
-        value = raw
-        note = None
-        if re.match(r"^\d{1,2}:\d{2}", raw) and record:
-            value = record[:10] + " " + raw
-            note = "仅有时刻，日期按同条记录/邮件头补齐；跨日需复核。"
+        note = (
+            "仅有时刻，日期按同条记录/邮件头补齐；跨日需复核。"
+            if re.fullmatch(CLOCK, m.group()) and record
+            else None
+        )
         try:
-            tv = parse_time(value, default)
-            if note and record and tv.as_datetime() and tv.as_datetime().tzinfo:
-                anchor = datetime.fromisoformat(record)
-                if anchor.tzinfo:
-                    local_date = (
-                        anchor.astimezone(tv.as_datetime().tzinfo).date().isoformat()
-                    )
-                    tv = parse_time(local_date + " " + raw, default)
+            tv = time_phrase(raw, default, record)
         except ValueError:
             tv = TimeValue(raw=raw)
-        tv = tv.model_copy(update={"raw": raw})
+        kind = _time_kind(text, m.start(), m.end(), planned)
+        clause = text[left:right]
+        if kind == TimeKind.CUSTOMER_CONFIRMED_RECOVERY and not re.search(
+            r"起.{0,4}(?:业务)?恢复|告警清除|恢复 UP", clause, re.I
+        ):
+            note = CONFIRMATION_TIME_NOTE
         if tv.iso or tv.placeholder:
-            yield tv, _time_kind(text, m.start(), m.end(), planned), note
+            yield tv, kind, note
+
+
+def conclusion_observations(observations, evidence):
+    """原始观测优先；引用独有事实仍保留，重复引用不增加结论证据。"""
+    by_id = {s.id: s for s in evidence}
+    observations = [o for o in observations if all(r in by_id for r in o.evidence_refs)]
+
+    def key(observation):
+        circuits = tuple(
+            sorted(set(re.findall(r"\bSYN-CKT-[\w-]+", observation.description)))
+        )
+        fact = (
+            (observation.metric, observation.value, observation.unit, circuits)
+            if observation.value is not None
+            else normalize(observation.description)
+        )
+        return observation.attribution, fact
+
+    originals = [
+        o
+        for o in observations
+        if all(
+            by_id[r].role != SpanRole.QUOTED and not by_id[r].derived_from
+            for r in o.evidence_refs
+        )
+    ]
+    selected = list(originals)
+    seen = {key(o) for o in originals}
+    for o in observations:
+        if any(by_id[r].derived_from for r in o.evidence_refs):
+            continue
+        if (
+            all(by_id[r].role == SpanRole.QUOTED for r in o.evidence_refs)
+            and key(o) not in seen
+        ):
+            selected.append(o)
+            seen.add(key(o))
+    return selected
 
 
 def _time_element(candidates, *, end=False, confirmation_refs=()):
@@ -250,7 +373,10 @@ def _time_element(candidates, *, end=False, confirmation_refs=()):
     viable = [
         c
         for c in candidates
-        if c.time_kind in primary and c.time.iso and not c.time.placeholder
+        if c.time_kind in primary
+        and c.time.iso
+        and not c.time.placeholder
+        and c.note != CONFIRMATION_TIME_NOTE
     ]
     if not viable and not end:
         viable = [
@@ -386,7 +512,7 @@ class RulesProvider:
             )
             kind = step_kind(text, log.action if log else "")
             trusted_original = span.role != SpanRole.QUOTED
-            if trusted_original and confirms_recovery(text):
+            if trusted_original and not span.derived_from and confirms_recovery(text):
                 confirmations.append(span.id)
             if key in field_time:
                 tv = parse_time(text, offset)
@@ -405,14 +531,20 @@ class RulesProvider:
                         evidence_refs=[span.id],
                     )
                 )
-            elif key not in {
-                "duration_returned",
-                "circuit_id",
-                "ticket_no",
-                "vendor",
-                "customer",
-                "bandwidth",
-            }:
+            elif (
+                part != "table"
+                and not (span.reading and span.reading.type == "table")
+                and key
+                not in {
+                    "duration_returned",
+                    "circuit_id",
+                    "ticket_no",
+                    "vendor",
+                    "customer",
+                    "bandwidth",
+                }
+            ):
+                time_cursor = 0
                 for tv, tk, note in text_times(
                     text, record, offset, kind == StepKind.PLANNED
                 ):
@@ -423,16 +555,28 @@ class RulesProvider:
                         and re.match(DATE, tv.raw)
                     ):
                         tk = TimeKind.BODY_TEXT_DATE
-                    dest = (
-                        times_end
-                        if tk
-                        in {
-                            TimeKind.CUSTOMER_CONFIRMED_RECOVERY,
-                            TimeKind.ALARM_CLEARED,
-                            TimeKind.REPAIR_COMPLETED,
-                        }
-                        else times_start
+                    match = next(iter(_time_matches(tv.raw)), None)
+                    source_match = next(
+                        (
+                            m
+                            for m in _time_matches(text)
+                            if match
+                            and m.start() >= time_cursor
+                            and m.group() == match.group()
+                        ),
+                        None,
                     )
+                    left, right = (
+                        _time_bounds(text, source_match.start(), source_match.end())
+                        if source_match
+                        else (0, len(text))
+                    )
+                    if source_match:
+                        time_cursor = source_match.end()
+                    side = _time_side(tk, text[left:right])
+                    if side is None:
+                        continue
+                    dest = times_end if side == "end" else times_start
                     refs = [span.id]
                     anchor_key = "occurred_at" if tk == TimeKind.ALARM_RAISED else None
                     anchor = field_spans.get(anchor_key)
@@ -453,7 +597,7 @@ class RulesProvider:
                             )
                             <= 86400
                         ):
-                            tv = parse_time(
+                            tv = time_phrase(
                                 at.iso[:10] + " " + tv.raw, offset
                             ).model_copy(update={"raw": tv.raw})
                             refs.append(anchor.id)
@@ -481,7 +625,12 @@ class RulesProvider:
                 if log.action in workflow_times and record:
                     dest = (
                         times_end
-                        if log.action in {"结单", "返单", "撤销"}
+                        if workflow_times[log.action]
+                        in {
+                            TimeKind.TICKET_CLOSED,
+                            TimeKind.TICKET_RETURNED,
+                            TimeKind.TICKET_CANCELLED,
+                        }
                         else times_start
                     )
                     dest.append(
@@ -534,7 +683,9 @@ class RulesProvider:
                     )
                 )
             if key in {"description", "alarm_title", "underlying_alarm"} or (
-                not key and METRIC.search(text)
+                not key
+                and METRIC.search(text)
+                and not re.search(r"责任认定[：:]|定责意见[：:]", text)
             ):
                 metric = (
                     "丢包率"
@@ -690,17 +841,18 @@ class RulesProvider:
         )
         actual_steps = [s for s in steps if not s.duplicate_of]
         actual_steps.sort(key=lambda s: s.time.iso if s.time and s.time.iso else "")
+        selected_observations = conclusion_observations(observations, ctx.evidence)
         phenomenon = PhenomenonElement(
-            status=Status.DOCUMENTED if observations else Status.UNKNOWN,
+            status=Status.DOCUMENTED if selected_observations else Status.UNKNOWN,
             value="；".join(
                 f"{ATTRIBUTION_LABELS_ZH[o.attribution]}：{o.description}"
-                for o in observations
+                for o in selected_observations
             )
-            if observations
+            if selected_observations
             else None,
             candidates=observations,
             evidence_refs=list(
-                dict.fromkeys(r for o in observations for r in o.evidence_refs)
+                dict.fromkeys(r for o in selected_observations for r in o.evidence_refs)
             ),
         )
         handling = HandlingProcessElement(

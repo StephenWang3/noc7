@@ -7,7 +7,9 @@ import re
 from ..extract.baseline import (
     cause_kind,
     chart_observation_text,
+    conclusion_observations,
     confirms_recovery,
+    time_phrase,
     usable_text,
 )
 from ..extract.types import QUALITY_REVIEW_THRESHOLD, Extraction, ExtractionContext
@@ -25,9 +27,8 @@ from ..schema import (
     TimeZoneSource,
     ValidationIssue,
 )
-from ..timeparse import parse_time
 
-VERSION = "1.0"
+VERSION = "1.1"
 
 
 def issue(code: IssueCode, message: str, refs=(), element=None) -> ValidationIssue:
@@ -165,7 +166,7 @@ def validate_extraction(ctx: ExtractionContext, data: Extraction) -> None:
                         if candidate.time.tz_source == TimeZoneSource.UNKNOWN
                         else ctx.bundle.manifest.default_timezone
                     )
-                    expected = parse_time(raw, offset)
+                    expected = time_phrase(raw, offset)
                     if expected.iso != candidate.time.iso:
                         errors.append(
                             issue(
@@ -305,11 +306,13 @@ def validate_extraction(ctx: ExtractionContext, data: Extraction) -> None:
                     )
                 )
         if name == ElementName.PHENOMENON:
+            selected_observations = conclusion_observations(el.candidates, ctx.evidence)
             grounded = "；".join(
                 f"{ATTRIBUTION_LABELS_ZH[c.attribution]}：{c.description}"
-                for c in el.candidates
+                for c in selected_observations
             )
-            if el.value != grounded:
+            expected_refs = {r for c in selected_observations for r in c.evidence_refs}
+            if el.value != grounded or set(el.evidence_refs) != expected_refs:
                 errors.append(
                     issue(
                         IssueCode.EVIDENCE_QUOTE_MISMATCH,
@@ -320,6 +323,42 @@ def validate_extraction(ctx: ExtractionContext, data: Extraction) -> None:
                 )
     if errors:
         raise ExtractionRejected(errors)
+
+
+def observation_scope_conflicts(observations):
+    """只有同指标的相反检查结果/不同范围读数才提示，来源不同本身不是冲突。"""
+    customers = [o for o in observations if o.attribution == Attribution.CUSTOMER]
+    network = [
+        o
+        for o in observations
+        if o.attribution in {Attribution.NOC_CHECK, Attribution.ALARM_SYSTEM}
+    ]
+    pairs = []
+    for customer in customers:
+        for check in network:
+            if customer.metric != check.metric:
+                continue
+            customer_loss = (
+                customer.metric == "丢包率"
+                and (customer.value is None or customer.value > 0)
+                and not re.search(
+                    r"无丢包|未见丢包|no packet loss", customer.description, re.I
+                )
+            )
+            network_no_loss = re.search(
+                r"无丢包|未见丢包|100 发 100 收|no packet loss", check.description, re.I
+            ) or (check.value == 0 and check.unit == "%")
+            latency_differs = (
+                customer.metric == "时延"
+                and customer.unit == check.unit
+                and customer.value is not None
+                and check.value is not None
+                and customer.value != check.value
+                and customer.scope != check.scope
+            )
+            if (customer_loss and network_no_loss) or latency_differs:
+                pairs.append((customer, check))
+    return pairs
 
 
 def check(ctx: ExtractionContext, data: Extraction) -> list[ValidationIssue]:
@@ -514,14 +553,18 @@ def check(ctx: ExtractionContext, data: Extraction) -> list[ValidationIssue]:
             limited,
             ElementName.END_TIME,
         )
-    obs = elements.phenomenon.candidates
-    if any(o.attribution == Attribution.CUSTOMER for o in obs) and any(
-        o.attribution in {Attribution.NOC_CHECK, Attribution.ALARM_SYSTEM} for o in obs
-    ):
+    obs = conclusion_observations(elements.phenomenon.candidates, ctx.evidence)
+    conflicting_observations = observation_scope_conflicts(obs)
+    if conflicting_observations:
         add(
             IssueCode.OBSERVATION_SCOPE_DIFFERS,
             "客户感知与网管观测来源、时刻或范围不同，分别保留。",
-            [r for o in obs for r in o.evidence_refs],
+            [
+                r
+                for pair in conflicting_observations
+                for o in pair
+                for r in o.evidence_refs
+            ],
             ElementName.PHENOMENON,
         )
     if elements.location.value is None:

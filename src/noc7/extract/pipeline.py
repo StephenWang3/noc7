@@ -87,7 +87,7 @@ def analyze_with_context(path, provider=None, *, registry=None):
         service_identity=data.service_identity,
         related_tickets=b.ticket.related_tickets,
         run=RunInfo(
-            pipeline_version="a1.1.0",
+            pipeline_version="a1.1.1",
             schema_version="1.0",
             provider=provider.name,
             rules_version=VERSION,

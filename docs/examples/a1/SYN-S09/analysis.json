@@ -1324,13 +1324,13 @@
   },
   "related_tickets": [],
   "run": {
-    "pipeline_version": "a1.1.0",
+    "pipeline_version": "a1.1.1",
     "schema_version": "1.0",
     "provider": "rules",
     "prompt_version": null,
-    "rules_version": "1.0",
+    "rules_version": "1.1",
     "bundle_sha256": "3b5a15345f1ced9d6c42edd2425ddbb95e2ebd58c990ab81b724eccd0302f21e",
-    "started_at": "2026-10-27T13:05:01.355443+00:00",
-    "finished_at": "2026-10-27T13:05:01.359313+00:00"
+    "started_at": "2026-10-27T13:35:08.854048+00:00",
+    "finished_at": "2026-10-27T13:35:08.859549+00:00"
   }
 }

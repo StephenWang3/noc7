@@ -72,9 +72,12 @@ def test_replay_roundtrip_binds_inputs(tmp_path):
         ReplayProvider(replay).extract(ctx)
 
 
-def test_nonexistent_evidence_is_rejected_and_failure_has_code():
+@pytest.mark.parametrize("element", ["end_time", "phenomenon"])
+def test_nonexistent_evidence_is_rejected_and_failure_has_code(element):
     ctx, data = context_and_data()
-    data["elements"]["end_time"]["evidence_refs"] = ["M99/forged"]
+    data["elements"][element]["evidence_refs"] = ["M99/forged"]
+    if element == "phenomenon":
+        data["elements"][element]["candidates"][0]["evidence_refs"] = ["M99/forged"]
     with pytest.raises(ExtractionRejected) as failure:
         validate_extraction(ctx, Extraction.model_validate(data))
     assert IssueCode.EVIDENCE_REF_MISSING in {i.code for i in failure.value.issues}
