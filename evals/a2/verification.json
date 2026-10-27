@@ -1,0 +1,151 @@
+{
+  "validation_scope": "仅合成材料；尚未用真实 PDF/EML 验证；未调用外部模型",
+  "versions": {
+    "rapidocr-onnxruntime": "1.4.4",
+    "onnxruntime": "1.31.1",
+    "pymupdf": "2.0",
+    "python-docx": "1.2.0",
+    "pillow": "13.0.0"
+  },
+  "materials": [
+    {
+      "bundle_id": "SYN-P02",
+      "material_id": "M03",
+      "sha256": "813910b0b9046533a2942c34e97160c7671aabd7d4ac83eb2ae0dafce4b95812",
+      "kind": "email_eml",
+      "status": "parsed",
+      "subtype": null,
+      "span_count": 3,
+      "located_span_count": 3,
+      "table_count": 0,
+      "issues": []
+    },
+    {
+      "bundle_id": "SYN-P03",
+      "material_id": "M04",
+      "sha256": "8bdfcbb8056e5a9cd1b0b0e1823402470fa6106a7788a1d8cd21d9829fca160e",
+      "kind": "docx",
+      "status": "parsed",
+      "subtype": null,
+      "span_count": 17,
+      "located_span_count": 17,
+      "table_count": 1,
+      "issues": [
+        "EMBEDDED_INSTRUCTION"
+      ]
+    },
+    {
+      "bundle_id": "SYN-P04",
+      "material_id": "M03",
+      "sha256": "0c9ff39c76325450d5c57c03ff0104e6bce3069a7f82429bdb200712fc10bae7",
+      "kind": "pdf",
+      "status": "parsed",
+      "subtype": null,
+      "span_count": 17,
+      "located_span_count": 17,
+      "table_count": 0,
+      "issues": []
+    },
+    {
+      "bundle_id": "SYN-S10",
+      "material_id": "M04",
+      "sha256": "14e8aab81fedd123427503b26961f4ddf4e2950fd99702cded3c304118a29b95",
+      "kind": "image",
+      "status": "parsed",
+      "subtype": "qos_chart",
+      "span_count": 61,
+      "located_span_count": 61,
+      "table_count": 0,
+      "issues": []
+    },
+    {
+      "bundle_id": "SYN-X01",
+      "material_id": "M03",
+      "sha256": "2cc36511053e9bf1ceff8a1fa0cb8cd062d1b5b24e53292c5037783ffd3a57d0",
+      "kind": "image",
+      "status": "needs_review",
+      "subtype": "document_composite",
+      "span_count": 48,
+      "located_span_count": 48,
+      "table_count": 1,
+      "issues": [
+        "MATERIAL_LOW_QUALITY"
+      ]
+    }
+  ],
+  "qos": {
+    "expected": {
+      "EF": [
+        1.4,
+        0.2,
+        0
+      ],
+      "AF41": [
+        3.1,
+        0.46,
+        0
+      ],
+      "AF31": [
+        6.2,
+        1.03,
+        0
+      ],
+      "AF21": [
+        9.6,
+        1.68,
+        0
+      ],
+      "AF11": [
+        14.3,
+        2.75,
+        0
+      ],
+      "BE": [
+        21.8,
+        4.76,
+        0
+      ]
+    },
+    "observed": {
+      "EF": [
+        1.4,
+        0.2,
+        0.0
+      ],
+      "AF41": [
+        3.1,
+        0.46,
+        0.0
+      ],
+      "AF31": [
+        6.2,
+        1.03,
+        0.0
+      ],
+      "AF21": [
+        9.6,
+        1.68,
+        0.0
+      ],
+      "AF11": [
+        14.3,
+        2.75,
+        0.0
+      ],
+      "BE": [
+        21.8,
+        4.76,
+        0.0
+      ]
+    },
+    "matched_values": 18,
+    "expected_values": 18,
+    "first_nonzero": "未测量，留空",
+    "timezone_shown": false
+  },
+  "tesseract_baseline": {
+    "status": "needs_review",
+    "observed": {},
+    "note": "未读出的统计留空；不将 OCR 的 218 自动改成 21.8"
+  }
+}

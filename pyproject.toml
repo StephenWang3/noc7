@@ -12,6 +12,7 @@ dependencies = [
     "pymupdf>=1.24",  # A2：PDF 文本层与页面渲染
     "python-docx>=1.1",  # A2：DOCX 段落与表格
     "pillow>=10.1",  # A2：图片读取与裁剪
+    "rapidocr-onnxruntime>=1.4.4,<2",  # A2：随包提供模型的离线中英文 OCR，见 ADR 0005
 ]
 
 [project.scripts]

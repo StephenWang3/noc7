@@ -54,3 +54,28 @@
 
 - 标准答案由编写合成样本的 agent 标注，**责任和原因的判断口径需要懂业务的人复核**；
 - `docs/IMPLEMENTATION_PLAN.md` 是早期输入文档，里面的工作日估算没有改（本次只按要求修改了 `ARCHITECTURE_OPTIONS.md`）。
+
+---
+
+## A2 附件（2026-10-27）
+
+### 做了什么
+
+- 基于 A0 的同一提交与数据格式，自动注册图片、PDF、DOCX、EML 和未知格式处理；无共享 schema 或样本修改。A1 可直接消费同一 `EvidenceSpan`。
+- 默认本地 RapidOCR：长图切片、图片类型识别、分类别曲线统计、文档区域与验收表。PDF 文本层 / 扫描 OCR、DOCX 段落 / 表格、EML MIME / 编码 / 引用 / 签名均保留定位。
+- 接入外发闸门，收紧为真实附件始终禁止外发；增加像素哈希回放、显式启用的图片 JSON 服务与 MiniMax 要求的限流策略。
+- 新增独立命令 `python -m noc7.parsers.attachments`，不改 A1 的分析入口。记录失败、低质量、内嵌指令和未覆盖的内嵌附件，不静默跳过。
+
+### 遇到的问题与取舍
+
+- Tesseract 在 S10 的小字体表格中漏小数点、混淆类别；保留为基线，默认用可离线运行且随包携带模型的 RapidOCR。
+- 当前没有可靠曲线像素测量：`first_nonzero` 留空，不能把 gold 中的 `02:12` 写入代码。照片含义与历史交付材料关联保留人工复核。
+- 现有定位器不表示 EML 子附件页码；先列清单、报待复核，后续由导入层登记为独立材料。不伪造材料编号，不写出邮件里的任意文件名。
+- 曾误判终端显示的 EML 换行；逐字节确认 P02 为正常 CRLF，纠正测试，未改原件。
+
+### 可引用的结果与边界
+
+- S10 六类、18 个 Max / Avg / Min 数值全部相符；X01 四个标题区域和一张验收表可定位。这里只能说明合成样本效果，不能作为总体准确率。
+- 详细数据、样本哈希与库版本见 `evals/a2/verification.json`，用 `uv run python scripts/check_a2.py --compare-tesseract` 复现；只做主验收时可去掉可选对比参数。
+- 新增测试覆盖扫描/旋转/加密/损坏 PDF、低质量图片、DOCX 嵌入图、EML 编码和 MIME、闸门与限流；完整验证命令见 [A2 说明](../A2_ATTACHMENTS.md)。
+- **真实 PDF / EML 尚未验证，外部服务只做模拟 HTTP 测试，内嵌附件递归解析和曲线首次非零未实现。** 细节见 [验收与答辩记录](a2-validation.md) 和 [ADR 0005](../decisions/0005-attachment-parsing-and-local-ocr.md)。
