@@ -58,6 +58,8 @@ spans = [span for output in outputs for span in output.spans]
 
 EML 内嵌 PDF / 图片、DOCX 嵌入图像等尚未递归解析，会报 `MATERIAL_UNSUPPORTED`，保留正文并标 `needs_review`。须在导入阶段把原件单独登记到清单；解析器不改清单、不写出附件、不伪造跨材料定位。邮件引用切分不能覆盖所有客户端的转发版式。
 
+EML 普通行恢复为当前消息的 `original`，单独 `From:` 不开启引用，连续且含发件人的不同邮件头才作为转发头；落款关键词仅整行匹配且不延续到后续普通行。当前正文与落款标签的消息索引为 0，引用分组从 1 起，HTML 块引用的表格和正文共享分组。PDF 若触发 `EgressBlocked`，拒绝会传播到注册表，整份材料为 `failed`，默认 CLI 退出码为 1；一般单页 OCR 故障仍保留其他页证据并待复核。
+
 ## 回放与替换提供方
 
 接口见 `noc7.ocr.base`：OCR 返回文字、像素 bbox 和分数；视觉返回图片类别与区域观测。调用经过 `read_layout` / `describe_image`，检查闸门、区域边界与曲线统计合法性。

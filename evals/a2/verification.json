@@ -15,8 +15,8 @@
       "kind": "email_eml",
       "status": "parsed",
       "subtype": null,
-      "span_count": 3,
-      "located_span_count": 3,
+      "span_count": 4,
+      "located_span_count": 4,
       "table_count": 0,
       "issues": []
     },

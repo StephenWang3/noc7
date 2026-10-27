@@ -4,6 +4,7 @@ from PIL import Image
 import pymupdf
 
 from ...ocr import RapidOCRLayout
+from ...providers import EgressBlocked
 from ...providers.attachment_models import read_layout
 from ...schema.evidence import MaterialKind, PageLocator, SpanRole, TableReading
 from ...schema.issues import IssueCode
@@ -58,6 +59,8 @@ class PDFParser:
                             issues.append(issue(IssueCode.MATERIAL_LOW_QUALITY, f"PDF 第 {p} 页未识别到文字，可能为空白或扫描质量不足"))
                         if blocks and page.get_images():
                             review = True  # 图像区域可能还包含无法由 OCR 表达的照片/曲线。
+                    except EgressBlocked:
+                        raise
                     except Exception as exc:
                         review = True
                         issues.append(issue(IssueCode.MATERIAL_PARSE_FAILED, f"PDF 第 {p} 页 OCR 失败：{type(exc).__name__}，其他页证据已保留"))
