@@ -210,6 +210,12 @@ def build_parser() -> argparse.ArgumentParser:
     ap.add_argument("--version", action="version", version=f"noc7 {__version__}")
     sub = ap.add_subparsers(dest="cmd", required=True)
 
+    p = sub.add_parser("local-batch", help="仅在本机批量分析顶层工单包，生成逐单索引与脱敏统计")
+    p.add_argument("root", type=Path)
+    p.add_argument("--out", type=Path, required=True, help="新的仓库外输出目录")
+    p.add_argument("--expected-count", type=int)
+    p.set_defaults(func=cmd_local_batch)
+
     p = sub.add_parser("analyze", help="分析工单包并生成 JSON、Markdown、HTML 报告")
     p.add_argument("paths", nargs="*", type=Path, help="工单包或包含多个工单包的目录")
     p.add_argument("--out", type=Path, default=Path("var/reports"))
@@ -256,6 +262,22 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--bundles", type=Path, default=DEFAULT_BUNDLES)
     p.set_defaults(func=cmd_gold_check)
     return ap
+
+
+def cmd_local_batch(args: argparse.Namespace) -> int:
+    from .batch import run_local_batch
+
+    try:
+        summary = run_local_batch(
+            args.root, args.out, expected_count=args.expected_count,
+            progress=lambda alias, status: print(f"{alias}：{'已生成' if status == 'ok' else '失败，见本机记录'}", flush=True),
+        )
+    except (ValueError, OSError):
+        print("批次预检/写入失败；请检查输入目录、数量，以及输出是否为新的仓库外目录。", file=sys.stderr)
+        return 1
+    failed = sum(c["status"] != "ok" for c in summary["cases"])
+    print(f"完成 {len(summary['cases']) - failed}，失败 {failed}；请打开输出目录中的 index.html。")
+    return 1 if failed else 0
 
 
 def main(argv: list[str] | None = None) -> int:

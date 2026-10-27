@@ -40,7 +40,9 @@ def analyze_with_context(path, provider=None, *, registry=None):
         )
         spans.extend(
             output.spans
-            if output.status == "parsed"
+            # 材料完整性与片段可用性分开，局部未覆盖不抹去已可靠读取的正文。
+            # failed/unsupported 的残留片段仍一律隔离。
+            if output.status in {"parsed", "needs_review"}
             else [s.model_copy(update={"needs_review": True}) for s in output.spans]
         )
         issues.extend(output.issues)
@@ -87,7 +89,7 @@ def analyze_with_context(path, provider=None, *, registry=None):
         service_identity=data.service_identity,
         related_tickets=b.ticket.related_tickets,
         run=RunInfo(
-            pipeline_version="a1.1.1",
+            pipeline_version="integration.1.0",
             schema_version="1.0",
             provider=provider.name,
             rules_version=VERSION,

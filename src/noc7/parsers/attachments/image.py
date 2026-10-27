@@ -193,6 +193,10 @@ class ImageParser:
         legend = set(re.findall(r"\b(?:EF|AF[1-4][1-3]|BE|CS[0-7])\b", " ".join(b.text for b in layout.blocks), re.I))
         read_series = {s.series for s in spans if isinstance(s.reading, ChartReading) for s in s.reading.series}
         incomplete = subtype is ImageSubtype.QOS_CHART and (not read_series or not {s.upper() for s in legend} <= read_series)
+        # 高 OCR 分数不能证明照片/历史交付材料与本次故障相关。
+        # 显式隔离这些片段，不依赖流水线按整件状态隐式隔离。
+        if subtype in (ImageSubtype.OTHER, ImageSubtype.SITE_PHOTO, ImageSubtype.DOCUMENT_COMPOSITE):
+            spans = [s.model_copy(update={"needs_review": True}) for s in spans]
         return finish(ctx, self.name, spans, subtype=subtype,
                       review=subtype in (ImageSubtype.OTHER, ImageSubtype.SITE_PHOTO) or incomplete,
                       note=" ".join(notes))

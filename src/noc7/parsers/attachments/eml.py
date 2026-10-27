@@ -72,20 +72,25 @@ class EMLParser:
             review = True
             issues.append(issue(IssueCode.MATERIAL_LOW_QUALITY, "EML 使用字面量转义换行，兼容解码后读取；原文件未修改，请复核"))
         message = BytesParser(policy=policy.default).parsebytes(data)
+        uncertain_message = review or bool(message.defects)
         header = "\n".join(f"{key}: {message[key]}" for key in ("From", "To", "Cc", "Subject", "Date", "Message-ID") if message[key])
         if not header:
             raise ValueError("没有可识别邮件头，不是有效 EML")
         spans.append(span(ctx, "msg:0:header", header, EmailMessageLocator(message_index=0, part="header"), self.name))
         # get_body 优先纯文本，避免 multipart/alternative 的 HTML 副本算成另一份证据。
         body = message.get_body(preferencelist=("plain", "html"))
+        uncertain_body = False
         if body is not None:
             try:
                 text = body.get_content()
             except (LookupError, UnicodeError):
                 text = body.get_payload(decode=True).decode("utf-8", errors="replace")
                 review = True
+                uncertain_body = True
             if "\ufffd" in text:
                 review = True
+                uncertain_body = True
+            uncertain_body = uncertain_body or bool(body.defects)
             lines = [(line, None) for line in text.splitlines()]
             tables = []
             if body.get_content_type() == "text/html":
@@ -143,5 +148,9 @@ class EMLParser:
                          role=SpanRole.DERIVED_SUMMARY, needs_review=True)
                 spans.append(s)
                 issues.append(issue(IssueCode.MATERIAL_UNSUPPORTED, "EML 内嵌附件需登记到工单包后单独解析：" + description, [s.id]))
+        if uncertain_message or uncertain_body:
+            review = True
+            spans = [s.model_copy(update={"needs_review": True}) if uncertain_message or
+                     (s.locator.part in {"body", "table", "signature"}) else s for s in spans]
         return finish(ctx, self.name, spans, issues=issues, review=review,
-                      note="保留邮件日期与编码头；alternative 正文只取一种；MIME 附件不写出、不执行。PDF/EML 验证样本均为合成。")
+                      note="保留邮件日期与编码头；alternative 正文只取一种；MIME 附件不写出、不执行，未覆盖部件需复核。")

@@ -30,11 +30,15 @@ uv run noc7 schema export                # 代码改动后重新导出 JSON Sche
 uv run noc7 analyze                      # 分析全部合成包，生成 JSON/Markdown/HTML
 uv run noc7 analyze --save-replay        # 同时录制离线回放快照
 uv run noc7 analyze --provider replay --replay var/reports --out var/replayed
+uv run noc7 local-batch ~/.noc7/real --out ~/.noc7/integration-next --expected-count 15  # 仓库外新批次
+uv run python scripts/check_integration.py  # 默认全链路对照合成 gold，有差异则退出 1
 uv run noc7 bundle rehash <工单包目录>    # 编写合成样本时重算清单里的哈希
 uv run --group fixtures python scripts/make_fixture_assets.py   # 重新生成合成附件（PNG/PDF/DOCX）
 uv run python -m noc7.parsers.attachments fixtures/bundles/SYN-S10 --out var/a2/s10.json  # 独立解析附件
 uv run python scripts/check_a2.py          # 复现合成附件验收，不调用外部模型
 ```
+
+合并后的全量测试、本机 15 张真实工单统计和待核实项见 [联调问题清单](docs/INTEGRATION_ISSUES.md)。真实报告仅在本机，不进仓库；测试通过与语义提取正确分别陈述。
 
 ## 目录
 
