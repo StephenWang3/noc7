@@ -25,53 +25,103 @@ def normalized(text: str) -> str:
     return re.sub(r"[^\w%+.\-]+", "", text).replace("_", "")
 
 
-NEGATIVE = re.compile(
-    r"未|没有|尚无|并无|不是|不属|否认|排除|无|非|\b(?:not|no|without|never)\b", re.I
+# 向前管到当前小句的否定。单字「无 / 非」和「排除」不在这里，避免「无线」「排除故障」。
+_FORWARD = re.compile(
+    r"没有|尚无|并无|不是|不属|否认|并未|并非|未(?![来知])|\b(?:not|no|without|never)\b",
+    re.I,
 )
+# 紧贴要点之后，或紧挨逗号的下一小句，才算否定该要点。
+_AFTER = re.compile(r"^(?:已|被|并|所)?(?:排除|否认)|^(?:并)?(?:不是|不属)|^(?:没有|并未|并非)")
+
+
+def _folded(text: str) -> str:
+    return unicodedata.normalize("NFKC", text).casefold().replace("−", "-")
+
+
+def _kept_indexes(folded: str) -> list[int]:
+    return [
+        i
+        for i, ch in enumerate(folded)
+        if ch != "_" and re.fullmatch(r"[\w%+.\-]", ch)
+    ]
+
+
+def _tight_before(before: str) -> bool:
+    compact = re.sub(r"\s+", "", before)
+    if compact.endswith("排除") or compact.endswith("否认"):
+        return True
+    if compact.endswith(("无", "非")):
+        prev = compact[-2:-1]
+        return not prev or re.fullmatch(r"[\w]", prev) is None
+    return False
+
+
+def _negated(text: str, start: int, end: int) -> bool:
+    """否定只覆盖紧贴要点的词，以及要点之后、逗号之后的同一小句。"""
+    ranges, cursor = [], 0
+    for mark in re.finditer(r"[，,、]", text):
+        ranges.append((cursor, mark.start()))
+        cursor = mark.end()
+    ranges.append((cursor, len(text)))
+    for i, (left, right) in enumerate(ranges):
+        if not (left <= start < right):
+            continue
+        before, after = text[left:start], text[end:right]
+        if _FORWARD.search(before) or _tight_before(before):
+            return True
+        if _AFTER.match(re.sub(r"[\s，,、]+", "", after)):
+            return True
+        if re.search(r"\b(?:not|no|without|never)\b", after, re.I):
+            return True
+        if i + 1 < len(ranges):
+            nxt = re.sub(r"\s+", "", text[ranges[i + 1][0] : ranges[i + 1][1]])
+            if _AFTER.match(nxt):
+                return True
+        return False
+    return False
+
+
+def _spans(folded: str, phrase: str):
+    """英文词边界在去掉空格之前判断。返回 (原文起、止、规范化起点)。"""
+    if re.search(r"[a-z]", phrase, re.I):
+        term = _folded(phrase).strip()
+        pattern = r"\s*".join(re.escape(p) for p in term.split())
+        if re.match(r"[a-z0-9_]", term):
+            pattern = r"(?<![a-z0-9_])" + pattern
+        if re.search(r"[a-z0-9_]$", term):
+            pattern += r"(?![a-z0-9_])"
+        idxs = _kept_indexes(folded)
+        return [
+            (m.start(), m.end(), sum(1 for i in idxs if i < m.start()))
+            for m in re.finditer(pattern, folded)
+        ]
+    needle = normalized(phrase)
+    if not needle:
+        return []
+    norm, idxs = normalized(folded), _kept_indexes(folded)
+    spans = []
+    for m in re.finditer(re.escape(needle), norm):
+        if (
+            needle[0].isdigit()
+            and m.start()
+            and norm[m.start() - 1] in "0123456789.+-"
+        ):
+            continue
+        if needle[-1].isdigit() and m.end() < len(norm) and norm[m.end()] in "0123456789.":
+            continue
+        spans.append((idxs[m.start()], idxs[m.end() - 1] + 1, m.start()))
+    return spans
 
 
 def positions(text, phrase):
     """局部否定、数值单位与英文标识边界优先；模糊改写留待判定。"""
-    out = []
-    offset = 0
-    for clause in re.split(r"[。；;\n]", text):
-        t = normalized(clause)
-        needle = normalized(phrase)
-        if re.search(r"[a-z]", phrase, re.I):
-            original = unicodedata.normalize("NFKC", clause).casefold()
-            term = unicodedata.normalize("NFKC", phrase).casefold().strip()
-            pattern = r"\s*".join(re.escape(p) for p in term.split())
-            if re.match(r"[a-z0-9_]", term):
-                pattern = r"(?<![a-z0-9_])" + pattern
-            if re.search(r"[a-z0-9_]$", term):
-                pattern += r"(?![a-z0-9_])"
-            starts = [
-                len(normalized(original[: m.start()]))
-                for m in re.finditer(pattern, original)
-            ]
-        else:
-            starts = []
-            for m in re.finditer(re.escape(needle), t):
-                if (
-                    needle[0].isdigit()
-                    and m.start()
-                    and t[m.start() - 1] in "0123456789.+-"
-                ):
-                    continue
-                if (
-                    needle[-1].isdigit()
-                    and m.end() < len(t)
-                    and t[m.end()] in "0123456789."
-                ):
-                    continue
-                starts.append(m.start())
-        for start in starts:
-            prefix = t[max(0, start - 16) : start]
-            if not NEGATIVE.search(prefix) and not re.search(
-                r"(?:no|not|without|never)$", prefix, re.I
-            ):
-                out.append(offset + start)
-        offset += len(t) + 1
+    out, offset = [], 0
+    for sentence in re.split(r"[。；;\n]", text):
+        folded = _folded(sentence)
+        for start, end, norm_start in _spans(folded, phrase):
+            if not _negated(folded, start, end):
+                out.append(offset + norm_start)
+        offset += len(normalized(sentence)) + 1
     return out
 
 

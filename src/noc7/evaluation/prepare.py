@@ -21,7 +21,10 @@ from .reference import (
     verify_sources,
 )
 
-CLOSED = re.compile(r"^(?:回访结单|结单签收|本地关单|结单归档|工单结案|结案|结单)$")
+# 销障是实际写下结案意见的动作，早于结单签收和回访结单。截止取其中最早的一条。
+CLOSED = re.compile(
+    r"^(?:回访结单|结单签收|本地关单|结单归档|工单结案|结案|结单|销障)$"
+)
 FINAL = re.compile(r"故障处理报告|故障报告|结案结论|最终结论|Failure\s+Report", re.I)
 
 

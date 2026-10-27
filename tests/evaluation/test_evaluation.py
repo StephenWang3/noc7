@@ -245,6 +245,26 @@ def test_negation_unknown_and_candidates_are_not_hits(sample):
     f.contradicts = ["光缆断裂"]
     assert compare(f, SimpleNamespace(value="光缆断裂")) == "conflict"
     assert compare(f, SimpleNamespace(value="未发现光缆断裂")) == "pending"
+    # 否定落在要点上时不能算一致；前缀里无关的「无 / 排除」也不能把引文里的要点否决掉。
+    point = [KeyPoint(any_of=["模块失效"])]
+    assert not matches_points("is not a module failure", [KeyPoint(any_of=["module failure"])])
+    assert not matches_points(
+        "did not see module failure", [KeyPoint(any_of=["module failure"])]
+    )
+    assert not matches_points("模块失效已排除。", point)
+    assert not matches_points("模块失效，已排除。", point)
+    assert matches_points("无线侧模块失效。", point)
+    assert matches_points("排除故障后业务恢复。", [KeyPoint(any_of=["业务恢复"])])
+    quote = "该连接便在无需人工干预的情况下恢复了正常。"
+    assert matches_points(quote, [KeyPoint(any_of=["无需人工干预"])])
+    assert matches_points(quote, [KeyPoint(any_of=["恢复了正常"])])
+    assert compare(f, SimpleNamespace(value="模块失效已排除。")) == "pending"
+    assert compare(f, SimpleNamespace(value="无线侧模块失效。")) == "agree"
+    english = f.model_copy(
+        update={"key_points": [KeyPoint(any_of=["module failure"])], "quote": "module failure"}
+    )
+    assert compare(english, SimpleNamespace(value="is not a module failure")) == "pending"
+    assert compare(english, SimpleNamespace(value="did not see module failure")) == "pending"
 
 
 def test_time_semantics_timezone_and_precision():
@@ -271,6 +291,73 @@ def test_time_semantics_timezone_and_precision():
     assert compare(f, el) == "agree"
     el.value = parse_time("2026-01-01 08:01 GMT+8")
     assert compare(f, el) == "conflict"
+
+
+def test_date_only_reference_uses_ticket_timezone():
+    f = Fact(
+        element="end_time",
+        source_id="H1",
+        quote="2026-01-01 当天恢复",
+        expected_time={"iso": "2026-01-01"},
+        time_kind="recovery_field",
+    )
+    chosen = SimpleNamespace(id="C1", time_kind="recovery_field")
+    late = SimpleNamespace(
+        value=parse_time("2026-01-01 20:00:00 UTC"),
+        selected="C1",
+        candidates=[chosen],
+    )
+    # 工单口径 +08:00 下，UTC 20:00 已是次日 04:00，不能按 ISO 前 10 位算同一天。
+    assert compare(f, late, "+08:00") == "conflict"
+    previous = SimpleNamespace(
+        value=parse_time("2025-12-31 20:00:00 UTC"),
+        selected="C1",
+        candidates=[chosen],
+    )
+    assert compare(f, previous, "+08:00") == "agree"
+    assert compare(f, late, None) == "pending"
+    naive = SimpleNamespace(
+        value=parse_time("2026-01-01 20:00:00"),
+        selected="C1",
+        candidates=[chosen],
+    )
+    assert compare(f, naive, "+08:00") == "pending"
+
+
+def test_xiaozhang_is_the_earliest_cutoff(sample):
+    tmp, root, selection, _ = sample
+    log = json.loads((root / "process_log.json").read_text())
+    log["entries"].extend(
+        [
+            dict(
+                seq=6,
+                recorded_at="2026-01-01 00:30:00",
+                action="销障",
+                content="办理销障。",
+            ),
+            dict(
+                seq=7,
+                recorded_at="2026-01-01 00:40:00",
+                action="信息追加",
+                content="销障之后的补充记录。",
+            ),
+        ]
+    )
+    dump(root / "process_log.json", log)
+    manifest = json.loads((root / "manifest.json").read_text())
+    raw = (root / "process_log.json").read_bytes()
+    manifest["materials"][1].update(
+        sha256=hashlib.sha256(raw).hexdigest(), size_bytes=len(raw)
+    )
+    dump(root / "manifest.json", manifest)
+    cases = prepare(selection, tmp / "dataset")
+    assert cases[0]["status"] == "ok"
+    assert cases[0]["cutoff"].startswith("2026-01-01T00:30:00")
+    assert [e.seq for e in load_bundle(tmp / "dataset/inputs/E01").process_log.entries] == [
+        1
+    ]
+    reasons = {d["where"]: d["reason"] for d in cases[0]["decisions"]}
+    assert reasons["log:6"] == "after_cutoff" and reasons["log:7"] == "after_cutoff"
 
 
 def test_process_order_and_source_conflict(sample):

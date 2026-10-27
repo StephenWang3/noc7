@@ -5,7 +5,7 @@ from __future__ import annotations
 import hashlib
 import traceback
 from collections import Counter, defaultdict
-from datetime import datetime
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
 from ..extract import analyze
@@ -32,7 +32,33 @@ LABELS = {
 }
 
 
-def compare_time(fact, element):
+def _zone(offset: str | None):
+    if not offset or len(offset) != 6 or offset[0] not in "+-" or offset[3] != ":":
+        return None
+    try:
+        sign = 1 if offset[0] == "+" else -1
+        return timezone(
+            sign * timedelta(hours=int(offset[1:3]), minutes=int(offset[4:6]))
+        )
+    except ValueError:
+        return None
+
+
+def _local_date(iso: str, default_timezone: str | None):
+    """日期精度按工单时区折到当地日期。只有日期的值本身就是日期。"""
+    if len(iso) == 10:
+        return date.fromisoformat(iso)
+    try:
+        moment = datetime.fromisoformat(iso)
+    except ValueError:
+        return None
+    zone = _zone(default_timezone)
+    if moment.utcoffset() is None or zone is None:
+        return None
+    return moment.astimezone(zone).date()
+
+
+def compare_time(fact, element, default_timezone=None):
     value = element.value
     if value is None or not value.iso:
         return "missing"
@@ -42,7 +68,10 @@ def compare_time(fact, element):
     want = fact.expected_time.iso
     got = value.iso
     if len(want) == 10:
-        return "agree" if got[:10] == want else "conflict"
+        left, right = _local_date(want, default_timezone), _local_date(got, default_timezone)
+        if left is None or right is None:
+            return "pending"
+        return "agree" if left == right else "conflict"
     if len(got) == 10 or value.precision not in {"second", "minute"}:
         return "pending"
     a, b = datetime.fromisoformat(want), datetime.fromisoformat(got)
@@ -61,7 +90,7 @@ def compare_time(fact, element):
     )
 
 
-def compare(fact: Fact, element):
+def compare(fact: Fact, element, default_timezone=None):
     if not element.value:
         return "missing"
     if getattr(element, "status", "documented") not in fact.allowed_statuses:
@@ -81,7 +110,7 @@ def compare(fact: Fact, element):
         if kind != fact.value_kind:
             return "conflict"
     if fact.expected_time:
-        return compare_time(fact, element)
+        return compare_time(fact, element, default_timezone)
     if fact.element == ElementName.HANDLING_PROCESS:
         text = "\n".join(
             " ".join(filter(None, [s.actor, s.action, s.target, s.result]))
@@ -176,12 +205,8 @@ def score(dataset: Path, results: Path, out: Path):
                 f"SYN-EVAL-{c['alias']}",
             }:
                 raise ValueError("分析结果与隔离输入不一致")
-            expected = {
-                m["id"]: m
-                for m in read_json(dataset / "inputs" / c["alias"] / "manifest.json")[
-                    "materials"
-                ]
-            }
+            manifest = read_json(dataset / "inputs" / c["alias"] / "manifest.json")
+            expected = {m["id"]: m for m in manifest["materials"]}
             if {m.id: m.sha256 for m in r.materials} != {
                 k: v["sha256"] for k, v in expected.items()
             }:
@@ -207,7 +232,11 @@ def score(dataset: Path, results: Path, out: Path):
                     if f.conflict
                     else "reference_only"
                     if not c["support"][i]
-                    else compare(f, getattr(r.elements, f.element.value))
+                    else compare(
+                        f,
+                        getattr(r.elements, f.element.value),
+                        manifest.get("default_timezone"),
+                    )
                 )
                 kind = sources[f.source_id]["kind"]
                 counts[status] += 1
