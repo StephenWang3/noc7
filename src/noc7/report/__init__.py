@@ -15,6 +15,12 @@ from ..schema import (
     ElementStatus,
     TimeValue,
 )
+from .company import (
+    ReportProfile,
+    load_report_profile,
+    render_company_html,
+    write_company_docx,
+)
 
 TEMPLATE_VERSION = "1.0"
 ROOT = Path(__file__).parent
@@ -157,20 +163,39 @@ def render(
     )
 
 
+OUTPUT_NAMES = (
+    "analysis.json",
+    "report.md",
+    "report.html",
+    "report.css",
+    "company_report.html",
+    "company_report.docx",
+)
+
+
 def write_reports(
-    result: AnalysisResult, directory: Path, *, report_type: str = "stage"
+    result: AnalysisResult,
+    directory: Path,
+    *,
+    report_type: str = "stage",
+    profile: ReportProfile | None = None,
 ) -> None:
     from ..extract.storage import ensure_output_allowed
 
     ensure_output_allowed(result.data_class, directory)
-    for name in ("analysis.json", "report.md", "report.html", "report.css"):
+    for name in OUTPUT_NAMES:
         ensure_output_allowed(result.data_class, directory / name)
+    profile = profile if profile is not None else load_report_profile()
     outputs = {
         f"report.{fmt}": render(result, format=fmt, report_type=report_type)
         for fmt in ("md", "html")
     }
     outputs["analysis.json"] = result.model_dump_json(indent=2) + "\n"
     outputs["report.css"] = (ROOT / "report.css").read_text(encoding="utf-8")
+    # 公司格式与审核报告同源：同一份校验后的结果，不重新抽取。
+    checked = AnalysisResult.model_validate(result.model_dump(mode="json"))
+    outputs["company_report.html"] = render_company_html(checked, profile)
     directory.mkdir(parents=True, exist_ok=True)
     for name, content in outputs.items():
         (directory / name).write_text(content, encoding="utf-8")
+    write_company_docx(checked, directory / "company_report.docx", profile)

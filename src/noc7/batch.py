@@ -107,7 +107,8 @@ def _index(rows):
         alias = row["alias"]
         identity = html.escape(row.get("ticket_ref", "输入校验失败"))
         if row["status"] == "ok":
-            links = f'<a href="{alias}/report.html">查看报告</a> · <a href="{alias}/analysis.json">七要素 JSON</a>'
+            links = (f'<a href="{alias}/report.html">查看报告</a> · <a href="{alias}/analysis.json">七要素 JSON</a>'
+                     f' · <a href="{alias}/company_report.html">公司格式预览</a> · <a href="{alias}/company_report.docx">公司格式 Word</a>')
         else:
             links = f'<a href="{alias}/failure.json">查看本机失败记录</a>'
         lines.append(f"<tr><td>{alias}</td><td>{identity}</td><td>{links}</td></tr>")

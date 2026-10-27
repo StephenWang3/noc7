@@ -242,7 +242,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--expected-count", type=int)
     p.set_defaults(func=cmd_local_batch)
 
-    p = sub.add_parser("analyze", help="分析工单包并生成 JSON、Markdown、HTML 报告")
+    p = sub.add_parser("analyze", help="分析工单包并生成 JSON、Markdown、HTML 审核报告和公司格式 Word")
     p.add_argument("paths", nargs="*", type=Path, help="工单包或包含多个工单包的目录")
     p.add_argument("--out", type=Path, default=Path("var/reports"))
     p.add_argument("--provider", choices=("rules", "replay", "llm"), default="rules")
