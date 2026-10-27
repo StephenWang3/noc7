@@ -17,6 +17,7 @@ global.fetch=async(url, options)=>{
   if(p.endsWith('/getNetworkFaultInfo'))data={sheetNo:'FAKE-VOID',sheetStatus:'作废',attId:mode==='networkFiles'?'fake-attachment':'无'};
   else if(p.endsWith('/getNetworkFaultLog'))data=[{actionName:'作废',hasAttachments:false,attachments:null,hasFeedbackHistory:false}];
   else if(p.endsWith('/getEsbProcessInfo'))data={faultNo:'FAKE-001'};
+  else if(p.endsWith('/faultReport/list'))data=[{id:'FAKE-REPORT',reportJson:'{}'}];
   else if(p.endsWith('/emailLog')||p.endsWith('/log'))data=[{nodeCnName:'信息追加',remark:'虚构',hasAttachments:false,
     ...(mode==='mailIds'?{emailIds:['FAKE-A;FAKE-B','FAKE-A'],emailId:'FAKE-C'}:{})}];
   else if(p.endsWith('/findEmailById'))data={emailId:JSON.parse(options.body).emailId,textContent:'虚构邮件'};
@@ -64,5 +65,13 @@ async function finish(c){for(let i=0;i<200;i++){if(c.status().status!=='running'
   mode='mailIds';c=createNocCollector();c.start({kind:'export',row:{id:'fake',orderId:'fake',dataType:'esb'}});
   r=await finish(c);assert.equal(r.status,'done');
   assert.deepEqual(r.result.emails.map(e=>e.emailId),['FAKE-A','FAKE-B','FAKE-C']);
+  mode='normal';c=createNocCollector();const refStart=calls.length;
+  for(const suffix of ['/generateFaultReportContent','/saveFaultReport','/downloadFaultReport','/uploadFaultReportToWoyunwei'])
+    assert.throws(()=>c.check(esb+suffix,'POST'));
+  c.start({kind:'references',row:{id:'fake',orderId:'fake',dataType:'esb'}});
+  r=await finish(c);assert.equal(r.status,'done');assert.equal(r.result.kind,'references');
+  assert.equal(r.result.reports.length,1);assert.equal(r.result.human_verified,false);
+  assert.deepEqual(calls.slice(refStart).map(x=>x.url.pathname),[esb+'/getEsbProcessInfo',esb+'/faultReport/list']);
+  assert(calls.slice(refStart).every(x=>x.options.method==='GET'));
   console.log('浏览器采集边界离线验证通过');
 })().catch(e=>{console.error(e);process.exitCode=1});

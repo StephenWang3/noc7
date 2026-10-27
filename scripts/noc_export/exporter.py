@@ -346,6 +346,16 @@ def accept_capture(envelope: dict, root: Path) -> dict:
     if envelope.get('status') != 'done':
         raise ValueError('没有已完成的采集结果')
     c = envelope['result']
+    if c['kind'] == 'references':
+        # 参考不发布为工单材料，不改变任何既有包或打包身份。
+        if c.get('capture_version') != 1 or not c.get('captured_at') or not isinstance(c.get('reports'), list):
+            raise ValueError('参考记录采集不完整')
+        ident = hashlib.sha256((str(c['row']['id']) + '\n' + c['captured_at']).encode()).hexdigest()[:20]
+        path = root / 'references' / (ident + '.json')
+        if path.exists() and json.loads(path.read_text()) != c:
+            raise ValueError('参考留档已存在且内容不同')
+        dump(path, c)
+        return {'kind': 'references', 'reports': len(c['reports']), 'human_verified': False}
     if c['kind'] == 'discovery':
         ident = hashlib.sha256(str(c['row']['id']).encode()).hexdigest()[:20]
         dump(root / 'discoveries' / (ident + '.json'), c)

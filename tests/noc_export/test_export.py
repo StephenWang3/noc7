@@ -179,3 +179,17 @@ def test_replay_compares_output_and_packager_version_changes_identity(tmp_path, 
     newer = exporter.publish(c, tmp_path)
     assert newer != original
     assert '修改后' in (newer / 'emails/001.html').read_text()
+
+
+def test_reference_archive_is_not_a_bundle(tmp_path):
+    record={'capture_version':1,'kind':'references','row':{'id':'FAKE'},'fault_no':'FAKE',
+            'captured_at':'2026-01-01T00:00:00+08:00','reports':[{'reportJson':'{"cause":"虚构"}'}],
+            'human_verified':False}
+    summary=exporter.accept_capture({'status':'done','result':record},tmp_path)
+    assert summary=={'kind':'references','reports':1,'human_verified':False}
+    assert len(list((tmp_path/'references').glob('*.json')))==1
+    assert not list(tmp_path.glob('REAL-*')) and not (tmp_path/'index.json').exists()
+    assert exporter.accept_capture({'status':'done','result':record},tmp_path)==summary
+    record.pop('captured_at')
+    with pytest.raises(ValueError,match='不完整'):
+        exporter.accept_capture({'status':'done','result':record},tmp_path)

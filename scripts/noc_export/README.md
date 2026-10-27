@@ -89,3 +89,59 @@ uv run python scripts/noc_export/exporter.py validate
 ```
 
 离线测试全部使用虚构内容：验证仓库/符号链接目录拒绝、附件名路径穿越、假 PDF/EML、哈希与引用、精确归属歧义、无附件标志仍下载、只读白名单、登录页、分页截断和请求预算。不会运行真实网络测试。
+
+## 已有人工结论与评估
+
+`references` 是独立只读任务：
+
+```json
+[{"kind":"references","row":{"id":"源行编号","orderId":"源流程编号","dataType":"esb"}}]
+```
+
+完整行来自限定查询的结果。任务只调用详情 GET 与 `esbProcess/faultReport/list` GET；静态页面服务的 `list()` 已核实返回保存记录及 `reportJson`。生成、保存、报告下载、上传接口不在白名单，报告按钮本身会生成，不能点击。返回值单独留在 `references/`，不进入工单材料或提取输入，打包身份没有改变。`human_verified=false` 表示保存记录并不能证明经过人工确认；报告来源资格仍须核对作者、审核依据和明确最终结论。
+
+评估采用独立命令，不改变原始包、共享 schema 或现有提取器：
+
+```sh
+uv run python scripts/noc_export/exporter.py --root ~/.noc7/real-eval/captures run \
+  --plan ~/.noc7/real-eval/collect.json
+uv run python -m noc7.evaluation prepare \
+  --selection ~/.noc7/real-eval/selection.json --out ~/.noc7/real-eval/dataset
+uv run python -m noc7.evaluation run \
+  --dataset ~/.noc7/real-eval/dataset --out ~/.noc7/real-eval/baseline
+uv run python -m noc7.evaluation score \
+  --dataset ~/.noc7/real-eval/dataset --results ~/.noc7/real-eval/baseline \
+  --out ~/.noc7/real-eval/scored
+```
+
+输出必须是全新仓库外目录，不能与输入互相包含。已有共享工具会话使用 `serve` 桥接，无需再启动第二个浏览器连接；真实响应、浏览器日志与计划同样留在仓库外。
+
+### 标注文件
+
+`selection.json` 的顶层是 `cases` 数组（最多二十例）及 `notes`。每例包含：
+
+- `alias`：如 `E01`；`bundle`：原工单包的绝对路径。
+- `sources`：来源编号 `id`，类型 `kind`（`formal_report`、`closure_note`、`final_email`），原件绝对路径 `path`、格式 `format`、`sha256`、作者 `author`、原记录时间 `recorded_at`、审核状态 `audit`、明确人工结论依据 `human_basis`。`audited` 必须提供 `reviewer`、`reviewed_at`、`audit_quote` 并在原件核验引文。审核人空白使用 `unaudited`，不能只看审核日期。工单内结论还填 `anchor`（原 `material_id` 与 `log_seq` 等）；转录文件必须与锚点原文吻合。
+- `facts`：稀疏标注，只列参考真正提及的要素。填 `element`、`source_id`、精确 `quote`、可选解析块 `block_id`（如 DOCX 的 `M99/tbl:0:1:1`）。文本用 `key_points: [{"any_of":["原文写法","事先确定的同义词"]}]`；时间用 `expected_time: {"iso":"带偏移的时间","tolerance_minutes":0}`、`time_kind` 和 `time_precision`（`second`／`minute`）。时间引文必须能解析并核验值，申报、关单和起障不能混用。
+- 每个事实的 `support` 列出截止前独立依据：`anchor` 加精确 `quote`；时间支持还须注明独立核对的 `time_kind`。可支持性不调用被测提取器判断。准备阶段重新定位和核对，不接受手填的“已有支持”布尔值。已被隔离的依据不会计入；一条事实的全部要点都要在保留依据的引文中得到支持。模型结果不参与生成参考或同义词。
+- `allowed_statuses` 约束允许的结论状态，`value_kind` 约束原因／责任／地点语义。供应商声称的原因使用 `documented` 和 `root_cause_claimed`，不能因为正式报告转述就升级为确诊。`contradicts` 只填事先明确的互斥事实；`conflict` 标记无法裁定的参考冲突。
+- `field_proofs` 默认空。只有字段值能与保留的截止前日志逐字核对时，才能填 `key` 和 `support`；最终字段没有历史版本时不直接交给提取器。`excluded_materials` 指定人工核对后必须隔离的材料编号。
+
+正式报告不必假装填满七要素；未提及责任方就不标注责任方。转录不是业务复核，标注者不能替 NOC 补写诊断。
+
+### 隔离与结果
+
+`dataset/inputs/E01/` 是提取器唯一读取的目录，只有重新登记哈希的截止前白名单材料。截止为首次明确结案节点（结单签收、回访结单、本地关单等）；缺失时间或详情状态不是已结单则排除该例。参考原件、参考锚点、长引文副本、故障报告标记、AI 摘要、源响应留档、截止后材料及无法核实归属／完整检查的附件不进入输入。邮件附件须唯一关联一条保留日志；`origin.log_seq` 单独存在不构成证明。标题、状态、真实工单号、分类与关联单也不作为输入元数据。
+
+`references.json` 保存参考原文块、稀疏事实、输入支持、逐项排除原因、原包及输入哈希；`selection.json` 保存标注，`freeze.json` 绑定参考文件。它们与输入并列，不是输入包的一部分。准备完成后不要改写标注；改动需创建新数据集。没有数字签名，冻结哈希用于检测意外改动，不能证明人为篡改从未发生。
+
+`baseline/E01/analysis.json` 是规则基线。其他模型沿用相同隔离包和解析器，输出到同样的目录结构即可用 `score` 比较；必须绑定该包清单及解析证据快照，不能导入之前对完整结案包生成的结果。
+
+`scored/summary.json` 只含枚举和计数；`details.json`、`report.md` 有真实原文和结果，只在本机打开。评分单位为“样本中的一条来源事实”，同一事实的不同来源分别统计，不把它们当作独立故障数量：
+
+- 一致、遗漏、明确冲突、待判定分别计数；只检查结论值，不把候选命中当成功。普通文本未命中、时区／语义不足或局部否定不武断算错。
+- 时间按语义、时区及冻结精度比较；处理过程的冻结动作要点须保持顺序；有来源声称却升级为确诊也记冲突。
+- 一致率＝一致／（一致＋遗漏＋明确冲突）；可判定覆盖率＝（一致＋遗漏＋明确冲突）／（一致＋遗漏＋明确冲突＋待判定）。两个比例同时呈现。
+- 未确认截止前输入支持、参考来源冲突另列，不进入上述分母；分母为零时为 `null`，不写零准确率或百分百正确。未标注要素没有评分事实。
+
+无可用样本、无可判定事实、输入不匹配或提取／评分失败返回非零。单例排除原因见 `dataset/references.json`，运行失败明细见本机对应 `failure.json`；终端只输出计数，不回显原文或异常。真实批次和脱敏汇总见 [人工参考评估说明](../../docs/HUMAN_REFERENCE_EVALUATION.md)。

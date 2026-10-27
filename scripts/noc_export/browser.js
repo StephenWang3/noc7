@@ -6,6 +6,8 @@ function createNocCollector(options = {}) {
     [base + '/hk/query/query/getProcessList', 'POST'],
     [esb + '/getEsbProcessInfo', 'GET'], [esb + '/log', 'GET'],
     [esb + '/emailLog', 'GET'], [esb + '/getAuthParams', 'GET'],
+    // 静态服务 list() 已核实只读；generate/save/download/upload 均不放行。
+    [esb + '/faultReport/list', 'GET'],
     [esb + '/busfault/order/detail/getDetailByPage', 'POST'],
     [esb + '/busfault/deal/buildPage', 'POST'], [esb + '/busfault/download', 'GET'],
     [base + '/mailbox/email/findEmailById', 'POST'],
@@ -88,6 +90,17 @@ function createNocCollector(options = {}) {
     if (!Array.isArray(j.data?.datas)) throw new Error('工单列表结构已变化');
     if(body.sta&&body.end&&j.data.datas.some(r=>!Number.isFinite(Number(r.createTimeStamp))||Number(r.createTimeStamp)<body.sta||Number(r.createTimeStamp)>body.end))throw new Error('服务端未遵守时间范围，停止查询');
     return {capture_version:1,kind:'list',captured_at:new Date().toISOString(),params,rows:clean(j.data.datas),total:j.data.totle};
+  }
+  async function references(job) {
+    const row=job.row;
+    if(row?.dataType!=='esb'||!row.orderId)throw new Error('参考记录采集仅支持业务布局');
+    const info=(await request(q(esb+'/getEsbProcessInfo',{id:row.orderId}))).data;
+    if(!info?.faultNo)throw new Error('参考记录缺少工单编号');
+    const reports=(await request(q(esb+'/faultReport/list',{faultNo:info.faultNo}))).data;
+    if(!Array.isArray(reports))throw new Error('报告列表结构已变化');
+    // 保存记录不等于人工审核，来源资格由独立标注决定。
+    return {capture_version:1,kind:'references',row:clean(row),fault_no:info.faultNo,
+      captured_at:new Date().toISOString(),reports:clean(reports),human_verified:false};
   }
   async function inspect(job) {
     const row=job.row;
@@ -239,7 +252,7 @@ function createNocCollector(options = {}) {
   return {
     // 只允许一个任务；失败结果带部分材料，包装端不会将其发布为有效包。
     start(job){if(running)throw new Error('已有采集任务');running=true;cancelled=false;state={status:'running'};
-      (async()=>{try{if(job.kind&&!['list','inspect','discover','export'].includes(job.kind))throw new Error('未知采集任务');const result=job.kind==='list'?await list(job.params):(job.kind==='inspect'?await inspect(job):(job.kind==='discover'?await discover(job):await exportRow(job)));state={status:'done',result};}
+      (async()=>{try{if(job.kind&&!['list','inspect','discover','export','references'].includes(job.kind))throw new Error('未知采集任务');const result=job.kind==='list'?await list(job.params):(job.kind==='references'?await references(job):(job.kind==='inspect'?await inspect(job):(job.kind==='discover'?await discover(job):await exportRow(job))));state={status:'done',result};}
       catch(e){state={status:'failed',error:String(e.message||e),partial:state.partial?clean(state.partial):undefined};}
       finally{running=false;}})();return {status:'running'};},
     status(){return {status:state.status,requests:count,error:state.error};},
