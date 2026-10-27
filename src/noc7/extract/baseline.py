@@ -423,6 +423,37 @@ def cause_signature(candidate):
     return normalize(text)
 
 
+def responsibility_basis(text: str, key: str = "", *, trusted: bool = True) -> ResponsibilityBasis | None:
+    """定责依据只认明确认定、责任字段或处理角色，与规则抽取使用同一判断。"""
+    formal = bool(re.search(r"责任认定[：:]|定责意见[：:]", text))
+    if key in {"vendor", "handling_dept", "handler", "responsible_party"} or (trusted and formal):
+        if formal:
+            return ResponsibilityBasis.FORMAL_DETERMINATION
+        if key == "responsible_party":
+            return ResponsibilityBasis.CLAIMED
+        return ResponsibilityBasis.INFERRED_FROM_ROLE
+    return None
+
+
+def location_role(text: str, key: str = "", *, trusted: bool = True) -> LocationRole | None:
+    """故障点、端点、告警位置和测试节点的角色，与规则抽取使用同一判断。"""
+    if key in {"a_end", "z_end"}:
+        return LocationRole.SERVICE_ENDPOINT
+    if key in {"device_location", "device_name", "shelf_slot_port"}:
+        return LocationRole.ALARM_LOCATION
+    if re.search(r"现场地址[：:]", text) or re.search(r"[AZ]\s*端接入设备", text):
+        return LocationRole.CUSTOMER_SITE
+    if (
+        trusted
+        and re.search(r"现场确认[：:].*(?:处|人井|交叉口)|故障点(?:位于|[：:])", text)
+        and not NEGATED.search(text)
+    ):
+        return LocationRole.LOCATED_FAULT_POINT
+    if re.search(r"ping|测试节点|PoP 设备|\b(?:\d{1,3}\.){3}\d{1,3}\b", text, re.I):
+        return LocationRole.TEST_NODE
+    return None
+
+
 def _text_element(cls, candidates, value_attr, allowed, confirmed=None, signature=None):
     choices = [c for c in candidates if allowed(c)]
     signature = signature or (lambda c: normalize(getattr(c, value_attr)))
@@ -745,16 +776,8 @@ class RulesProvider:
                         evidence_refs=[span.id],
                     )
                 )
-            if key in {"vendor", "handling_dept", "handler", "responsible_party"} or (
-                trusted_original and re.search(r"责任认定[：:]|定责意见[：:]", text)
-            ):
-                basis = (
-                    ResponsibilityBasis.FORMAL_DETERMINATION
-                    if re.search(r"责任认定[：:]|定责意见[：:]", text)
-                    else ResponsibilityBasis.CLAIMED
-                    if key == "responsible_party"
-                    else ResponsibilityBasis.INFERRED_FROM_ROLE
-                )
+            basis = responsibility_basis(text, key, trusted=trusted_original)
+            if basis:
                 parties.append(
                     PartyCandidate(
                         id=candidate_id(parties),
@@ -764,27 +787,7 @@ class RulesProvider:
                         evidence_refs=[span.id],
                     )
                 )
-            lr = None
-            if key in {"a_end", "z_end"}:
-                lr = LocationRole.SERVICE_ENDPOINT
-            elif key in {"device_location", "device_name", "shelf_slot_port"}:
-                lr = LocationRole.ALARM_LOCATION
-            elif re.search(r"现场地址[：:]", text):
-                lr = LocationRole.CUSTOMER_SITE
-            elif re.search(r"[AZ]\s*端接入设备", text):
-                lr = LocationRole.CUSTOMER_SITE
-            elif (
-                trusted_original
-                and re.search(
-                    r"现场确认[：:].*(?:处|人井|交叉口)|故障点(?:位于|[：:])", text
-                )
-                and not NEGATED.search(text)
-            ):
-                lr = LocationRole.LOCATED_FAULT_POINT
-            elif re.search(
-                r"ping|测试节点|PoP 设备|\b(?:\d{1,3}\.){3}\d{1,3}\b", text, re.I
-            ):
-                lr = LocationRole.TEST_NODE
+            lr = location_role(text, key, trusted=trusted_original)
             if lr:
                 locations.append(
                     LocationCandidate(
