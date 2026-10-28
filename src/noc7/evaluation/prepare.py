@@ -6,11 +6,12 @@ import hashlib
 import json
 import re
 from pathlib import Path
+from bs4 import BeautifulSoup
 
 from ..bundle import load_bundle
 from ..parsers import ParseContext, default_registry
 from ..schema.common import DataClass
-from ..schema.evidence import MaterialKind
+from ..schema.evidence import MaterialKind, SpanRole
 from ..timeparse import parse_time
 from .reference import (
     Selection,
@@ -63,6 +64,40 @@ def clock(raw, offset):
     return t if t is not None and t.utcoffset() is not None else None
 
 
+def _copy_text(text):
+    # 普通路径／URL 不交给 HTML 解析器，避免警告回显真实内容。
+    if re.search(r"</?[a-zA-Z][^>]*>", text):
+        text = BeautifulSoup(text, "html.parser").get_text(" ")
+    return normalized(text)
+
+
+def _independent_emails(case, b, cutoff, reference_logs, reference_materials, reference_hashes):
+    """同文可来自独立的上游邮件；只有逐项证实的原始邮件可例外放行。"""
+    approved = {}
+    for proof in case.independent_emails:
+        e = b.process_log.entry(proof.log_seq)
+        m = b.manifest.material(proof.material_id)
+        parents = [x for x in b.process_log.entries if m.id in (*x.attachments, *x.emails)]
+        t = clock(e.recorded_at, b.manifest.default_timezone) if e else None
+        if (e is None or e.entry_kind != "email" or t is None or t >= cutoff
+            or e.seq in reference_logs or m.id in reference_materials
+            or m.sha256 in reference_hashes or m.id in case.excluded_materials
+            or m.kind != MaterialKind.EMAIL_HTML or m.derived or m.derived_from
+            or m.id not in e.emails or not m.origin or m.origin.log_seq != e.seq
+            or any(x.seq != e.seq and x.entry_kind != "ai_summary" for x in parents)
+            or FINAL.search(e.content) or FINAL.search(m.path)):
+            raise ValueError("截止前独立邮件的时间、来源或唯一原始归属不足")
+        parsed = default_registry().parse(ParseContext(b, m))
+        originals = [s for s in parsed.spans if s.role == SpanRole.ORIGINAL and not s.needs_review]
+        if (parsed.status != "parsed" or any(s.needs_review for s in parsed.spans)
+            or not any(proof.quote in s.text for s in originals)
+            or _copy_text(proof.quote) not in _copy_text(e.content)
+            or any(FINAL.search(s.text) for s in originals)):
+            raise ValueError("独立邮件正文与原始日志无法互证，或含最终报告")
+        approved[m.id] = e.seq
+    return approved
+
+
 def prepare_case(case, target: Path):
     private_path(case.bundle)
     for source in case.sources:
@@ -88,12 +123,13 @@ def prepare_case(case, target: Path):
         s.anchor.material_id for s in case.sources if s.anchor and not s.anchor.log_seq
     }
     reference_hashes = {s.sha256 for s in case.sources}
-    fingerprints = [
-        normalized(f.quote) for f in case.facts if len(normalized(f.quote)) >= 12
-    ]
+    fingerprints = [part for f in case.facts for line in (f.quote, *f.quote.splitlines())
+                    if len(part := _copy_text(line)) >= 12]
+    independent = _independent_emails(case, b, cutoff, reference_logs, reference_materials, reference_hashes)
+    independent_logs = set(independent.values())
 
     def leaked(text):
-        t = normalized(text)
+        t = _copy_text(text)
         return bool(FINAL.search(text)) or any(f in t for f in fingerprints)
 
     decisions, kept = [], []
@@ -104,6 +140,9 @@ def prepare_case(case, target: Path):
     for e in b.process_log.entries:
         t = clock(e.recorded_at, offset)
         why = (
+            "independent_preclosure_email"
+            if e.seq in independent_logs
+            else
             "reference"
             if e.seq in reference_logs
             or leaked(
@@ -117,8 +156,9 @@ def prepare_case(case, target: Path):
             if t >= cutoff
             else "before_cutoff"
         )
-        record(f"log:{e.seq}", why == "before_cutoff", why)
-        if why == "before_cutoff":
+        keep = why in {"before_cutoff", "independent_preclosure_email"}
+        record(f"log:{e.seq}", keep, why)
+        if keep:
             kept.append(e.model_copy(deep=True))
     seqs = {e.seq for e in kept}
     registry = default_registry()
@@ -208,6 +248,9 @@ def prepare_case(case, target: Path):
         parents = [
             e for e in b.process_log.entries if m.id in (*e.attachments, *e.emails)
         ]
+        if m.id in independent:
+            # 衍生摘要对同一邮件的挂接不构成第二个原始来源；摘要仍不进入输入。
+            parents = [e for e in parents if e.seq == independent[m.id]]
         why = (
             "reference"
             if m.id in reference_materials
@@ -234,12 +277,13 @@ def prepare_case(case, target: Path):
                 s.needs_review for s in result.spans
             ):
                 why = "uninspectable"
-            elif any(leaked(s.text) for s in result.spans):
+            elif m.id not in independent and any(leaked(s.text) for s in result.spans):
                 why = "reference_copy"
             # EML 子附件或 DOCX 未覆盖区域也不能排除藏有答案。
             elif result.status != "parsed":
                 why = "uninspectable"
-        record(m.id, why == "before_cutoff", why)
+        record(m.id, why == "before_cutoff", "independent_preclosure_email"
+               if why == "before_cutoff" and m.id in independent else why)
         if why == "before_cutoff":
             safe_materials.add(m.id)
             add(
@@ -337,6 +381,7 @@ def prepare_case(case, target: Path):
         support=support,
         decisions=decisions,
         reference_blocks=blocks,
+        independent_emails=[p.model_dump(mode="json") for p in case.independent_emails],
     )
 
 

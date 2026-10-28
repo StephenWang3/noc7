@@ -42,6 +42,7 @@ from ..schema import (
 from ..schema.elements import CAUSE_KINDS_ALLOWED_AS_VALUE
 from ..timeparse import parse_time
 from .types import QUALITY_REVIEW_THRESHOLD, Extraction, ExtractionContext
+from .fact_phrases import responsibility_claims, rfo_fault_points
 
 DATE = r"\d{4}[-/.年]\d{1,2}[-/.月]\d{1,2}日?"
 CLOCK = r"\d{1,2}:\d{2}(?::\d{2})?"
@@ -432,6 +433,8 @@ def responsibility_basis(text: str, key: str = "", *, trusted: bool = True) -> R
         if key == "responsible_party":
             return ResponsibilityBasis.CLAIMED
         return ResponsibilityBasis.INFERRED_FROM_ROLE
+    if trusted and responsibility_claims(text):
+        return ResponsibilityBasis.CLAIMED
     return None
 
 
@@ -448,6 +451,8 @@ def location_role(text: str, key: str = "", *, trusted: bool = True) -> Location
         and re.search(r"现场确认[：:].*(?:处|人井|交叉口)|故障点(?:位于|[：:])", text)
         and not NEGATED.search(text)
     ):
+        return LocationRole.LOCATED_FAULT_POINT
+    if trusted and rfo_fault_points(text):
         return LocationRole.LOCATED_FAULT_POINT
     if re.search(r"ping|测试节点|PoP 设备|\b(?:\d{1,3}\.){3}\d{1,3}\b", text, re.I):
         return LocationRole.TEST_NODE
@@ -781,7 +786,8 @@ class RulesProvider:
                 parties.append(
                     PartyCandidate(
                         id=candidate_id(parties),
-                        party=text,
+                        party=(responsibility_claims(text) or [text])[0]
+                        if basis == ResponsibilityBasis.CLAIMED and key != "responsible_party" else text,
                         basis=basis,
                         attribution=attr,
                         evidence_refs=[span.id],
@@ -792,7 +798,8 @@ class RulesProvider:
                 locations.append(
                     LocationCandidate(
                         id=candidate_id(locations),
-                        description=text,
+                        description=(rfo_fault_points(text) or [text])[0]
+                        if lr == LocationRole.LOCATED_FAULT_POINT else text,
                         role=lr,
                         attribution=attr,
                         evidence_refs=[span.id],

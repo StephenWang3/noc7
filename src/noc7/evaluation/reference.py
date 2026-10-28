@@ -236,6 +236,15 @@ class FieldProof(Model):
     support: Support
 
 
+class IndependentEmailInput(Model):
+    """来源审查后声明的截止前邮件；prepare 仍核验时间、归属与正文。"""
+
+    log_seq: int = Field(gt=0)
+    material_id: str
+    quote: str = Field(min_length=12)
+    provenance: str = Field(min_length=12)
+
+
 class SelectionCase(Model):
     alias: str = Field(pattern=r"^E[0-9]{2,}$")
     bundle: Path
@@ -253,6 +262,7 @@ class SelectionCase(Model):
     field_proofs: list[FieldProof] = Field(default_factory=list)
     # 无法从原始结构确认材料归属时，不接受仅凭操作者填入的时间。
     excluded_materials: list[str] = Field(default_factory=list)
+    independent_emails: list[IndependentEmailInput] = Field(default_factory=list)
 
     @model_validator(mode="after")
     def references(self):
@@ -262,6 +272,9 @@ class SelectionCase(Model):
         keys = [(f.element, f.source_id, f.quote, f.block_id) for f in self.facts]
         if len(set(keys)) != len(keys):
             raise ValueError("同一来源事实不能重复计分")
+        proofs = [(p.log_seq, p.material_id) for p in self.independent_emails]
+        if len(set(proofs)) != len(proofs):
+            raise ValueError("独立邮件输入依据重复")
         return self
 
 

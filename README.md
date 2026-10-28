@@ -60,7 +60,9 @@ uv run noc7 analyze ~/.noc7/real --provider replay \
   --replay ~/.noc7/deepseek-real-new --out ~/.noc7/replayed-real-new
 ```
 
-DeepSeek 密钥只从团队密钥注入的 `DEEPSEEK_API_KEY` 读取，不能写入配置、命令参数或 git。配置默认使用官方兼容端点、`deepseek-flash`、JSON 模式与思考模式；推理正文不保存。没有自动切换模型或服务的行为。
+DeepSeek 密钥只从团队密钥注入的 `DEEPSEEK_API_KEY` 读取，不能写入配置、命令参数或 git。配置默认使用官方兼容端点、`deepseek-flash`、JSON 模式与思考模式；默认不保存原始响应。没有自动切换模型或服务的行为。
+
+排查模型遗漏或本地规则删除时，可追加 `--model-audit-dir ~/.noc7/model-audit-new`。目录必须位于仓库外且尚不存在；其中保留原始响应、结构补全及本地重算前后快照、删除／类别变化和拒绝状态，不写请求头或凭据。诊断可能含真实原文，仅在本机查看，不能提交。详见 [截止前邮件与补漏识别决策](docs/decisions/preclosure-email-and-fact-recall.md)。
 
 部署内网 Qwen 时，将 `config/models/qwen.example.json` 复制到仓库外，例如 `~/.noc7/qwen.json`，填写以下字段再使用：
 

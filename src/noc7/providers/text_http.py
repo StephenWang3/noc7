@@ -18,6 +18,7 @@ from .gate import ensure_allowed
 from .text_config import TextModelConfig, TextProviderError
 from .text_ground import ground_extraction, normalize_model_payload
 from .text_prompt import PROMPT_VERSION, SYSTEM_PROMPT, prepare_evidence
+from .text_audit import AuditStore, grounding_changes
 
 
 class _NoRedirect(urllib.request.HTTPRedirectHandler):
@@ -28,11 +29,12 @@ class _NoRedirect(urllib.request.HTTPRedirectHandler):
 class OpenAICompatibleTextProvider:
     prompt_version = PROMPT_VERSION
 
-    def __init__(self, config: TextModelConfig, *, sleep=time.sleep):
+    def __init__(self, config: TextModelConfig, *, sleep=time.sleep, audit_dir=None):
         self.config = config
         self.name = f"openai_compatible:{config.name}:{config.model}:{config.fingerprint}"
         self.url = config.base_url.rstrip("/") + "/chat/completions"
         self.sleep = sleep
+        self.audit = AuditStore(audit_dir) if audit_dir is not None else None
 
     def preflight(self, data_class: DataClass) -> str | None:
         """先检查分级，再读取凭据；调用 CLI 与直接使用提供方均受保护。"""
@@ -74,6 +76,7 @@ class OpenAICompatibleTextProvider:
         if not self.config.external:
             handlers.append(urllib.request.ProxyHandler({}))
         opener = urllib.request.build_opener(*handlers)
+        audit = self.audit.begin(clean_ctx, evidence, PROMPT_VERSION) if self.audit else None
         for attempt in range(self.config.max_retries + 1):
             ensure_allowed(self.config.gate_config(), ctx.bundle.manifest.data_class)
             request = urllib.request.Request(self.url, data=body, headers=headers)
@@ -81,9 +84,6 @@ class OpenAICompatibleTextProvider:
             try:
                 with opener.open(request, timeout=self.config.timeout_seconds) as response:
                     raw = response.read(self.config.max_response_bytes + 1)
-                if len(raw) > self.config.max_response_bytes:
-                    raise TextProviderError("模型响应超过配置的字节上限，已拒绝。")
-                return self._decode(raw, clean_ctx)
             except urllib.error.HTTPError as exc:
                 status = exc.code
                 try:
@@ -97,16 +97,42 @@ class OpenAICompatibleTextProvider:
                 if (status == 429 or 500 <= status <= 599) and attempt < self.config.max_retries:
                     self.sleep(delay)
                     continue
-                raise TextProviderError(f"文本模型 HTTP {status}，未保存远端正文。") from None
+                if audit:
+                    audit.record(outcome="http_error", http_status=status)
+                raise TextProviderError(f"文本模型 HTTP {status}。") from None
             except (urllib.error.URLError, OSError, http.client.HTTPException):
                 if attempt < self.config.max_retries:
                     self.sleep(delay)
                     continue
+                if audit:
+                    audit.record(outcome="transport_error")
                 raise TextProviderError("文本模型连接失败或超时，重试次数已耗尽。") from None
+            else:
+                # 诊断写入／输出校验失败不能触发再次请求模型。
+                if len(raw) > self.config.max_response_bytes:
+                    if audit:
+                        audit.record(outcome="response_too_large")
+                    raise TextProviderError("模型响应超过配置的字节上限，已拒绝。")
+                return self._decode(raw, clean_ctx, audit)
         raise TextProviderError("文本模型重试次数已耗尽。")
 
     @staticmethod
-    def _decode(raw: bytes, ctx: ExtractionContext) -> Extraction:
+    def _decode(raw: bytes, ctx: ExtractionContext, audit=None) -> Extraction:
+        if audit:
+            audit.record(raw_response=raw.decode("utf-8", errors="replace"), outcome="response_received")
+        try:
+            result = OpenAICompatibleTextProvider._decode_payload(raw, ctx, audit)
+        except (TextProviderError, ExtractionRejected) as exc:
+            if audit:
+                audit.record(outcome="rejected", error_type=type(exc).__name__,
+                             issue_codes=[i.code.value for i in exc.issues] if isinstance(exc, ExtractionRejected) else [])
+            raise
+        if audit:
+            audit.record(outcome="accepted")
+        return result
+
+    @staticmethod
+    def _decode_payload(raw: bytes, ctx: ExtractionContext, audit=None) -> Extraction:
         try:
             response = json.loads(raw)
             choices = response["choices"]
@@ -119,19 +145,28 @@ class OpenAICompatibleTextProvider:
         except TextProviderError:
             raise
         except (ValueError, TypeError, KeyError, IndexError, RecursionError):
-            raise TextProviderError("模型 HTTP 响应结构不合格，已拒绝且未保存远端正文。") from None
+            raise TextProviderError("模型 HTTP 响应结构不合格，已拒绝。") from None
         try:
             parsed = json.loads(content)
         except (ValueError, RecursionError):
-            raise TextProviderError("模型输出不是有效 JSON，已拒绝且未保存远端正文。") from None
+            raise TextProviderError("模型输出不是有效 JSON，已拒绝。") from None
         try:
-            data = Extraction.model_validate(normalize_model_payload(
-                parsed, ctx.bundle.manifest.default_timezone
-            ))
+            normalized = normalize_model_payload(
+                parsed, ctx.bundle.manifest.default_timezone, ctx.evidence
+            )
+            if audit:
+                audit.record(normalized=normalized)
+            data = Extraction.model_validate(normalized)
         except (ValidationError, RecursionError):
-            raise TextProviderError("模型七要素结构不合格，已拒绝且未保存远端正文。") from None
+            raise TextProviderError("模型七要素结构不合格，已拒绝。") from None
+        before = data.model_dump(mode="json")
+        if audit:
+            audit.record(before_grounding=before)
         # 语义标签、现象概述和归一时间都以本地规则为准；无依据摘录仍由后面的校验拒绝。
         data = ground_extraction(ctx, data)
+        if audit:
+            after = data.model_dump(mode="json")
+            audit.record(after_grounding=after, changes=grounding_changes(before, after))
         try:
             validate_extraction(ctx, data)
         except ExtractionRejected as exc:

@@ -129,8 +129,8 @@ def cmd_analyze(args: argparse.Namespace) -> int:
     if args.provider == "replay" and args.replay is None:
         print("replay 提供方必须指定 --replay。", file=sys.stderr)
         return 2
-    if args.model_config is not None and args.provider != "llm":
-        print("--model-config 必须配合 --provider llm 使用。", file=sys.stderr)
+    if (args.model_config is not None or args.model_audit_dir is not None) and args.provider != "llm":
+        print("--model-config 和 --model-audit-dir 只能配合 --provider llm 使用。", file=sys.stderr)
         return 2
     llm = None
     if args.provider == "llm":
@@ -141,7 +141,7 @@ def cmd_analyze(args: argparse.Namespace) -> int:
             print("模型输出目录已存在，请指定新目录，避免旧报告冒充本次结果。", file=sys.stderr)
             return 2
         try:
-            llm = create_text_provider(args.model_config)
+            llm = create_text_provider(args.model_config, audit_dir=args.model_audit_dir)
         except ValueError as e:
             print(str(e), file=sys.stderr)
             return 2
@@ -247,6 +247,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--out", type=Path, default=Path("var/reports"))
     p.add_argument("--provider", choices=("rules", "replay", "llm"), default="rules")
     p.add_argument("--model-config", type=Path, help="统一文本模型的 JSON 配置文件")
+    p.add_argument("--model-audit-dir", type=Path, help="可选：仓库外新私有目录，保存模型原始输出与本地重算记录")
     p.add_argument(
         "--replay",
         type=Path,

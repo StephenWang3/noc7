@@ -98,7 +98,7 @@ def load_model_config(path: Path | str) -> TextModelConfig:
         raise TextProviderError("无法读取模型配置或配置不完整，请检查配置字段；不要填写密钥值。") from None
 
 
-def create_text_provider(path: Path | str):
+def create_text_provider(path: Path | str, *, audit_dir: Path | None = None):
     from .text_http import OpenAICompatibleTextProvider
 
-    return OpenAICompatibleTextProvider(load_model_config(path))
+    return OpenAICompatibleTextProvider(load_model_config(path), audit_dir=audit_dir)
