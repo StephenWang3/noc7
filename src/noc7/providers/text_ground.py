@@ -105,14 +105,13 @@ def _raw(value):
 
 
 def _attribution(value, refs, spans):
-    parsed = _one_of(value, Attribution)
-    if parsed:
-        return parsed
+    """归属只认所引片段上的规则，模型交来的合法枚举也覆盖。"""
     for ref in refs:
         span = spans.get(ref)
         if span is not None:
             return span_attribution(span, span.text).value
-    return Attribution.UNKNOWN.value
+    parsed = _one_of(value, Attribution)
+    return parsed or Attribution.UNKNOWN.value
 
 
 def _number_ids(items, pattern, prefix):
@@ -187,16 +186,17 @@ def _shell(item, spans, quote_key):
 
 
 def _step_label(value, action, refs, spans):
-    parsed = _one_of(value, StepKind)
-    if parsed:
-        return parsed
-    text = action
+    """步骤和事件类别只认所引片段上的规则，模型交来的合法枚举也覆盖。"""
+    text = action if isinstance(action, str) else ""
     for ref in refs:
         span = spans.get(ref)
-        if span is not None and action in span.text:
+        if span is not None and text and text in span.text:
             text = span.text
             break
-    return step_kind(text, action).value
+    if text:
+        return step_kind(text, action if isinstance(action, str) else "").value
+    parsed = _one_of(value, StepKind)
+    return parsed or StepKind.COMMUNICATION.value
 
 
 def _cause_label(value, selected):
@@ -836,13 +836,21 @@ def _ground_time(element, spans, ctx: ExtractionContext, *, end: bool):
 
 
 def _ground_phenomenon(element, ctx: ExtractionContext):
-    selected = conclusion_observations(element.candidates, ctx.evidence)
-    note = _note(element.note, _blob(_all_refs(element), {span.id: span for span in ctx.evidence}))
+    spans = {span.id: span for span in ctx.evidence}
+    revised = [
+        item.model_copy(update={
+            "attribution": Attribution(_attribution(None, item.evidence_refs, spans))
+        })
+        for item in element.candidates
+    ]
+    selected = conclusion_observations(revised, ctx.evidence)
+    note = _note(element.note, _blob(_all_refs(element), spans))
     if not selected:
         return element.model_copy(update={
             "status": ElementStatus.UNKNOWN,
             "value": None,
             "evidence_refs": [],
+            "candidates": revised,
             "note": note,
         })
     refs = list(dict.fromkeys(ref for observation in selected for ref in observation.evidence_refs))
@@ -853,13 +861,18 @@ def _ground_phenomenon(element, ctx: ExtractionContext):
         "status": ElementStatus.DOCUMENTED,
         "value": value,
         "evidence_refs": refs,
+        "candidates": revised,
         "note": note,
     })
 
 
 def _narrative(item, spans):
     blob = _blob(item.evidence_refs, spans)
-    update = {"note": _note(getattr(item, "note", None), blob)}
+    update = {
+        "note": _note(getattr(item, "note", None), blob),
+        "attribution": Attribution(_attribution(None, item.evidence_refs, spans)),
+        "step_kind": StepKind(_step_label(None, item.action, item.evidence_refs, spans)),
+    }
     for field in ("actor", "result", "target"):
         value = getattr(item, field, None)
         update[field] = value if value and value in blob else None
@@ -878,6 +891,8 @@ def _ground_event(event, spans):
         "actor": event.actor if event.actor and event.actor in blob else None,
         "result": event.result if event.result and event.result in blob else None,
         "target": event.target if event.target and event.target in blob else None,
+        "attribution": Attribution(_attribution(None, event.evidence_refs, spans)),
+        "event_kind": StepKind(_step_label(None, event.action, event.evidence_refs, spans)),
     })
 
 

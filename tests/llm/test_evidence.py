@@ -307,6 +307,44 @@ def test_structural_gaps_are_filled_before_validation(server, sample):
     assert result.service_identity.identifiers[0].value == "光缆"
 
 
+def test_legal_enums_are_recomputed_from_cited_text(server, sample):
+    text = "客户反映专线中断，已联系现场。"
+    span = EvidenceSpan(
+        id="M01/f:diagnosis", material_id="M01", locator=FieldLocator(field_key="diagnosis"),
+        text=text, extractor="synthetic",
+    )
+    data = empty_extraction()
+    data["elements"]["phenomenon"] = dict(
+        status="documented", value="客户反映专线中断", evidence_refs=[span.id],
+        candidates=[dict(
+            id="C1", evidence_refs=[span.id], attribution="vendor",
+            description="客户反映专线中断",
+        )],
+    )
+    data["elements"]["handling_process"] = dict(
+        status="documented", evidence_refs=[span.id],
+        value=[dict(
+            id="C1", action="已联系现场", evidence_refs=[span.id],
+            attribution="vendor", step_kind="technical_action",
+        )],
+    )
+    data["events"] = [dict(
+        id="EV1", action="已联系现场", evidence_refs=[span.id],
+        attribution="vendor", event_kind="technical_action",
+    )]
+    data["quotes"] = [dict(evidence_id=span.id, quote=text)]
+    server.default = envelope(data)
+    result = OpenAICompatibleTextProvider(qwen_config(server)).extract(
+        ExtractionContext(sample[0].bundle, [span])
+    )
+    assert result.elements.phenomenon.candidates[0].attribution == "customer"
+    assert result.elements.phenomenon.value == "客户反馈：客户反映专线中断"
+    step = result.elements.handling_process.value[0]
+    assert step.attribution == "customer" and step.step_kind == "communication"
+    assert result.events[0].attribution == "customer"
+    assert result.events[0].event_kind == "communication"
+
+
 def test_valid_labels_survive_structure_repair():
     text = "现场确认光纤中断。"
     span = EvidenceSpan(
