@@ -159,6 +159,8 @@ uv run python -m noc7.evaluation score \
 
 人工来源、审核状态与截止前输入支持分别核对。客户侧归因仅按声称记载，供应商名称、分类编码、告警位置或业务端点不能直接成为答案。参考要点、允许状态及同义词须在看提取结果前冻结；邮件例外按上节逐事实审定，不能给整封邮件放行。先查看 `references.json` 的实际支持和排除记录，不能把选择文件中填写的支持等同于隔离后仍有效。
 
+`prepare` 纳入一例不等于该例所有事实均可评分。先保存完整来源预审，再按实际保留的支持建立新的正式选择文件和数据集，未确认支持的参考另列。核对完整断言和定位关系：邮件提到客户设备不证明已归因于客户，站点名相同也不能把距站点一定距离的故障改成站点处故障。逐字引文的 HTML、换行差异须与实际解析片段核对，不能通过截短限定语取得放行。来源与支持在规则及模型运行前固定，之后不改同义词或分母。
+
 以下 `$batch` 为 `~/.noc7/` 下新私有目录；已完成采集和标注后运行，所有输出目录必须尚不存在：
 
 ```sh
@@ -176,11 +178,23 @@ uv run python -m noc7.evaluation score \
 uv run python -m noc7.evaluation score \
   --dataset "$batch/dataset" --results "$batch/deepseek" \
   --out "$batch/scored-deepseek"
-uv run noc7 analyze "$batch/dataset/inputs" \
-  --provider replay --replay "$batch/deepseek" --out "$batch/replayed"
+replay_inputs=()
+for input_dir in "$batch"/dataset/inputs/E*; do
+  case_alias=${input_dir##*/}
+  if [[ -f "$batch/deepseek/$case_alias/analysis.json" && \
+        -f "$batch/deepseek/$case_alias/replay.json" ]]; then
+    replay_inputs+=("$input_dir")
+  fi
+done
+if (( ${#replay_inputs[@]} > 0 )); then
+  uv run noc7 analyze "${replay_inputs[@]}" \
+    --provider replay --replay "$batch/deepseek" --out "$batch/replayed"
+fi
 uv run python -m noc7.evaluation score \
   --dataset "$batch/dataset" --results "$batch/replayed" \
   --out "$batch/scored-replayed"
 ```
 
 无合格输入时不发模型请求，保留排除台账；零分母报告为不可计算。两侧结果由评分器核验相同输入清单及解析证据快照，不能用完整包旧结果代入。模型失败和拒绝单独报告，不删去后计算成功率；回放在新目录核对要素结果与评分。来源事实数、覆盖工单数和独立事件数须区分，不将相同故障的多张工单当成独立故障样本。真实明细、响应、配置副本和浏览器日志仅留在本机，脱敏结果见 [扩样报告](../../docs/RESPONSIBILITY_LOCATION_SAMPLE_EXPANSION.md)。
+
+模型内容拒绝后不因退出非零就重跑整批。先核对 `analysis-rejected.json` 与模型诊断，保留原始运行目标；回放仅传入已有合格分析和回放快照的输入目录，评分仍传完整 `dataset`。因此原运行有失败时，回放评分也应保留失败，非零返回不能自动触发新的付费请求。本轮正式集、结果和最终断点见扩样报告；本机旧筛查及恢复计划作为历史保留，不再执行。
