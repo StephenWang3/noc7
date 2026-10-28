@@ -148,3 +148,39 @@ uv run python -m noc7.evaluation score \
 - 未确认截止前输入支持、参考来源冲突另列，不进入上述分母；分母为零时为 `null`，不写零准确率或百分百正确。未标注要素没有评分事实。
 
 无可用样本、无可判定事实、输入不匹配或提取／评分失败返回非零。单例排除原因见 `dataset/references.json`，运行失败明细见本机对应 `failure.json`；终端只输出计数，不回显原文或异常。真实批次和脱敏汇总见 [人工参考评估说明](../../docs/HUMAN_REFERENCE_EVALUATION.md)。
+
+### 按责任方／地点定向扩样
+
+先对新抓取的 `main` 独立副本执行 `uv run pytest -q`，通过后才开始采集。不切换会话分支，也不在共享只读仓库缓存中安装依赖或运行测试。
+
+本轮采用人工结论优先：最近三个月创建且已结案的业务单，按创建时间从近到远检查最多 200 条去重候选，排除已有评估工单，最多新增 20 张。责任方和地点各争取覆盖至少 10 张有独立输入支持的工单；达到候选上限后按实际数量结束。单次计划仍最多 20 项，列表页和任务计划均在本机留档；核对分页顺序、跨页重复和返回时间范围，不能把源系统的总条数当成检查数。
+
+先用 `references` 查询已保存报告，再核对明确人工结案说明，最后追溯原始邮件和 RFO。现有 `references` 仅保存报告记录；结案日志可从已导出的 `source/capture.json` 核对。本轮本机筛查副本在该任务内额外读取已在白名单的 `/esbProcess/log`，并保留同次详情和日志；仍经过 `request()` 的限速、预算及失败停止，不使用页面业务方法。该预检不是完整包，选中后必须继续完整导出和校验。不要因报告列表为空就跳过人工结案说明，也不要把“等待 RFO”算成已有报告。
+
+人工来源、审核状态与截止前输入支持分别核对。客户侧归因仅按声称记载，供应商名称、分类编码、告警位置或业务端点不能直接成为答案。参考要点、允许状态及同义词须在看提取结果前冻结；邮件例外按上节逐事实审定，不能给整封邮件放行。先查看 `references.json` 的实际支持和排除记录，不能把选择文件中填写的支持等同于隔离后仍有效。
+
+以下 `$batch` 为 `~/.noc7/` 下新私有目录；已完成采集和标注后运行，所有输出目录必须尚不存在：
+
+```sh
+uv run python -m noc7.evaluation prepare \
+  --selection "$batch/selection.json" --out "$batch/dataset"
+uv run python -m noc7.evaluation run \
+  --dataset "$batch/dataset" --out "$batch/rules"
+uv run noc7 analyze "$batch/dataset/inputs" \
+  --provider llm --model-config config/models/deepseek.json \
+  --model-audit-dir "$batch/model-audit" --save-replay \
+  --out "$batch/deepseek"
+uv run python -m noc7.evaluation score \
+  --dataset "$batch/dataset" --results "$batch/rules" \
+  --out "$batch/scored-rules"
+uv run python -m noc7.evaluation score \
+  --dataset "$batch/dataset" --results "$batch/deepseek" \
+  --out "$batch/scored-deepseek"
+uv run noc7 analyze "$batch/dataset/inputs" \
+  --provider replay --replay "$batch/deepseek" --out "$batch/replayed"
+uv run python -m noc7.evaluation score \
+  --dataset "$batch/dataset" --results "$batch/replayed" \
+  --out "$batch/scored-replayed"
+```
+
+无合格输入时不发模型请求，保留排除台账；零分母报告为不可计算。两侧结果由评分器核验相同输入清单及解析证据快照，不能用完整包旧结果代入。模型失败和拒绝单独报告，不删去后计算成功率；回放在新目录核对要素结果与评分。来源事实数、覆盖工单数和独立事件数须区分，不将相同故障的多张工单当成独立故障样本。真实明细、响应、配置副本和浏览器日志仅留在本机，脱敏结果见 [扩样报告](../../docs/RESPONSIBILITY_LOCATION_SAMPLE_EXPANSION.md)。
