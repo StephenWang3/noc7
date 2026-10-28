@@ -26,7 +26,7 @@ from .reference import (
 CLOSED = re.compile(
     r"^(?:回访结单|结单签收|本地关单|结单归档|工单结案|结案|结单|销障)$"
 )
-FINAL = re.compile(r"故障处理报告|故障报告|结案结论|最终结论|Failure\s+Report", re.I)
+FINAL = re.compile(r"故障处理报告|故障报告|结案结论|最终结论|Failure\s*Report", re.I)
 
 
 def private_path(path: Path) -> Path:
@@ -71,7 +71,11 @@ def _copy_text(text):
     return normalized(text)
 
 
-def _independent_emails(case, b, cutoff, reference_logs, reference_materials, reference_hashes):
+def _has_final(text):
+    return bool(FINAL.search(text) or FINAL.search(_copy_text(text)))
+
+
+def _independent_emails(case, b, cutoff, reference_logs, reference_materials, reference_hashes, leaked):
     """同文可来自独立的上游邮件；只有逐项证实的原始邮件可例外放行。"""
     approved = {}
     for proof in case.independent_emails:
@@ -85,14 +89,15 @@ def _independent_emails(case, b, cutoff, reference_logs, reference_materials, re
             or m.kind != MaterialKind.EMAIL_HTML or m.derived or m.derived_from
             or m.id not in e.emails or not m.origin or m.origin.log_seq != e.seq
             or any(x.seq != e.seq and x.entry_kind != "ai_summary" for x in parents)
-            or FINAL.search(e.content) or FINAL.search(m.path)):
+            or _has_final(e.content) or _has_final(m.path)):
             raise ValueError("截止前独立邮件的时间、来源或唯一原始归属不足")
         parsed = default_registry().parse(ParseContext(b, m))
         originals = [s for s in parsed.spans if s.role == SpanRole.ORIGINAL and not s.needs_review]
         if (parsed.status != "parsed" or any(s.needs_review for s in parsed.spans)
             or not any(proof.quote in s.text for s in originals)
             or _copy_text(proof.quote) not in _copy_text(e.content)
-            or any(FINAL.search(s.text) for s in originals)):
+            or leaked(e.content, (proof.quote,))
+            or any(leaked(s.text, (proof.quote,)) for s in parsed.spans)):
             raise ValueError("独立邮件正文与原始日志无法互证，或含最终报告")
         approved[m.id] = e.seq
     return approved
@@ -123,14 +128,21 @@ def prepare_case(case, target: Path):
         s.anchor.material_id for s in case.sources if s.anchor and not s.anchor.log_seq
     }
     reference_hashes = {s.sha256 for s in case.sources}
-    fingerprints = [part for f in case.facts for line in (f.quote, *f.quote.splitlines())
+    fingerprints = [(i, part) for i, f in enumerate(case.facts)
+                    for line in (f.quote, *f.quote.splitlines())
                     if len(part := _copy_text(line)) >= 12]
-    independent = _independent_emails(case, b, cutoff, reference_logs, reference_materials, reference_hashes)
-    independent_logs = set(independent.values())
 
-    def leaked(text):
+    def leaked(text, allowed_quotes=()):
         t = _copy_text(text)
-        return bool(FINAL.search(text)) or any(f in t for f in fingerprints)
+        # 仅审定引文本身、且属于对应参考事实的指纹可例外；整封邮件不豁免。
+        allowed = {(i, part) for i, part in fingerprints for quote in allowed_quotes
+                   if _copy_text(quote) in _copy_text(case.facts[i].quote)
+                   and part in _copy_text(quote)}
+        return _has_final(text) or any(part in t and (i, part) not in allowed
+                                      for i, part in fingerprints)
+
+    independent = _independent_emails(case, b, cutoff, reference_logs, reference_materials, reference_hashes, leaked)
+    independent_logs = set(independent.values())
 
     decisions, kept = [], []
 
@@ -141,7 +153,9 @@ def prepare_case(case, target: Path):
         t = clock(e.recorded_at, offset)
         why = (
             "independent_preclosure_email"
-            if e.seq in independent_logs
+            if e.seq in independent_logs and not leaked(
+                " ".join(filter(None, [e.content, e.action, e.actor, e.actor_org])),
+                tuple(p.quote for p in case.independent_emails if p.log_seq == e.seq))
             else
             "reference"
             if e.seq in reference_logs
@@ -277,7 +291,8 @@ def prepare_case(case, target: Path):
                 s.needs_review for s in result.spans
             ):
                 why = "uninspectable"
-            elif m.id not in independent and any(leaked(s.text) for s in result.spans):
+            elif any(leaked(s.text, tuple(p.quote for p in case.independent_emails
+                                          if p.material_id == m.id)) for s in result.spans):
                 why = "reference_copy"
             # EML 子附件或 DOCX 未覆盖区域也不能排除藏有答案。
             elif result.status != "parsed":

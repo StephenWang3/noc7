@@ -94,3 +94,50 @@ def test_independent_flag_cannot_override_invalid_provenance(sample, failure):
     write_material(root, "process_log.json", logs)
     dump(selection, d)
     assert prepare(selection, tmp / "dataset")[0]["status"] == "excluded"
+
+
+@pytest.mark.parametrize("extra", [
+    "<p>结案结论：合成结果</p>",
+    "<blockquote>故障处理报告：合成结果</blockquote>",
+    "<blockquote>结<b>案</b>结论：合成结果</blockquote>",
+])
+@pytest.mark.parametrize("where", ["log", "email"])
+def test_reviewed_quote_does_not_allow_final_markers_elsewhere(sample, extra, where):
+    tmp, root, selection, _ = independent_sample(sample)
+    if where == "log":
+        logs = json.loads((root / "process_log.json").read_text())
+        next(e for e in logs['entries'] if e['seq'] == 6)['content'] += extra
+        write_material(root, 'process_log.json', logs)
+    else:
+        p = root / 'emails/a.html'
+        p.write_text(p.read_text() + extra)
+        manifest = json.loads((root / 'manifest.json').read_text())
+        m = manifest['materials'][2]
+        m.update(sha256=hashlib.sha256(p.read_bytes()).hexdigest(), size_bytes=p.stat().st_size)
+        dump(root / 'manifest.json', manifest)
+    assert prepare(selection, tmp / 'dataset')[0]['status'] == 'excluded'
+
+
+@pytest.mark.parametrize('where', ['log', 'email', 'quoted_email'])
+def test_reviewed_quote_does_not_exempt_another_reference_fact(sample, where):
+    tmp, root, selection, quote = independent_sample(sample)
+    extra = '备用模块已经永久退服并转入回收流程。'
+    d = json.loads(selection.read_text())
+    ref = tmp / 'reference.txt'
+    ref.write_text(quote + '\n' + extra)
+    d['cases'][0]['sources'][0]['sha256'] = hashlib.sha256(ref.read_bytes()).hexdigest()
+    d['cases'][0]['facts'].append(dict(element='phenomenon', source_id='H1', quote=extra,
+                                     key_points=[{'any_of': ['备用模块']}], support=[]))
+    logs = json.loads((root / 'process_log.json').read_text())
+    logs['entries'][2]['content'] = quote + '\n' + extra
+    if where == 'log':
+        next(e for e in logs['entries'] if e['seq'] == 6)['content'] += extra
+    else:
+        p = root / 'emails/a.html'
+        p.write_text(p.read_text() + ('<blockquote>' + extra + '</blockquote>' if where == 'quoted_email' else '<p>' + extra + '</p>'))
+        manifest = json.loads((root / 'manifest.json').read_text())
+        manifest['materials'][2].update(sha256=hashlib.sha256(p.read_bytes()).hexdigest(), size_bytes=p.stat().st_size)
+        dump(root / 'manifest.json', manifest)
+    write_material(root, 'process_log.json', logs)
+    dump(selection, d)
+    assert prepare(selection, tmp / 'dataset')[0]['status'] == 'excluded'

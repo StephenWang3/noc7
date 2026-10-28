@@ -783,28 +783,26 @@ class RulesProvider:
                 )
             basis = responsibility_basis(text, key, trusted=trusted_original)
             if basis:
-                parties.append(
-                    PartyCandidate(
+                party_values = responsibility_claims(text) if basis == ResponsibilityBasis.CLAIMED and key != "responsible_party" else []
+                for party_value in dict.fromkeys(party_values or [text]):
+                    parties.append(PartyCandidate(
                         id=candidate_id(parties),
-                        party=(responsibility_claims(text) or [text])[0]
-                        if basis == ResponsibilityBasis.CLAIMED and key != "responsible_party" else text,
+                        party=party_value,
                         basis=basis,
                         attribution=attr,
                         evidence_refs=[span.id],
-                    )
-                )
+                    ))
             lr = location_role(text, key, trusted=trusted_original)
             if lr:
-                locations.append(
-                    LocationCandidate(
+                location_values = rfo_fault_points(text) if lr == LocationRole.LOCATED_FAULT_POINT else []
+                for location_value in dict.fromkeys(location_values or [text]):
+                    locations.append(LocationCandidate(
                         id=candidate_id(locations),
-                        description=(rfo_fault_points(text) or [text])[0]
-                        if lr == LocationRole.LOCATED_FAULT_POINT else text,
+                        description=location_value,
                         role=lr,
                         attribution=attr,
                         evidence_refs=[span.id],
-                    )
-                )
+                    ))
             if key == "circuit_id":
                 identifiers.append(
                     ServiceIdentifier(

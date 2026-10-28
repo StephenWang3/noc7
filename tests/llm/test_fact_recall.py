@@ -43,6 +43,8 @@ def test_explicit_claim_is_documented_not_formally_confirmed(server, sample, tex
 @pytest.mark.parametrize("text", [
     "疑似客户原因。", "非客户原因。", "不能认定客户原因。", "请排查客户原因。",
     "客户原因待核实。", "客户原因已排除。", "责任归属：未知。", "责任归属：可能为客户。",
+    "排除客户原因。", "否认客户原因。", "已排除客户侧原因。",
+    "客户原因（疑似）。", "客户原因，待核实。", "责任归属：客户，待确认。",
     "不能认定（客户原因）。", "疑似（客户原因）。", "办结（客户原因）尚待确认。",
 ])
 def test_uncertain_or_negated_claims_stay_unknown(server, sample, text):
@@ -103,3 +105,30 @@ def test_conflicting_explicit_claims_are_not_auto_selected(server, sample):
     result = OpenAICompatibleTextProvider(qwen_config(server)).extract(ctx)
     assert result.elements.responsible_party.status == "conflicted"
     assert result.elements.responsible_party.value is None
+
+
+@pytest.mark.parametrize("excerpt", ["告警位置：SYN-机房", "SYN-Node-A"])
+def test_rfo_cannot_transfer_role_to_alarm_or_single_node(server, sample, excerpt):
+    ctx = context(sample, "告警位置：SYN-机房 " + RFO.replace("\n", " "))
+    el = model_result(server, ctx, "location", excerpt, {"role": "located_fault_point"}).elements.location
+    assert el.status == "unknown" and el.value is None
+
+
+def test_rule_keeps_all_distinct_claims_in_one_span(sample):
+    ctx = context(sample, "责任归属：SYN-甲。责任归属：SYN-乙。")
+    el = RulesProvider().extract(ctx).elements.responsible_party
+    assert el.status == "conflicted" and el.value is None
+    assert len(el.candidates) == 2
+
+
+def test_rule_keeps_all_rfo_points_in_one_span(sample):
+    ctx = context(sample, RFO + "\n" + RFO.replace("SYN-Node-A", "SYN-Node-C"))
+    el = RulesProvider().extract(ctx).elements.location
+    assert el.status == "conflicted" and el.value is None
+    assert len(el.candidates) == 2
+
+
+def test_long_rfo_excerpt_uses_only_complete_point(server, sample):
+    ctx = context(sample, RFO)
+    el = model_result(server, ctx, "location", RFO, {"role": "located_fault_point"}).elements.location
+    assert el.value == POINT

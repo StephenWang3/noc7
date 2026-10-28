@@ -6,11 +6,10 @@ import re
 def responsibility_claims(text: str) -> list[str]:
     claims = []
     for match in re.finditer(r"客户(?:侧)?原因|责任归属[：:]\s*[^。；;\n，,]+", text):
-        left = re.split(r"[。；;\n，,]", text[:match.start()])[-1]
-        right = re.split(r"[。；;\n，,]", text[match.end():])[0]
-        if re.search(r"非|不|未|疑似|可能|怀疑|排查|核查|确认是否|是否|假设|若|如果", left):
-            continue
-        if re.search(r"排除|否认|未确认|待确认|待核实|待查|尚待|不成立|可能", right):
+        # 否定、疑似与待核实覆盖整句，包括括号和逗号后的限定。
+        sentence = re.split(r"[。；;\n]", text[:match.start()])[-1] + text[match.start():].split("。", 1)[0]
+        sentence = re.split(r"[；;\n]", sentence)[0]
+        if re.search(r"非|不|未|疑似|可能|怀疑|排查|核查|是否|假设|若|如果|排除|否认|除外|待确认|待核实|待查|尚待|未知|待定", sentence):
             continue
         value = match.group().strip()
         # 标签值本身也可能是占位、否定或疑似，不能升级为归因记载。
@@ -24,7 +23,7 @@ def rfo_fault_points(text: str) -> list[str]:
     # 只看当前正文，转发／引用的旧 RFO 不用作本次定位。
     current = re.split(r"(?:\n|<br\s*/?>)\s*(?:From:|发件人[：:]|[- ]*Original Message)", text, maxsplit=1, flags=re.I)[0]
     points = []
-    for match in re.finditer(r"\bLocation\s*:\s*(?P<point>Between\s+[^\n\r<>;]+)", current, re.I):
+    for match in re.finditer(r"\bLocation\s*:\s*(?P<point>Between\s+[^\n\r<>;.]+?)(?=[.\n\r<>;]|\s+(?:Reason\s+for|Location\s*:|Corrective\s+Actions)|$)", current, re.I):
         point = match.group("point").strip().rstrip(".")
         # 故障段必须有两个命名位置及地区；笼统的中心设备到客户端不满足。
         if not re.fullmatch(r"Between\s+\S[^,]*?\s+and\s+\S[^,]*,\s*\S.+", point, re.I):

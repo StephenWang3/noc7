@@ -683,10 +683,16 @@ def _location_of(excerpt: str, spans):
     for span in spans:
         if excerpt not in span.text and excerpt != usable_text(span):
             continue
-        if (_trusted(span)
-            and location_role(span.text, _field_key(span)) == LocationRole.LOCATED_FAULT_POINT
-            and any(excerpt in point or point in excerpt for point in rfo_fault_points(span.text))):
-            found.append(LocationRole.LOCATED_FAULT_POINT)
+        points = rfo_fault_points(span.text)
+        if points:
+            # RFO 角色只赋给覆盖完整故障段的摘录，不能借整句转移给告警点。
+            complete = any(point in excerpt for point in points)
+            role = location_role(span.text, _field_key(span), trusted=_trusted(span))
+            if complete and _trusted(span) and role == LocationRole.LOCATED_FAULT_POINT:
+                found.append(role)
+            else:
+                own_role = location_role(excerpt, _field_key(span), trusted=False)
+                found.append(own_role)
             continue
         found.append(location_role(
             _clause(span.text, excerpt), _field_key(span), trusted=_trusted(span)
@@ -708,8 +714,13 @@ def _ground_location(element, spans):
         role = _location_of(candidate.description, support)
         if role is None:
             continue
+        description = candidate.description
+        if role == LocationRole.LOCATED_FAULT_POINT:
+            complete = [p for span in support for p in rfo_fault_points(span.text) if p in description]
+            if len(set(complete)) == 1:
+                description = complete[0]
         revised.append(candidate.model_copy(update={
-            "role": role, "note": _note(candidate.note, blob)
+            "description": description, "role": role, "note": _note(candidate.note, blob)
         }))
     note = _note(element.note, _blob(_all_refs(element), spans))
     if element.status == ElementStatus.UNKNOWN:
@@ -728,7 +739,8 @@ def _ground_location(element, spans):
         return _clear(element, revised, note)
     if element.status is ElementStatus.CONFLICTED and len(revised) < 2:
         return _clear(element, revised, note)
-    return element.model_copy(update={"candidates": revised, "note": note})
+    return element.model_copy(update={"candidates": revised, "note": note,
+                                      "value": chosen.description if supported else element.value})
 
 
 def _cause_of(excerpt: str, spans):
