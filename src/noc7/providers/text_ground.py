@@ -11,6 +11,7 @@ import re
 
 from ..extract.baseline import (
     _time_kind,
+    attribution as span_attribution,
     cause_kind,
     conclusion_observations,
     confirms_recovery,
@@ -24,9 +25,11 @@ from ..extract.types import Extraction, ExtractionContext
 from ..schema import (
     ATTRIBUTION_LABELS_ZH,
     CAUSE_KINDS_ALLOWED_AS_VALUE,
+    Attribution,
     CauseKind,
     ElementStatus,
     IdentityStatus,
+    IssueCode,
     LocationRole,
     ResponsibilityBasis,
     SpanRole,
@@ -60,36 +63,489 @@ _END_CONCLUSION = {TimeKind.RECOVERY_FIELD, TimeKind.CUSTOMER_CONFIRMED_RECOVERY
 _CONCLUSIVE = {ElementStatus.DOCUMENTED, ElementStatus.CONFIRMED}
 
 
-def normalize_model_payload(payload, offset: str | None):
-    """时间只保留原文。iso、精度和时区在本地填写，避免结构校验拒绝合格摘录。"""
+_EVIDENCE_RE = re.compile(r"^M\d{2,}/[A-Za-z0-9:_.\-]+$")
+_CANDIDATE_RE = re.compile(r"^[A-Za-z][A-Za-z0-9_.\-]*$")
+_EVENT_RE = re.compile(r"^EV[A-Za-z0-9_.\-]+$")
+_GRANULARITY = {"country", "city", "site", "segment", "device", "port"}
+_ID_ROLES = {"reported", "old", "new", "current", "other"}
+_CONCLUSIVE_STATUS = {"documented", "confirmed"}
+_QUOTE_ELEMENTS = {
+    "responsible_party": "party",
+    "cause": "statement",
+    "location": "description",
+}
 
-    def walk(node, parent_key=None):
-        if isinstance(node, list):
-            return [walk(item, parent_key) for item in node]
-        if not isinstance(node, dict):
-            return node
-        if _is_time(node):
-            raw = node.get("raw")
-            if not isinstance(raw, str):
-                return {key: walk(value, parent_key) for key, value in node.items()}
-            try:
-                filled = time_phrase(raw, offset)
-            except ValueError:
-                filled = TimeValue(raw=raw)
-            return filled.model_dump(mode="json")
-        copied = {key: walk(value, key) for key, value in node.items()}
-        if (
-            parent_key == "candidates"
-            and "time" in copied
-            and "evidence_refs" in copied
-            and "time_kind" not in copied
-            and "event_kind" not in copied
-            and "step_kind" not in copied
-        ):
-            copied["time_kind"] = TimeKind.OTHER.value
-        return copied
 
-    return walk(payload)
+def _one_of(value, enum_cls):
+    try:
+        return enum_cls(value).value
+    except ValueError:
+        return None
+
+
+def _refs(value):
+    if isinstance(value, str):
+        value = [value]
+    if not isinstance(value, list):
+        return []
+    return [item for item in value if isinstance(item, str) and _EVIDENCE_RE.match(item)]
+
+
+def _time_node(value):
+    if isinstance(value, str) and value:
+        return {"raw": value}
+    if isinstance(value, dict) and isinstance(value.get("raw"), str) and value["raw"]:
+        return {"raw": value["raw"]}
+    return None
+
+
+def _raw(value):
+    node = _time_node(value)
+    return node["raw"] if node else None
+
+
+def _attribution(value, refs, spans):
+    parsed = _one_of(value, Attribution)
+    if parsed:
+        return parsed
+    for ref in refs:
+        span = spans.get(ref)
+        if span is not None:
+            return span_attribution(span, span.text).value
+    return Attribution.UNKNOWN.value
+
+
+def _number_ids(items, pattern, prefix):
+    used = set()
+    mapping = {}
+    n = 1
+    for item in items:
+        old = item.get("id")
+        if isinstance(old, str) and pattern.match(old) and old not in used:
+            new = old
+        else:
+            while True:
+                new = f"{prefix}{n}"
+                n += 1
+                if new not in used:
+                    break
+        used.add(new)
+        if isinstance(old, str) and old not in mapping:
+            mapping[old] = new
+        item["id"] = new
+    return mapping
+
+
+def _selected(value, mapping, ids):
+    if not isinstance(value, str):
+        return None
+    value = mapping.get(value, value)
+    return value if value in ids else None
+
+
+def _optional_text(value):
+    return value if isinstance(value, str) else None
+
+
+def _meta(node):
+    meta = {}
+    note = _optional_text(node.get("note"))
+    if note is not None:
+        meta["note"] = note
+    if isinstance(node.get("review"), dict):
+        meta["review"] = node["review"]
+    issues = []
+    if isinstance(node.get("issues"), list):
+        for code in node["issues"]:
+            parsed = _one_of(code, IssueCode)
+            if parsed:
+                issues.append(parsed)
+    if issues:
+        meta["issues"] = issues
+    return meta
+
+
+def _shell(item, spans, quote_key):
+    if not isinstance(item, dict):
+        return None
+    text = item.get(quote_key)
+    if not isinstance(text, str) or not text:
+        return None
+    refs = _refs(item.get("evidence_refs"))
+    if not refs:
+        return None
+    out = {
+        "id": item.get("id"),
+        "evidence_refs": refs,
+        "attribution": _attribution(item.get("attribution"), refs, spans),
+        quote_key: text,
+    }
+    note = _optional_text(item.get("note"))
+    if note is not None:
+        out["note"] = note
+    return out
+
+
+def _step_label(value, action, refs, spans):
+    parsed = _one_of(value, StepKind)
+    if parsed:
+        return parsed
+    text = action
+    for ref in refs:
+        span = spans.get(ref)
+        if span is not None and action in span.text:
+            text = span.text
+            break
+    return step_kind(text, action).value
+
+
+def _cause_label(value, selected):
+    parsed = _one_of(value, CauseKind)
+    if selected:
+        allowed = {kind.value for kind in CAUSE_KINDS_ALLOWED_AS_VALUE}
+        return parsed if parsed in allowed else CauseKind.ROOT_CAUSE_CLAIMED.value
+    return parsed or CauseKind.INVESTIGATION_FINDING.value
+
+
+def _basis_label(value, selected):
+    parsed = _one_of(value, ResponsibilityBasis)
+    if selected:
+        allowed = {
+            ResponsibilityBasis.FORMAL_DETERMINATION.value,
+            ResponsibilityBasis.CLAIMED.value,
+        }
+        return parsed if parsed in allowed else ResponsibilityBasis.CLAIMED.value
+    return parsed or ResponsibilityBasis.INFERRED_FROM_ROLE.value
+
+
+def _role_label(value, selected):
+    parsed = _one_of(value, LocationRole)
+    if selected:
+        return LocationRole.LOCATED_FAULT_POINT.value
+    return parsed or LocationRole.ALARM_LOCATION.value
+
+
+def _finish_conclusion(node, candidates, value, quote_key):
+    status = _one_of(node.get("status"), ElementStatus)
+    selected = node.get("selected") if isinstance(node.get("selected"), str) else None
+    ids = {item["id"] for item in candidates}
+    if selected not in ids:
+        selected = None
+    refs = _refs(node.get("evidence_refs"))
+    if status == ElementStatus.CONFLICTED.value:
+        if len(candidates) < 2:
+            return "unknown", None, None, refs
+        # 非结论状态不保留 selected，避免重算后的类别和选中项互相打架。
+        return status, None, None, refs
+    attempted = status in _CONCLUSIVE_STATUS or (status is None and value is not None)
+    if attempted:
+        chosen = next(
+            (item for item in candidates if item["id"] == selected and item.get(quote_key) == value),
+            None,
+        )
+        if chosen is None:
+            chosen = next((item for item in candidates if item.get(quote_key) == value), None)
+        if chosen is None or not chosen["evidence_refs"]:
+            return "unknown", None, None, refs
+        if not refs:
+            refs = list(chosen["evidence_refs"])
+        kept = status if status in _CONCLUSIVE_STATUS else ElementStatus.DOCUMENTED.value
+        return kept, value, chosen["id"], refs
+    return ElementStatus.UNKNOWN.value, None, None, refs
+
+
+def _repair_quote_element(node, spans, quote_key):
+    if not isinstance(node, dict):
+        node = {}
+    candidates = []
+    for item in node.get("candidates") or []:
+        shell = _shell(item, spans, quote_key)
+        if shell is None:
+            continue
+        if quote_key == "statement":
+            shell["cause_kind"] = item.get("cause_kind")
+        elif quote_key == "party":
+            shell["basis"] = item.get("basis")
+        else:
+            shell["role"] = item.get("role")
+            if item.get("granularity") in _GRANULARITY:
+                shell["granularity"] = item["granularity"]
+        candidates.append(shell)
+    mapping = _number_ids(candidates, _CANDIDATE_RE, "C")
+    patched = dict(node)
+    patched["selected"] = _selected(node.get("selected"), mapping, {item["id"] for item in candidates})
+    value = node.get("value") if isinstance(node.get("value"), str) and node.get("value") else None
+    status, value, selected, refs = _finish_conclusion(patched, candidates, value, quote_key)
+    for item in candidates:
+        chosen = item["id"] == selected
+        if quote_key == "statement":
+            item["cause_kind"] = _cause_label(item.get("cause_kind"), chosen)
+        elif quote_key == "party":
+            item["basis"] = _basis_label(item.get("basis"), chosen)
+        else:
+            item["role"] = _role_label(item.get("role"), chosen)
+    repaired = dict(status=status, value=value, selected=selected, evidence_refs=refs, candidates=candidates)
+    repaired.update(_meta(node))
+    return repaired
+
+
+def _repair_time_element(node, spans):
+    if not isinstance(node, dict):
+        node = {}
+    candidates = []
+    for item in node.get("candidates") or []:
+        if not isinstance(item, dict):
+            continue
+        raw = _time_node(item.get("time"))
+        refs = _refs(item.get("evidence_refs"))
+        if raw is None or not refs:
+            continue
+        candidate = {
+            "id": item.get("id"),
+            "evidence_refs": refs,
+            "attribution": _attribution(item.get("attribution"), refs, spans),
+            "time": raw,
+            "time_kind": _one_of(item.get("time_kind"), TimeKind) or TimeKind.OTHER.value,
+        }
+        note = _optional_text(item.get("note"))
+        if note is not None:
+            candidate["note"] = note
+        candidates.append(candidate)
+    mapping = _number_ids(candidates, _CANDIDATE_RE, "C")
+    value = _time_node(node.get("value"))
+    comparable = [
+        {**item, "raw": item["time"]["raw"]} for item in candidates
+    ]
+    patched = dict(node)
+    patched["selected"] = _selected(node.get("selected"), mapping, {item["id"] for item in candidates})
+    status, _, selected, refs = _finish_conclusion(
+        patched, comparable, value["raw"] if value else None, "raw"
+    )
+    repaired = dict(
+        status=status,
+        value=value if status in _CONCLUSIVE_STATUS else None,
+        selected=selected,
+        evidence_refs=refs,
+        candidates=candidates,
+    )
+    repaired.update(_meta(node))
+    return repaired
+
+
+def _repair_observations(node, spans):
+    if not isinstance(node, dict):
+        node = {}
+    candidates = []
+    for item in node.get("candidates") or []:
+        shell = _shell(item, spans, "description")
+        if shell is None:
+            continue
+        for key in ("metric", "value_text", "unit", "scope"):
+            if isinstance(item.get(key), str):
+                shell[key] = item[key]
+        number = item.get("value")
+        if isinstance(number, (int, float)) and not isinstance(number, bool):
+            shell["value"] = number
+        observed = _time_node(item.get("observed_at"))
+        if observed:
+            shell["observed_at"] = observed
+        candidates.append(shell)
+    _number_ids(candidates, _CANDIDATE_RE, "C")
+    refs = _refs(node.get("evidence_refs"))
+    status = _one_of(node.get("status"), ElementStatus)
+    value = node.get("value") if isinstance(node.get("value"), str) and node.get("value") else None
+    if status in _CONCLUSIVE_STATUS and value and (refs or candidates):
+        if not refs:
+            refs = list(dict.fromkeys(ref for item in candidates for ref in item["evidence_refs"]))
+        kept = status
+    else:
+        kept, value = ElementStatus.UNKNOWN.value, None
+    repaired = dict(status=kept, value=value, evidence_refs=refs, candidates=candidates)
+    repaired.update(_meta(node))
+    return repaired
+
+
+def _repair_steps(node, spans):
+    if not isinstance(node, dict):
+        node = {}
+    steps = []
+    for item in node.get("value") or []:
+        shell = _shell(item, spans, "action")
+        if shell is None or not isinstance(item, dict):
+            continue
+        shell["step_kind"] = _step_label(item.get("step_kind"), shell["action"], shell["evidence_refs"], spans)
+        for key in ("actor", "target", "result"):
+            if isinstance(item.get(key), str):
+                shell[key] = item[key]
+        moment = _time_node(item.get("time"))
+        if moment:
+            shell["time"] = moment
+        if isinstance(item.get("duplicate_of"), str):
+            shell["duplicate_of"] = item["duplicate_of"]
+        steps.append(shell)
+    mapping = _number_ids(steps, _CANDIDATE_RE, "C")
+    ids = {item["id"] for item in steps}
+    for item in steps:
+        dup = item.get("duplicate_of")
+        if not isinstance(dup, str):
+            continue
+        dup = mapping.get(dup, dup)
+        if dup in ids and dup != item["id"]:
+            item["duplicate_of"] = dup
+        else:
+            item.pop("duplicate_of", None)
+    refs = _refs(node.get("evidence_refs"))
+    status = _one_of(node.get("status"), ElementStatus)
+    # 步骤本身就是 value，conflicted 既要空 value 又要两个候选，结构上站不住。
+    if steps:
+        kept = (
+            ElementStatus.CONFIRMED.value
+            if status == ElementStatus.CONFIRMED.value
+            else ElementStatus.DOCUMENTED.value
+        )
+        if not refs:
+            refs = list(dict.fromkeys(ref for item in steps for ref in item["evidence_refs"]))
+        value = steps
+    else:
+        kept, value, refs = ElementStatus.UNKNOWN.value, [], []
+    repaired = dict(status=kept, value=value, evidence_refs=refs)
+    repaired.update(_meta(node))
+    return repaired
+
+
+def _repair_events(items, spans):
+    if not isinstance(items, list):
+        return []
+    events = []
+    for item in items:
+        shell = _shell(item, spans, "action")
+        if shell is None or not isinstance(item, dict):
+            continue
+        shell["event_kind"] = _step_label(item.get("event_kind"), shell["action"], shell["evidence_refs"], spans)
+        for key in ("actor", "target", "result", "scope"):
+            if isinstance(item.get(key), str):
+                shell[key] = item[key]
+        moment = _time_node(item.get("time"))
+        if moment:
+            shell["time"] = moment
+            shell["time_kind"] = _one_of(item.get("time_kind"), TimeKind) or TimeKind.OTHER.value
+        if isinstance(item.get("duplicate_of"), str):
+            shell["duplicate_of"] = item["duplicate_of"]
+        events.append(shell)
+    mapping = _number_ids(events, _EVENT_RE, "EV")
+    ids = {item["id"] for item in events}
+    for item in events:
+        dup = item.get("duplicate_of")
+        if not isinstance(dup, str):
+            continue
+        dup = mapping.get(dup, dup)
+        if dup in ids and dup != item["id"]:
+            item["duplicate_of"] = dup
+        else:
+            item.pop("duplicate_of", None)
+    return events
+
+
+def _repair_identity(node):
+    if not isinstance(node, dict):
+        return None
+    identifiers = node.get("identifiers")
+    if not isinstance(identifiers, list):
+        if isinstance(node.get("value"), str) and node["value"]:
+            identifiers = [node]
+        else:
+            identifiers = []
+    repaired = []
+    for item in identifiers:
+        if not isinstance(item, dict) or not isinstance(item.get("value"), str) or not item["value"]:
+            continue
+        role = item.get("role") if item.get("role") in _ID_ROLES else "other"
+        entry = {"value": item["value"], "role": role, "evidence_refs": _refs(item.get("evidence_refs"))}
+        note = _optional_text(item.get("note"))
+        if note is not None and item is not node:
+            entry["note"] = note
+        repaired.append(entry)
+    status = _one_of(node.get("status"), IdentityStatus) or IdentityStatus.UNVERIFIED.value
+    result = {"status": status, "identifiers": repaired}
+    note = _optional_text(node.get("note"))
+    if note is not None:
+        result["note"] = note
+    if not repaired and "note" not in result:
+        return None
+    return result
+
+
+def _repair_quotes(items):
+    if not isinstance(items, list):
+        return []
+    quotes = []
+    for item in items:
+        if not isinstance(item, dict):
+            continue
+        evidence_id = item.get("evidence_id")
+        quote = item.get("quote")
+        if isinstance(evidence_id, str) and _EVIDENCE_RE.match(evidence_id) and isinstance(quote, str) and quote:
+            quotes.append({"evidence_id": evidence_id, "quote": quote})
+    return quotes
+
+
+def _repair_payload(payload, spans):
+    elements = payload.get("elements")
+    if not isinstance(elements, dict):
+        return payload
+    repaired = {}
+    for name in ("start_time", "end_time"):
+        repaired[name] = _repair_time_element(elements.get(name), spans)
+    repaired["phenomenon"] = _repair_observations(elements.get("phenomenon"), spans)
+    for name, quote_key in _QUOTE_ELEMENTS.items():
+        repaired[name] = _repair_quote_element(elements.get(name), spans, quote_key)
+    repaired["handling_process"] = _repair_steps(elements.get("handling_process"), spans)
+    result = {
+        "elements": repaired,
+        "events": _repair_events(payload.get("events"), spans),
+        "quotes": _repair_quotes(payload.get("quotes")),
+    }
+    if "service_identity" in payload:
+        result["service_identity"] = _repair_identity(payload.get("service_identity"))
+    return result
+
+
+def normalize_model_payload(payload, offset: str | None, spans=None):
+    """先补齐缺字段、收掉非法类别和多余字段，再把时间收成原文。
+
+    缺编号、归属、步骤类别，以及写错的枚举、写成纯文字的时间，不再整单拒绝。
+    语义类别仍由后续本地规则按引用原文重算；对不上的结论改成 unknown。
+    """
+    if isinstance(payload, dict):
+        payload = _repair_payload(payload, {span.id: span for span in spans or ()})
+    return _fill_times(payload, offset)
+
+
+def _fill_times(node, offset, parent_key=None):
+    if isinstance(node, list):
+        return [_fill_times(item, offset, parent_key) for item in node]
+    if not isinstance(node, dict):
+        return node
+    if _is_time(node):
+        raw = node.get("raw")
+        if not isinstance(raw, str):
+            return {key: _fill_times(value, offset, parent_key) for key, value in node.items()}
+        try:
+            filled = time_phrase(raw, offset)
+        except ValueError:
+            filled = TimeValue(raw=raw)
+        return filled.model_dump(mode="json")
+    copied = {key: _fill_times(value, offset, key) for key, value in node.items()}
+    if (
+        parent_key == "candidates"
+        and "time" in copied
+        and "evidence_refs" in copied
+        and "time_kind" not in copied
+        and "event_kind" not in copied
+        and "step_kind" not in copied
+    ):
+        copied["time_kind"] = TimeKind.OTHER.value
+    return copied
 
 
 def ground_extraction(ctx: ExtractionContext, data: Extraction) -> Extraction:

@@ -3,8 +3,9 @@ import json
 
 import pytest
 
-from noc7.extract.types import ExtractionContext
+from noc7.extract.types import Extraction, ExtractionContext
 from noc7.providers.text_config import TextProviderError
+from noc7.providers.text_ground import normalize_model_payload
 from noc7.providers.text_http import OpenAICompatibleTextProvider
 from noc7.providers.text_prompt import prepare_evidence
 from noc7.rules import ExtractionRejected
@@ -264,6 +265,64 @@ def test_evidence_filter_preserves_ocr_location_and_source_links(sample):
     ocr = next(s for s in clean.evidence if s.id == "M01/img:r1")
     assert ocr.locator.bbox == (1, 2, 30, 40)
     assert next(s for s in clean.evidence if s.id == "M01/quoted").derived_from == [source.id]
+
+
+def test_structural_gaps_are_filled_before_validation(server, sample):
+    text = "2026-03-01 10:00:00 已联系现场核查光缆。"
+    span = EvidenceSpan(
+        id="M01/f:diagnosis", material_id="M01", locator=FieldLocator(field_key="diagnosis"),
+        text=text, extractor="synthetic",
+    )
+    data = empty_extraction()
+    data["elements"]["phenomenon"]["selected"] = "C9"
+    data["elements"]["cause"] = dict(
+        status="documented", value="光缆", selected="C1", evidence_refs=[span.id],
+        candidates=[dict(id="C1", evidence_refs=[span.id], attribution="noc_check",
+                         statement="光缆", cause_kind="not-a-kind")],
+    )
+    data["elements"]["start_time"] = dict(
+        status="documented", selected="bad id", evidence_refs=[span.id],
+        value="2026-03-01 10:00:00",
+        candidates=[dict(evidence_refs=[span.id], time="2026-03-01 10:00:00", time_kind="not-a-kind")],
+    )
+    data["elements"]["handling_process"] = dict(
+        status="done", evidence_refs=[],
+        value=[dict(action="已联系现场核查光缆", evidence_refs=[span.id], result="模型旁白")],
+    )
+    data["events"] = [dict(action="已联系现场核查光缆", evidence_refs=[span.id], event_kind="not-a-kind")]
+    data["service_identity"] = dict(value="光缆", evidence_refs=[span.id])
+    data["quotes"] = [dict(evidence_id=span.id, quote=text)]
+    server.default = envelope(data)
+    result = OpenAICompatibleTextProvider(qwen_config(server)).extract(
+        ExtractionContext(sample[0].bundle, [span])
+    )
+    step = result.elements.handling_process.value[0]
+    assert step.id == "C1" and step.attribution == "system_field" and step.step_kind == "communication"
+    assert step.result is None
+    start = result.elements.start_time.candidates[0]
+    assert start.time.raw == "2026-03-01 10:00:00" and start.time.precision == "second"
+    assert result.events[0].id == "EV1" and result.events[0].event_kind == "communication"
+    assert result.service_identity is not None
+    assert result.service_identity.status == "unverified"
+    assert result.service_identity.identifiers[0].value == "光缆"
+
+
+def test_valid_labels_survive_structure_repair():
+    text = "现场确认光纤中断。"
+    span = EvidenceSpan(
+        id="M01/f:diagnosis", material_id="M01", locator=FieldLocator(field_key="diagnosis"),
+        text=text, extractor="synthetic",
+    )
+    data = empty_extraction()
+    data["elements"]["cause"] = dict(
+        status="unknown", value=None, selected=None, evidence_refs=[],
+        candidates=[dict(id="C1", evidence_refs=[span.id], attribution="field_engineer",
+                         statement="现场确认光纤中断", cause_kind="investigation_finding")],
+    )
+    repaired = normalize_model_payload(data, "+08:00", [span])
+    Extraction.model_validate(repaired)
+    assert repaired["elements"]["cause"]["candidates"][0]["cause_kind"] == "investigation_finding"
+    assert repaired["elements"]["cause"]["status"] == "unknown"
 
 
 def test_filtered_evidence_cannot_return_through_model_refs(server, sample):

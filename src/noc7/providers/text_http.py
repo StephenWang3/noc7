@@ -126,7 +126,7 @@ class OpenAICompatibleTextProvider:
             raise TextProviderError("模型输出不是有效 JSON，已拒绝且未保存远端正文。") from None
         try:
             data = Extraction.model_validate(normalize_model_payload(
-                parsed, ctx.bundle.manifest.default_timezone
+                parsed, ctx.bundle.manifest.default_timezone, ctx.evidence
             ))
         except (ValidationError, RecursionError):
             raise TextProviderError("模型七要素结构不合格，已拒绝且未保存远端正文。") from None
