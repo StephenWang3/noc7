@@ -22,7 +22,7 @@ from .company import (
     write_company_docx,
 )
 
-TEMPLATE_VERSION = "1.0"
+TEMPLATE_VERSION = "1.1"
 ROOT = Path(__file__).parent
 STATUS = {
     "documented": "原文记载",
@@ -82,6 +82,25 @@ def _value(el):
     return el.value
 
 
+def _relation_text(r):
+    if r is None:
+        return None
+    certainty = {"asserted": "明确陈述", "suspected": "推测", "negated": "否定", "unknown": "未明"}[r.modality]
+    text = f"事件：{r.event_id}；范围：{r.scope}；{certainty}；{'本次事件' if r.current_event else '非本次事件'}。"
+    if hasattr(r, "speaker"):
+        assertion = {"fault": "故障", "mechanism": "机制", "planned_work": "作业", "phenomenon": "现象", "finding": "排查", "recovery": "恢复方式", "unknown": "未明"}[r.assertion]
+        text += f"{r.speaker}陈述的{assertion}；{'影响本次业务' if r.affects_service else '未说明业务影响'}；{'已发生' if r.occurred else '未证明已发生'}。"
+        if r.contradicts:
+            text += "相矛盾候选：" + "、".join(r.contradicts) + "。"
+    for q in r.context:
+        text += f"依据 {q.evidence_id}：{q.quote}；"
+    for key, label in (("date_anchor", "日期锚点"), ("timezone_anchor", "时区锚点"), ("customer_confirmation", "客户确认依据")):
+        q = getattr(r, key, None)
+        if q:
+            text += f"{label} {q.evidence_id}：{q.quote}；"
+    return text
+
+
 def _candidate(c):
     kind = next(
         (
@@ -108,14 +127,26 @@ def _candidate(c):
         "source": ATTRIBUTION_LABELS_ZH[c.attribution],
         "refs": c.evidence_refs,
         "note": c.note,
+        "relation": _relation_text(getattr(c, "relation", None)),
     }
+
+
+def duration_basis(result: AnalysisResult) -> bool:
+    if result.semantic_assessment is None:
+        return True
+    start, end = result.elements.start_time, result.elements.end_time
+    a = next((c for c in start.candidates if c.id == start.selected), None)
+    b = next((c for c in end.candidates if c.id == end.selected), None)
+    return bool(a and b and a.relation and b.relation and a.time_kind != "alarm_raised"
+                and (a.relation.event_id, a.relation.scope) == (b.relation.event_id, b.relation.scope)
+                and a.time.utc_offset is not None and b.time.utc_offset is not None)
 
 
 def final_duration(result: AnalysisResult) -> float | None:
     if any(i.code == "TICKET_CANCELLED" for i in result.issues):
         return None
     start, end = result.elements.start_time, result.elements.end_time
-    if end.status != ElementStatus.CONFIRMED or not start.value or not end.value:
+    if not duration_basis(result) or end.status != ElementStatus.CONFIRMED or not start.value or not end.value:
         return None
     a, b = start.value.as_datetime(), end.value.as_datetime()
     if not a or not b or (a.utcoffset() is None) != (b.utcoffset() is None):
@@ -142,6 +173,7 @@ def render(
     env.filters["role"] = lambda v: ROLE[v]
     env.filters["parse"] = lambda v: PARSE[v]
     env.filters["step"] = lambda v: STEP[v]
+    env.filters["constraint_status"] = lambda v: {"eligible": "可采用候选", "pending": "待核实", "conflict": "有冲突", "downgraded": "降低确认等级"}[v]
     env.filters["quote_status"] = lambda v: {"strict": "严格匹配", "whitespace": "仅空白等价匹配", "mismatch": "待核对：引文不匹配"}[v]
     env.filters["model_source"] = lambda v: ATTRIBUTION_LABELS_ZH.get(v, v or "未提供") if isinstance(v, str) else str(v or "未提供")
     env.filters["source"] = lambda v: ATTRIBUTION_LABELS_ZH[v]
@@ -159,6 +191,7 @@ def render(
         result=result,
         rows=rows,
         suggestions=_suggestion_rows(result),
+        semantic_assessment=result.semantic_assessment,
         whitespace_checks=[c for c in result.quote_checks if c.status == "whitespace"],
         title="结案草稿" if report_type == "closure" else "阶段报告",
         template_version=TEMPLATE_VERSION,

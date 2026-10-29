@@ -27,7 +27,17 @@
 {% else %}- 没有可用候选。
 {% endfor %}
 {% endfor %}
-## AI 建议，待确认
+{% if semantic_assessment %}## 时间与原因：模型关系和本地核验
+
+模型判断含义，程序仅核对出处与约束；引用可定位不证明模型语义正确，也不表示人工审核。
+
+{% for row in rows %}{% for c in row.candidates %}{% if c.relation %}- {{ row.label|md }} / {{ c.id|md }}：{{ c.relation|md }}
+{% endif %}{% endfor %}{% endfor %}
+{% for c in semantic_assessment.checks %}- {{ c.element|md }} / {{ (c.candidate_id or '结论')|md }} / {{ c.outcome|constraint_status|md }}：{{ c.reason|md }}（{{ c.evidence_refs|join('、')|md }}）。
+{% endfor %}
+原始三栏（含原状态、值、选中项和未识别格式）：{{ semantic_assessment.original|md }}
+
+{% endif %}## AI 建议，待确认
 
 以下内容是模型原始判断，不代表人工认定；“某方声称”及模型自报的 confirmed 均不表示已审核。引用匹配只证明文字存在，不证明业务语义正确。建议不进入正式结论或公司报告。
 

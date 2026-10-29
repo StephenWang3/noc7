@@ -157,6 +157,12 @@ class OpenAICompatibleTextProvider:
                 audit.record(normalized=normalized)
             data = Extraction.model_validate(normalized)
             data.suggestions = suggestions
+            from copy import deepcopy
+            from ..schema.relations import SemanticAssessment
+            data.semantic_assessment = SemanticAssessment(original={
+                key: deepcopy(parsed["elements"].get(key))
+                for key in ("start_time", "end_time", "cause")
+            })
         except TextProviderError:
             raise
         except (ValueError, TypeError, RecursionError):
@@ -164,7 +170,7 @@ class OpenAICompatibleTextProvider:
         before = data.model_dump(mode="json")
         if audit:
             audit.record(before_grounding=before)
-        # 两栏原始业务判断留在建议区；其余语义标签、现象概述和归一时间沿用规则。
+        # 两栏建议独立保存；时间和原因只验证模型关系，其余沿用既有处理。
         data = ground_extraction(ctx, data)
         if audit:
             after = data.model_dump(mode="json")

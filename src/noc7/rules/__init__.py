@@ -29,7 +29,7 @@ from ..schema import (
     ValidationIssue,
 )
 
-VERSION = "1.1"
+VERSION = "1.2"
 
 
 def issue(code: IssueCode, message: str, refs=(), element=None) -> ValidationIssue:
@@ -59,6 +59,9 @@ def validate_extraction(ctx: ExtractionContext, data: Extraction) -> None:
     refs += [q.evidence_id for q in data.quotes]
     for suggestion in data.suggestions:
         refs.extend(suggestion.iter_evidence_refs())
+    if data.semantic_assessment:
+        from ..providers.semantic_constraints import original_refs
+        refs.extend(original_refs(data.semantic_assessment.original))
     errors = []
     missing = sorted(set(refs) - spans.keys())
     if missing:
@@ -74,6 +77,11 @@ def validate_extraction(ctx: ExtractionContext, data: Extraction) -> None:
         checks.append(checked)
         return checked.status != "mismatch"
 
+    if data.semantic_assessment:
+        from ..providers.semantic_constraints import original_quotes
+        for ref, text in original_quotes(data.semantic_assessment.original):
+            if ref in spans and not matches(text, spans[ref], "semantic_assessment/original"):
+                errors.append(issue(IssueCode.EVIDENCE_QUOTE_MISMATCH, "原始关系引文与证据不符。", [ref]))
     for suggestion in data.suggestions:
         suggestion.checks = [match_quote(text, spans[ref].text, path=path, evidence_id=ref)
                              for path, ref, text in suggestion.quote_requests() if ref in spans]
@@ -139,6 +147,13 @@ def validate_extraction(ctx: ExtractionContext, data: Extraction) -> None:
                         name,
                     )
                 )
+            relation = getattr(candidate, "relation", None)
+            if relation:
+                from ..providers.semantic_constraints import relation_quotes
+                for q in relation_quotes(relation):
+                    if q.evidence_id in spans and not matches(q.quote, spans[q.evidence_id], f"{name.value}/candidates/{candidate.id}/relation"):
+                        errors.append(issue(IssueCode.EVIDENCE_QUOTE_MISMATCH,
+                                            "关系引文与原文不一致。", [q.evidence_id], name))
             if hasattr(candidate, "time_kind"):
                 raw = candidate.time.raw
                 metadata = []
@@ -172,14 +187,18 @@ def validate_extraction(ctx: ExtractionContext, data: Extraction) -> None:
                         )
                     )
                 # 完整日期可直接复算；裸时刻需要日期锚点，由抽取器保留补齐说明。
-                if re.match(r"^(?:北京时间\s*)?\d{4}[-/.年]", raw):
+                if data.semantic_assessment or re.match(r"^(?:北京时间\s*)?\d{4}[-/.年]", raw):
                     offset = (
                         None
                         if candidate.time.tz_source == TimeZoneSource.UNKNOWN
                         else ctx.bundle.manifest.default_timezone
                     )
-                    expected = time_phrase(raw, offset)
-                    if expected.iso != candidate.time.iso:
+                    if data.semantic_assessment:
+                        from ..providers.semantic_constraints import normalized_time
+                        expected = normalized_time(candidate, ctx)
+                    else:
+                        expected = time_phrase(raw, offset)
+                    if (expected != candidate.time if data.semantic_assessment else expected.iso != candidate.time.iso):
                         errors.append(
                             issue(
                                 IssueCode.EVIDENCE_QUOTE_MISMATCH,
@@ -237,7 +256,7 @@ def validate_extraction(ctx: ExtractionContext, data: Extraction) -> None:
                         name,
                     )
                 )
-            elif name == ElementName.CAUSE:
+            elif name == ElementName.CAUSE and data.semantic_assessment is None:
                 semantic = cause_kind(chosen.statement)
                 if semantic and semantic not in {
                     CauseKind.ROOT_CAUSE_CONFIRMED,
@@ -304,7 +323,7 @@ def validate_extraction(ctx: ExtractionContext, data: Extraction) -> None:
                             name,
                         )
                     )
-        if name == ElementName.END_TIME and el.status == ElementStatus.CONFIRMED:
+        if data.semantic_assessment is None and name == ElementName.END_TIME and el.status == ElementStatus.CONFIRMED:
             if not any(
                 confirms_recovery(usable_text(s)) and s.role != SpanRole.QUOTED
                 for s in support
@@ -333,6 +352,11 @@ def validate_extraction(ctx: ExtractionContext, data: Extraction) -> None:
                         name,
                     )
                 )
+    if data.semantic_assessment:
+        from ..providers.semantic_constraints import apply_constraints, NAMES
+        expected = apply_constraints(ctx, data)
+        if any(getattr(expected.elements, n) != getattr(data.elements, n) for n in NAMES):
+            errors.append(issue(IssueCode.SEMANTIC_RELATION_INCOMPLETE, "正式结论未遵守关系约束。"))
     data.quote_checks = checks
     if errors:
         raise ExtractionRejected(errors)
@@ -382,6 +406,10 @@ def check(ctx: ExtractionContext, data: Extraction) -> list[ValidationIssue]:
     def add(code, message, refs=(), element=None):
         out.append(issue(code, message, refs, element))
 
+    if data.semantic_assessment:
+        for c in data.semantic_assessment.checks:
+            if c.outcome != "eligible":
+                add(c.code, c.reason, c.evidence_refs, ElementName(c.element))
     original = [
         s
         for s in spans
@@ -405,6 +433,8 @@ def check(ctx: ExtractionContext, data: Extraction) -> list[ValidationIssue]:
         for c in elements.end_time.candidates
         if c.time_kind == TimeKind.RECOVERY_FIELD
     ]
+    if data.semantic_assessment:
+        starts, ends = [], []  # 新链路只按关系分组比较，不能拿不同事件的首个字段相减。
     field_minutes = None
     if starts and ends:
         start, end = starts[0].time.as_datetime(), ends[0].time.as_datetime()
@@ -453,7 +483,7 @@ def check(ctx: ExtractionContext, data: Extraction) -> list[ValidationIssue]:
             not in {TimeKind.PLANNED, TimeKind.RECORD_TIME, TimeKind.MESSAGE_SENT}
         ]
         values = {c.time.as_datetime() or c.time.iso for c in parsed}
-        if len(values) > 1:
+        if data.semantic_assessment is None and len(values) > 1:
             add(
                 IssueCode.TIME_CANDIDATES_DIFFER,
                 "时间候选有不同语义或数值；建单、告警、关单时间不能替代起障/恢复。",
@@ -514,7 +544,7 @@ def check(ctx: ExtractionContext, data: Extraction) -> list[ValidationIssue]:
     elif elements.end_time.status != ElementStatus.CONFIRMED:
         add(
             IssueCode.RECOVERY_UNVERIFIED,
-            "仅有系统恢复记载，未见客户恢复确认；同意结单不等于确认恢复。",
+            "有业务恢复记载，缺少客户恢复确认关系；同意结单不等于确认恢复。",
             elements.end_time.evidence_refs,
             ElementName.END_TIME,
         )
@@ -543,7 +573,7 @@ def check(ctx: ExtractionContext, data: Extraction) -> list[ValidationIssue]:
     if any(c.cause_kind != CauseKind.CANDIDATE_LIST_ITEM for c in findings):
         add(
             IssueCode.CAUSE_NOT_DIAGNOSIS,
-            "排查结论、恢复方式和资源状态保留为候选，不能当作根因。",
+            "推测及其他非正式原因类别保留为候选，不能当作已确认根因。",
             [r for c in findings for r in c.evidence_refs],
             ElementName.CAUSE,
         )
@@ -554,7 +584,7 @@ def check(ctx: ExtractionContext, data: Extraction) -> list[ValidationIssue]:
             [r for c in elements.responsible_party.candidates for r in c.evidence_refs],
             ElementName.RESPONSIBLE_PARTY,
         )
-    limited = [
+    limited = [] if data.semantic_assessment else [
         s.id
         for s in original
         if re.search(r"无告警|无丢包|未见丢包|流量正常|100 发 100 收", s.text)

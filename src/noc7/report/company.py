@@ -32,7 +32,7 @@ from ..schema import (
     TimeValue,
 )
 
-COMPANY_TEMPLATE_VERSION = "1.0"
+COMPANY_TEMPLATE_VERSION = "1.1"
 ROOT = Path(__file__).parent
 TITLE = "故障处理报告 Failure Report"
 PENDING = "【待核实】"
@@ -197,14 +197,28 @@ def _element_lines(el) -> tuple[Line, ...]:
     return _text_lines(el.value)
 
 
-def _time_lines(el) -> tuple[Line, ...]:
+def _time_lines(el, *, semantic=False) -> tuple[Line, ...]:
     if el.status == ElementStatus.CONFLICTED:
         return ((Part("【待核实：时间有冲突】", True),),)
-    return (company_time(el.value),) if el.value else (PENDING_LINE,)
+    if not el.value:
+        return (PENDING_LINE,)
+    line = company_time(el.value)
+    if semantic:
+        from ..providers.semantic_constraints import TIME_LABELS
+        c = next((c for c in el.candidates if c.id == el.selected), None)
+        if c:
+            label = TIME_LABELS.get(c.time_kind, str(c.time_kind))
+            line = (Part(label + "："), *line)
+            if el.value.tz_source == "assumed":
+                line = (*line, Part("【时区按系统口径假设】", True))
+    return (line,)
 
 
 def _duration_lines(result: AnalysisResult) -> tuple[Line, ...]:
-    from . import final_duration
+    from . import final_duration, duration_basis
+
+    if not duration_basis(result):
+        return (PENDING_LINE,)
 
     minutes = final_duration(result)
     if minutes is not None:
@@ -256,8 +270,13 @@ def build_company_report(result: AnalysisResult) -> CompanyReport:
         generated = datetime.fromisoformat(raw)
     except ValueError:
         generated = None
+    cause_lines = _element_lines(e.cause)
+    if result.semantic_assessment and e.cause.value:
+        c = next(c for c in e.cause.candidates if c.id == e.cause.selected)
+        cause_lines = ((Part(f"{c.relation.speaker}记载："), *cause_lines[0],
+                        Part("【有记录，未经人工审核】", True)), *cause_lines[1:])
     analysis = (
-        *_element_lines(e.cause),
+        *cause_lines,
         (Part("责任方："), *_value_parts(e.responsible_party),
          Part("；故障位置："), *_value_parts(e.location)),
     )
@@ -266,8 +285,8 @@ def build_company_report(result: AnalysisResult) -> CompanyReport:
         "circuit_id": (circuit_line,),
         "ticket_no": ((Part(fields.get("ticket_no") or result.ticket_ref),),),
         "service": _text_lines(service),
-        "declared": _time_lines(e.start_time),
-        "resumed": _time_lines(e.end_time),
+        "declared": _time_lines(e.start_time, semantic=result.semantic_assessment is not None),
+        "resumed": _time_lines(e.end_time, semantic=result.semantic_assessment is not None),
         "duration": _duration_lines(result),
         "phenomenon": _element_lines(e.phenomenon),
         "process": _process_lines(result),

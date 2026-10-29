@@ -23,7 +23,19 @@ def envelope(data, *, finish="stop"):
 @pytest.fixture(scope="session")
 def sample():
     _, ctx, extraction = analyze_with_context(BUNDLES / "SYN-S01", registry=text_registry())
-    data = extraction.model_dump(mode="json", exclude={"suggestions", "quote_checks"})
+    data = extraction.model_dump(mode="json", exclude={"suggestions", "quote_checks", "semantic_assessment"})
+    spans = {s.id: s for s in ctx.evidence}
+    for name in ("start_time", "end_time", "cause"):
+        for c in data["elements"][name]["candidates"]:
+            ref = c["evidence_refs"][0]
+            relation = dict(event_id="current", scope="本次业务", current_event=True,
+                            modality="asserted", context=[dict(evidence_id=ref, quote=spans[ref].text)])
+            if name == "cause":
+                relation.update(assertion="fault", affects_service=True, occurred=True, speaker="现场人员")
+            elif name == "end_time":
+                c["time_kind"] = "business_recovery"
+                relation["customer_confirmation"] = dict(evidence_id=ref, quote=spans[ref].text)
+            c["relation"] = relation
     refs = set(extraction.elements.iter_evidence_refs())
     refs.update(r for event in extraction.events for r in event.evidence_refs)
     if extraction.service_identity:

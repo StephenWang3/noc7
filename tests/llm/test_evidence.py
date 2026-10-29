@@ -142,9 +142,9 @@ def test_free_text_cannot_upgrade_party_location_cause_or_time(server, sample):
     assert result.suggestions[0].original == data["elements"]["responsible_party"]
     assert location.status == "unknown" and location.value is None and location.note is None
     assert location.candidates == []
-    assert cause.status == "unknown" and cause.value is None and cause.candidates == []
+    assert cause.status == "unknown" and cause.value is None and len(cause.candidates) == 1
     assert start.status == "unknown" and start.value is None
-    assert start.candidates[0].time_kind == "observation"
+    assert start.candidates[0].time_kind == "fault_start_field"
     assert start.candidates[0].time.precision == "second"
     assert start.candidates[0].time.utc_offset == "+08:00"
     event = result.events[0]
@@ -165,9 +165,9 @@ def test_time_raw_is_normalized_locally(server, sample):
                          time={"raw": "2026-09-03"})])
     server.default = envelope(data)
     result = OpenAICompatibleTextProvider(qwen_config(server)).extract(ExtractionContext(sample[0].bundle, [span]))
-    value = result.elements.start_time.value
-    assert result.elements.start_time.status == "documented"
-    assert result.elements.start_time.candidates[0].time_kind == "customer_reported_start"
+    value = result.elements.start_time.candidates[0].time
+    assert result.elements.start_time.status == "unknown"
+    assert result.elements.start_time.candidates[0].time_kind == "other"
     assert (value.raw, value.iso, value.precision, value.tz_source) == ("2026-09-03", "2026-09-03", "day", "unknown")
 
 
@@ -219,7 +219,8 @@ def test_candidate_originals_are_validated_without_duplicate_quotes(server, samp
     data["quotes"] = []
     server.default = envelope(data)
     result = OpenAICompatibleTextProvider(qwen_config(server)).extract(sample[0])
-    assert result.elements.start_time.value is not None
+    assert result.elements.start_time.status == "unknown"  # 只有日精度，正式栏待核实
+    assert result.elements.start_time.candidates[1].time.iso == "2026-09-03"
     data["elements"]["start_time"]["candidates"][0]["time"]["raw"] = "SENSITIVE_FAKE_TIME"
     server.default = envelope(data)
     with pytest.raises(ExtractionRejected):

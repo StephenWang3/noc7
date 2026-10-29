@@ -76,7 +76,7 @@ ensure_allowed(minimax, ctx.data_class)   # 真实数据 → 抛 EgressBlocked
 
 - 外部服务默认只放行 `synthetic`。要放行 `real`，配置里必须写 `approval_ref`（批准依据，例如一份决策记录），否则配置本身就无法创建。
 - 没有“临时绕过”开关。测试里也不要 mock 掉这一步。
-- 本项目后续批准的例外：开发期允许向**官方 DeepSeek** 发送真实工单正文及本地 OCR 文字。统一文本配置必须声明 `allowed_data` 包含 `real`，并以 `docs/decisions/llm-text-providers.md` 为 `approval_ref`；仍在请求前调用 `ensure_allowed()`，不修改闸门默认策略。该批准不扩展到其他外部服务或原始图片；附件层 `ensure_attachment_allowed()` 的原图禁发规则保留。文本模型只提交有来源的摘录；责任方和地点在结构补全前独立保存为“AI 建议，待确认”，正式两栏置空，不再用规则重判模型的业务语义。其他要素的原因类别、时间语义、确认等级和现象概述继续本地重算。详见 [AI 建议决策](decisions/ai-suggestions.md)。
+- 本项目后续批准的例外：开发期允许向**官方 DeepSeek** 发送真实工单正文及本地 OCR 文字。统一文本配置必须声明 `allowed_data` 包含 `real`，并以 `docs/decisions/llm-text-providers.md` 为 `approval_ref`；仍在请求前调用 `ensure_allowed()`，不修改闸门默认策略。该批准不扩展到其他外部服务或原始图片；附件层 `ensure_attachment_allowed()` 的原图禁发规则保留。文本模型只提交有来源的摘录；责任方和地点在结构补全前独立保存为“AI 建议，待确认”，正式两栏置空，不再用规则重判模型的业务语义。时间和原因改为模型提交结构化关系、程序核对证据与约束，不再用词表重判；自动原因最高为 documented。现象概述及处理过程沿用本地处理。详见 [时间与原因决策](decisions/time-cause-validation.md)。详见 [AI 建议决策](decisions/ai-suggestions.md)。
 - 内网 Qwen 通过同一文本接口接入，由部署者核实地址及网络边界并声明为内网服务；不能因模型名为 Qwen 就把外部地址视作内网。接口资料到位前仅做兼容协议模拟验收。
 - 调用 MiniMax 时按用户的限流要求：每批 10 个请求，批与批之间隔 30 秒；被限流后等 5 分钟再试。
 
@@ -164,3 +164,15 @@ ensure_allowed(minimax, ctx.data_class)   # 真实数据 → 抛 EgressBlocked
 1. 只**追加**：新增可选字段（有默认值）、新增枚举值、新增问题代码，都是兼容变更。在合并说明里写清楚，并运行 `uv run noc7 schema export` 更新 `schemas/`。
 2. 不兼容变更（改名、删字段、改语义、改编号规则）要单独写一份决策记录，并同时更新标准答案和示例结果；`tests/test_schema.py` 和 `noc7 schema check` 会拦下忘记同步的情况。
 3. 发现标准答案标错：改 `evals/gold/` 时在提交说明里写理由，并跑 `uv run noc7 gold check`。
+
+### 时间与原因关系
+
+追加 `TimeCandidate.relation`、`CauseCandidate.relation` 与 `Extraction`／`AnalysisResult.semantic_assessment`（默认空），旧结果仍可读取。模型必须提交关系引文、事件与范围及确定／推测／否定边界；本地原始三栏和检查记录禁止由模型提交。未知原因类别留 `unclassified`，推测机制用 `suspected_mechanism`。追加时间类别 `business_start`、`business_recovery`、`confirmation_action`、`protocol_down`、`protocol_up`，已有枚举不改义。
+
+| 追加问题码 | 默认级别 | 含义 |
+| --- | --- | --- |
+| `SEMANTIC_ASSERTIONS_CONFLICT` | warning | 同事件、同范围的模型原因断言有显式矛盾，保留双方 |
+| `SEMANTIC_RELATION_INCOMPLETE` | warning | 模型关系／选中关系不足以采用正式结论，保留候选 |
+| `SEMANTIC_STATUS_DOWNGRADED` | info | 自动原因确认等级降为有记录，未经人工审核 |
+
+原始三栏中的来源编号和关系引文也纳入硬校验，不能通过结构补全丢字段逃过检查。空白等价范围在最终完整证据上重算。新链路起障可带标签采用告警时刻，恢复只用业务恢复时刻；日期或时区不足、同组冲突不填正式栏。自动原因最高 documented。模型事件分组、范围及断言类型仍不是独立人工真值。完整策略见时间与原因 ADR。

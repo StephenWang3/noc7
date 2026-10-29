@@ -1,7 +1,7 @@
-"""两栏建议独立保存；其他模型摘录收成规则基线能支持的结论。
+"""两栏建议独立保存；时间和原因保留模型关系并核对约束。
 
 模型责任方和地点在结构补全前保存为建议，正式字段置空。
-其余要素按 baseline 对引用片段重算；对不上的结论改为 unknown。
+时间和原因不再调用 baseline 语义分类器，模型关系交给独立约束检查。
 现象的 value 与 evidence_refs 在本地写入。旁白和身份文本必须是引用原文的子串。
 """
 
@@ -10,11 +10,8 @@ from __future__ import annotations
 import re
 
 from ..extract.baseline import (
-    _time_kind,
     attribution as span_attribution,
-    cause_kind,
     conclusion_observations,
-    confirms_recovery,
     step_kind,
     time_phrase,
     usable_text,
@@ -30,37 +27,11 @@ from ..schema import (
     IssueCode,
     LocationRole,
     ResponsibilityBasis,
-    SpanRole,
     StepKind,
     TimeKind,
 )
 from ..schema.timeval import TimeValue
 from ..quote_match import match_quote
-
-# 与 RulesProvider 的字段时间和流程动作一致。
-_FIELD_TIME = {
-    "occurred_at": TimeKind.FAULT_START_FIELD,
-    "recovered_at": TimeKind.RECOVERY_FIELD,
-    "alarm_time": TimeKind.ALARM_RAISED,
-    "warning_time": TimeKind.WARNING_RAISED,
-    "created_at": TimeKind.TICKET_CREATED,
-    "alarm_cleared_at": TimeKind.ALARM_CLEARED,
-}
-_WORKFLOW_TIME = {
-    "建单": TimeKind.TICKET_CREATED,
-    "创建工单": TimeKind.TICKET_CREATED,
-    "返单": TimeKind.TICKET_RETURNED,
-    "结单": TimeKind.TICKET_CLOSED,
-    "撤销": TimeKind.TICKET_CANCELLED,
-}
-_START_CONCLUSION = {
-    TimeKind.FAULT_START_FIELD,
-    TimeKind.CUSTOMER_REPORTED_START,
-    TimeKind.ALARM_RAISED,
-}
-_END_CONCLUSION = {TimeKind.RECOVERY_FIELD, TimeKind.CUSTOMER_CONFIRMED_RECOVERY}
-_CONCLUSIVE = {ElementStatus.DOCUMENTED, ElementStatus.CONFIRMED}
-
 
 _EVIDENCE_RE = re.compile(r"^M\d{2,}/[A-Za-z0-9:_.\-]+$")
 _CANDIDATE_RE = re.compile(r"^[A-Za-z][A-Za-z0-9_.\-]*$")
@@ -116,6 +87,8 @@ def _attribution(value, refs, spans):
 def _number_ids(items, pattern, prefix):
     used = set()
     mapping = {}
+    duplicates = {item.get("id") for item in items if isinstance(item.get("id"), str)
+                  and sum(other.get("id") == item.get("id") for other in items) > 1}
     n = 1
     for item in items:
         old = item.get("id")
@@ -131,6 +104,8 @@ def _number_ids(items, pattern, prefix):
         if isinstance(old, str) and old not in mapping:
             mapping[old] = new
         item["id"] = new
+    for duplicate in duplicates:
+        mapping[duplicate] = None
     return mapping
 
 
@@ -199,14 +174,6 @@ def _step_label(value, action, refs, spans):
     return parsed or StepKind.COMMUNICATION.value
 
 
-def _cause_label(value, selected):
-    parsed = _one_of(value, CauseKind)
-    if selected:
-        allowed = {kind.value for kind in CAUSE_KINDS_ALLOWED_AS_VALUE}
-        return parsed if parsed in allowed else CauseKind.ROOT_CAUSE_CLAIMED.value
-    return parsed or CauseKind.INVESTIGATION_FINDING.value
-
-
 def _basis_label(value, selected):
     parsed = _one_of(value, ResponsibilityBasis)
     if selected:
@@ -240,18 +207,29 @@ def _finish_conclusion(node, candidates, value, quote_key):
     attempted = status in _CONCLUSIVE_STATUS or (status is None and value is not None)
     if attempted:
         chosen = next(
-            (item for item in candidates if item["id"] == selected and item.get(quote_key) == value),
+            (item for item in candidates if item["id"] == selected and (quote_key in {"raw", "statement"} or item.get(quote_key) == value)),
             None,
         )
         if chosen is None:
-            chosen = next((item for item in candidates if item.get(quote_key) == value), None)
+            exact = [item for item in candidates if item.get(quote_key) == value]
+            chosen = exact[0] if len(exact) == 1 and node.get("selected") is None and not node.get("_selection_invalid") else None
         if chosen is None or not chosen["evidence_refs"]:
             return "unknown", None, None, refs
         if not refs:
             refs = list(chosen["evidence_refs"])
         kept = status if status in _CONCLUSIVE_STATUS else ElementStatus.DOCUMENTED.value
+        if quote_key in {"raw", "statement"}:
+            value, refs = chosen[quote_key], list(chosen["evidence_refs"])
         return kept, value, chosen["id"], refs
     return ElementStatus.UNKNOWN.value, None, None, refs
+
+
+def _relation(value, *, cause=False):
+    from ..schema.relations import CauseRelation, TimeRelation
+    try:
+        return (CauseRelation if cause else TimeRelation).model_validate(value).model_dump(mode="json")
+    except (ValueError, TypeError):
+        return None
 
 
 def _repair_quote_element(node, spans, quote_key):
@@ -263,7 +241,9 @@ def _repair_quote_element(node, spans, quote_key):
         if shell is None:
             continue
         if quote_key == "statement":
-            shell["cause_kind"] = item.get("cause_kind")
+            shell["cause_kind"] = _one_of(item.get("cause_kind"), CauseKind) or CauseKind.UNCLASSIFIED.value
+            shell["relation"] = _relation(item.get("relation"), cause=True)
+            shell["attribution"] = _one_of(item.get("attribution"), Attribution) or Attribution.UNKNOWN.value
         elif quote_key == "party":
             shell["basis"] = item.get("basis")
         else:
@@ -274,12 +254,14 @@ def _repair_quote_element(node, spans, quote_key):
     mapping = _number_ids(candidates, _CANDIDATE_RE, "C")
     patched = dict(node)
     patched["selected"] = _selected(node.get("selected"), mapping, {item["id"] for item in candidates})
+    patched["_selection_invalid"] = node.get("selected") is not None and patched["selected"] is None
     value = node.get("value") if isinstance(node.get("value"), str) and node.get("value") else None
     status, value, selected, refs = _finish_conclusion(patched, candidates, value, quote_key)
     for item in candidates:
         chosen = item["id"] == selected
         if quote_key == "statement":
-            item["cause_kind"] = _cause_label(item.get("cause_kind"), chosen)
+            if chosen and item["cause_kind"] not in {k.value for k in CAUSE_KINDS_ALLOWED_AS_VALUE}:
+                status, value, selected, refs = "unknown", None, None, []
         elif quote_key == "party":
             item["basis"] = _basis_label(item.get("basis"), chosen)
         else:
@@ -303,7 +285,8 @@ def _repair_time_element(node, spans):
         candidate = {
             "id": item.get("id"),
             "evidence_refs": refs,
-            "attribution": _attribution(item.get("attribution"), refs, spans),
+            "attribution": _one_of(item.get("attribution"), Attribution) or Attribution.UNKNOWN.value,
+            "relation": _relation(item.get("relation")),
             "time": raw,
             "time_kind": _one_of(item.get("time_kind"), TimeKind) or TimeKind.OTHER.value,
         }
@@ -318,12 +301,13 @@ def _repair_time_element(node, spans):
     ]
     patched = dict(node)
     patched["selected"] = _selected(node.get("selected"), mapping, {item["id"] for item in candidates})
-    status, _, selected, refs = _finish_conclusion(
+    patched["_selection_invalid"] = node.get("selected") is not None and patched["selected"] is None
+    status, canonical, selected, refs = _finish_conclusion(
         patched, comparable, value["raw"] if value else None, "raw"
     )
     repaired = dict(
         status=status,
-        value=value if status in _CONCLUSIVE_STATUS else None,
+        value={"raw": canonical} if status in _CONCLUSIVE_STATUS else None,
         selected=selected,
         evidence_refs=refs,
         candidates=candidates,
@@ -514,7 +498,7 @@ def normalize_model_payload(payload, offset: str | None, spans=None):
     """先补齐缺字段、收掉非法类别和多余字段，再把时间收成原文。
 
     缺编号、归属、步骤类别，以及写错的枚举、写成纯文字的时间，不再整单拒绝。
-    两栏业务答案已由 separate_suggestions 隔离，其余语义类别由后续规则重算。
+    两栏业务答案独立保存；时间和原因保留模型关系，不重判合法语义类别。
     """
     if isinstance(payload, dict):
         payload = _repair_payload(payload, {span.id: span for span in spans or ()})
@@ -552,17 +536,15 @@ def ground_extraction(ctx: ExtractionContext, data: Extraction) -> Extraction:
     spans = {span.id: span for span in ctx.evidence}
     elements = data.elements
     elements = elements.model_copy(update={
-        "start_time": _ground_time(elements.start_time, spans, ctx, end=False),
-        "end_time": _ground_time(elements.end_time, spans, ctx, end=True),
-        "cause": _ground_cause(elements.cause, spans),
         "phenomenon": _ground_phenomenon(elements.phenomenon, ctx),
         "handling_process": _ground_steps(elements.handling_process, spans),
     })
-    return data.model_copy(update={
+    from .semantic_constraints import apply_constraints
+    return apply_constraints(ctx, data.model_copy(update={
         "elements": elements,
         "events": [_ground_event(event, spans) for event in data.events],
         "service_identity": _ground_identity(data.service_identity, spans),
-    })
+    }))
 
 
 def _is_time(node: dict) -> bool:
@@ -583,155 +565,6 @@ def _note(note, blob: str):
     if note and note in blob:
         return note
     return None
-
-
-def _field_key(span) -> str:
-    return getattr(span.locator, "field_key", "") or ""
-
-
-def _excerpt_in(text: str, spans) -> bool:
-    return bool(text) and any(match_quote(text, span.text).start is not None or text == usable_text(span) for span in spans)
-
-
-def _clear(element, candidates, note):
-    return element.model_copy(update={
-        "status": ElementStatus.UNKNOWN,
-        "value": None,
-        "selected": None,
-        "candidates": candidates,
-        "evidence_refs": [],
-        "note": note,
-    })
-
-
-def _cause_of(excerpt: str, spans):
-    found = []
-    for span in spans:
-        matched = match_quote(excerpt, span.text)
-        if matched.start is None and excerpt != usable_text(span):
-            continue
-        found.append(cause_kind(matched.original or excerpt, _field_key(span)))
-    found = [item for item in found if item is not None]
-    if len(set(found)) == 1:
-        return found[0]
-    return None
-
-
-def _ground_cause(element, spans):
-    revised = []
-    for candidate in element.candidates:
-        support = _support(candidate.evidence_refs, spans)
-        blob = _blob(candidate.evidence_refs, spans)
-        if not _excerpt_in(candidate.statement, support):
-            revised.append(candidate.model_copy(update={"note": _note(candidate.note, blob)}))
-            continue
-        kind = _cause_of(candidate.statement, support)
-        if kind is None:
-            continue
-        revised.append(candidate.model_copy(update={
-            "cause_kind": kind, "note": _note(candidate.note, blob)
-        }))
-    note = _note(element.note, _blob(_all_refs(element), spans))
-    chosen = next((item for item in revised if item.id == element.selected), None)
-
-    def supported(candidate, status):
-        if candidate.cause_kind not in CAUSE_KINDS_ALLOWED_AS_VALUE:
-            return False
-        if status is ElementStatus.CONFIRMED:
-            return candidate.cause_kind is CauseKind.ROOT_CAUSE_CONFIRMED
-        return status is ElementStatus.DOCUMENTED
-
-    if element.status in _CONCLUSIVE and (chosen is None or not supported(chosen, element.status)):
-        return _clear(element, revised, note)
-    if element.status is ElementStatus.CONFLICTED and len(revised) < 2:
-        return _clear(element, revised, note)
-    return element.model_copy(update={"candidates": revised, "note": note})
-
-
-def _time_of(raw: str, spans, ctx: ExtractionContext):
-    found = []
-    for span in spans:
-        key = _field_key(span)
-        matched = match_quote(raw, span.text)
-        if key in _FIELD_TIME and matched.start is not None:
-            found.append(_FIELD_TIME[key])
-            continue
-        if getattr(span.locator, "type", "") == "log_entry":
-            entry = ctx.bundle.process_log.entry(span.locator.seq)
-            recorded = entry.recorded_at.strip() if entry and entry.recorded_at else ""
-            recorded_match = match_quote(raw, recorded)
-            if recorded and recorded_match.start == 0 and recorded_match.end == len(recorded):
-                if "同意结单" in span.text:
-                    found.append(TimeKind.TICKET_CLOSED)
-                elif entry.action in _WORKFLOW_TIME:
-                    found.append(_WORKFLOW_TIME[entry.action])
-                continue
-        if matched.start is not None:
-            planned = step_kind(span.text) is StepKind.PLANNED
-            found.append(_time_kind(span.text, matched.start, matched.end, planned))
-            continue
-        reading = span.reading
-        if reading and reading.type == "chart":
-            if any(series.first_nonzero and match_quote(raw, series.first_nonzero).start is not None for series in reading.series):
-                found.append(TimeKind.CHART_FIRST_NONZERO)
-    if len(set(found)) == 1:
-        return found[0]
-    return None
-
-
-def _time_grounded(raw: str, spans, ctx: ExtractionContext) -> bool:
-    if not raw:
-        return False
-    for span in spans:
-        if match_quote(raw, span.text).start is not None:
-            return True
-        reading = span.reading
-        if reading and reading.type == "chart" and any(
-            series.first_nonzero and match_quote(raw, series.first_nonzero).start is not None for series in reading.series
-        ):
-            return True
-        if getattr(span.locator, "type", "") == "log_entry":
-            entry = ctx.bundle.process_log.entry(span.locator.seq)
-            if entry and entry.recorded_at and match_quote(raw, entry.recorded_at).start is not None:
-                return True
-    return False
-
-
-def _ground_time(element, spans, ctx: ExtractionContext, *, end: bool):
-    revised = []
-    for candidate in element.candidates:
-        support = _support(candidate.evidence_refs, spans)
-        blob = _blob(candidate.evidence_refs, spans)
-        raw = candidate.time.raw
-        if not _time_grounded(raw, support, ctx):
-            revised.append(candidate.model_copy(update={"note": _note(candidate.note, blob)}))
-            continue
-        kind = _time_of(raw, support, ctx) or TimeKind.OTHER
-        revised.append(candidate.model_copy(update={
-            "time_kind": kind, "note": _note(candidate.note, blob)
-        }))
-    note = _note(element.note, _blob(_all_refs(element), spans))
-    chosen = next((item for item in revised if item.id == element.selected), None)
-    allowed = _END_CONCLUSION if end else _START_CONCLUSION
-
-    def supported(candidate, status):
-        if candidate.time_kind not in allowed:
-            return False
-        if status is ElementStatus.CONFIRMED:
-            if not end:
-                return False
-            support = _support(candidate.evidence_refs, spans)
-            return any(
-                confirms_recovery(usable_text(span)) and span.role != SpanRole.QUOTED
-                for span in support
-            )
-        return status is ElementStatus.DOCUMENTED
-
-    if element.status in _CONCLUSIVE and (chosen is None or not supported(chosen, element.status)):
-        return _clear(element, revised, note)
-    if element.status is ElementStatus.CONFLICTED and len(revised) < 2:
-        return _clear(element, revised, note)
-    return element.model_copy(update={"candidates": revised, "note": note})
 
 
 def _ground_phenomenon(element, ctx: ExtractionContext):
@@ -830,7 +663,7 @@ def separate_suggestions(payload):
     def reject_review(node):
         if isinstance(node, dict):
             if any(k in node and (k != "review" or node[k] is not None)
-                   for k in ("review", "suggestions", "quote_checks", "checks")):
+                   for k in ("review", "suggestions", "quote_checks", "checks", "semantic_assessment")):
                 from .text_config import TextProviderError
                 raise TextProviderError("模型不能提交人工审核或本地核验记录，已拒绝。")
             for value in node.values():

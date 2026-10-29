@@ -67,12 +67,18 @@ def _tzinfo(offset: str) -> timezone:
 
 def parse_time(raw: str | None, default_offset: str | None = None) -> TimeValue:
     """解析单个时间原文。default_offset 是工单包声明的系统口径（如 '+08:00'）。"""
-    text = (raw or "").strip()
+    text = re.sub(r"\s+", " ", (raw or "").strip()).replace("：", ":")
+    text = re.sub(r"(?<=日)(?=\d{1,2}:)", " ", text)
     if _PLACEHOLDER.search(text):
         return TimeValue(raw=raw or "", placeholder=True)
     if text.lower() in _EMPTY:
         return TimeValue(raw=raw or "")
 
+    # RFO 的日.月.四位年格式；不猜有歧义的斜杠短日期。
+    day_first = re.fullmatch(r"(\d{1,2})\.(\d{1,2})\.(\d{4})([ T]+.*)?", text)
+    if day_first:
+        normalized = f"{day_first[3]}-{int(day_first[2]):02d}-{int(day_first[1]):02d}" + (day_first[4] or "")
+        return parse_time(normalized, default_offset).model_copy(update={"raw": raw or ""})
     m = _MAIN.match(text)
     if m:
         y, mo, d = int(m["y"]), int(m["m"]), int(m["d"])

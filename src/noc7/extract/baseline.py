@@ -45,9 +45,9 @@ from .types import QUALITY_REVIEW_THRESHOLD, Extraction, ExtractionContext
 from .fact_phrases import responsibility_claims, rfo_fault_points
 
 DATE = r"\d{4}[-/.年]\d{1,2}[-/.月]\d{1,2}日?"
-CLOCK = r"\d{1,2}:\d{2}(?::\d{2})?"
+CLOCK = r"\d{1,2}[:：]\d{2}(?:[:：]\d{2})?"
 ZONE_RE = re.compile(
-    r"\b(?:GMT|UTC)\b(?:\s*[+-]\s*\d{1,2}(?::?\d{2})?)?|(?<![\w-])[+-](?:0\d|1[0-4]):?[0-5]\d(?!\d)|北京时间|香港时间",
+    r"\b(?:GMT|UTC)\b(?:\s*[+-]\s*\d{1,2}(?::?\d{2})?)?|(?<![A-Za-z_-])[+-](?:0\d|1[0-4]):?[0-5]\d(?!\d)|\bZ\b|北京时间|香港时间",
     re.I,
 )
 TIME_RE = re.compile(
@@ -223,6 +223,9 @@ def time_phrase(raw: str, offset: str | None, record: str | None = None) -> Time
     """解析含间隔词的时间短语；归一时去掉间隔词，raw 始终保留原文。"""
     # 与引用核验采用相同的空白口径；原始 raw 与证据位置不改写。
     parse_raw = re.sub(r"\s+", " ", raw)
+    direct = parse_time(parse_raw, offset)
+    if direct.iso is not None or direct.placeholder:
+        return direct.model_copy(update={"raw": raw})
     match = next(iter(_time_matches(parse_raw)), None)
     if not match:
         return TimeValue(raw=raw)

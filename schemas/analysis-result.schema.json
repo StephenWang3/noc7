@@ -92,6 +92,17 @@
           "default": null,
           "title": "Note"
         },
+        "relation": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/CauseRelation"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
         "statement": {
           "title": "Statement",
           "type": "string"
@@ -194,6 +205,8 @@
     },
     "CauseKind": {
       "enum": [
+        "unclassified",
+        "suspected_mechanism",
         "root_cause_confirmed",
         "root_cause_claimed",
         "candidate_list_item",
@@ -207,6 +220,91 @@
       ],
       "title": "CauseKind",
       "type": "string"
+    },
+    "CauseRelation": {
+      "additionalProperties": false,
+      "properties": {
+        "affects_service": {
+          "title": "Affects Service",
+          "type": "boolean"
+        },
+        "assertion": {
+          "enum": [
+            "fault",
+            "mechanism",
+            "planned_work",
+            "phenomenon",
+            "finding",
+            "recovery",
+            "unknown"
+          ],
+          "title": "Assertion",
+          "type": "string"
+        },
+        "context": {
+          "items": {
+            "$ref": "#/$defs/RelationQuote"
+          },
+          "minItems": 1,
+          "title": "Context",
+          "type": "array"
+        },
+        "contradicts": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Contradicts",
+          "type": "array"
+        },
+        "current_event": {
+          "title": "Current Event",
+          "type": "boolean"
+        },
+        "event_id": {
+          "description": "模型分组的事件标识，不是已核实的身份",
+          "minLength": 1,
+          "title": "Event Id",
+          "type": "string"
+        },
+        "modality": {
+          "enum": [
+            "asserted",
+            "suspected",
+            "negated",
+            "unknown"
+          ],
+          "title": "Modality",
+          "type": "string"
+        },
+        "occurred": {
+          "title": "Occurred",
+          "type": "boolean"
+        },
+        "scope": {
+          "description": "业务／设备范围",
+          "minLength": 1,
+          "title": "Scope",
+          "type": "string"
+        },
+        "speaker": {
+          "minLength": 1,
+          "title": "Speaker",
+          "type": "string"
+        }
+      },
+      "required": [
+        "event_id",
+        "scope",
+        "context",
+        "current_event",
+        "modality",
+        "assertion",
+        "affects_service",
+        "occurred",
+        "speaker"
+      ],
+      "title": "CauseRelation",
+      "type": "object"
     },
     "ChartReading": {
       "additionalProperties": false,
@@ -343,6 +441,65 @@
         "series"
       ],
       "title": "ChartSeriesStat",
+      "type": "object"
+    },
+    "ConstraintCheck": {
+      "additionalProperties": false,
+      "properties": {
+        "candidate_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Candidate Id"
+        },
+        "code": {
+          "$ref": "#/$defs/IssueCode",
+          "default": "SEMANTIC_RELATION_INCOMPLETE"
+        },
+        "element": {
+          "enum": [
+            "start_time",
+            "end_time",
+            "cause"
+          ],
+          "title": "Element",
+          "type": "string"
+        },
+        "evidence_refs": {
+          "items": {
+            "pattern": "^M\\d{2,}/[A-Za-z0-9:_.\\-]+$",
+            "type": "string"
+          },
+          "title": "Evidence Refs",
+          "type": "array"
+        },
+        "outcome": {
+          "enum": [
+            "eligible",
+            "pending",
+            "conflict",
+            "downgraded"
+          ],
+          "title": "Outcome",
+          "type": "string"
+        },
+        "reason": {
+          "title": "Reason",
+          "type": "string"
+        }
+      },
+      "required": [
+        "element",
+        "outcome",
+        "reason"
+      ],
+      "title": "ConstraintCheck",
       "type": "object"
     },
     "DataClass": {
@@ -943,6 +1100,9 @@
     },
     "IssueCode": {
       "enum": [
+        "SEMANTIC_ASSERTIONS_CONFLICT",
+        "SEMANTIC_RELATION_INCOMPLETE",
+        "SEMANTIC_STATUS_DOWNGRADED",
         "TIME_ORDER_INVERTED",
         "NEGATIVE_DURATION",
         "TIME_PLACEHOLDER",
@@ -1912,6 +2072,27 @@
       "title": "RelationKind",
       "type": "string"
     },
+    "RelationQuote": {
+      "additionalProperties": false,
+      "properties": {
+        "evidence_id": {
+          "pattern": "^M\\d{2,}/[A-Za-z0-9:_.\\-]+$",
+          "title": "Evidence Id",
+          "type": "string"
+        },
+        "quote": {
+          "minLength": 1,
+          "title": "Quote",
+          "type": "string"
+        }
+      },
+      "required": [
+        "evidence_id",
+        "quote"
+      ],
+      "title": "RelationQuote",
+      "type": "object"
+    },
     "ResponsibilityBasis": {
       "enum": [
         "formal_determination",
@@ -2128,6 +2309,26 @@
         "started_at"
       ],
       "title": "RunInfo",
+      "type": "object"
+    },
+    "SemanticAssessment": {
+      "additionalProperties": false,
+      "description": "只由本地解码器构建；original 的来源与引文须核验，但不用于补造正式结论。",
+      "properties": {
+        "checks": {
+          "items": {
+            "$ref": "#/$defs/ConstraintCheck"
+          },
+          "title": "Checks",
+          "type": "array"
+        },
+        "original": {
+          "additionalProperties": true,
+          "title": "Original",
+          "type": "object"
+        }
+      },
+      "title": "SemanticAssessment",
       "type": "object"
     },
     "ServiceIdentifier": {
@@ -2395,6 +2596,17 @@
           "default": null,
           "title": "Note"
         },
+        "relation": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/TimeRelation"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
         "time": {
           "$ref": "#/$defs/TimeValue"
         },
@@ -2500,6 +2712,11 @@
     "TimeKind": {
       "description": "时间语义。七要素里的时间候选必须标明自己是哪一种时间。",
       "enum": [
+        "business_start",
+        "business_recovery",
+        "confirmation_action",
+        "protocol_down",
+        "protocol_up",
         "fault_start_field",
         "recovery_field",
         "customer_reported_start",
@@ -2535,6 +2752,87 @@
       ],
       "title": "TimePrecision",
       "type": "string"
+    },
+    "TimeRelation": {
+      "additionalProperties": false,
+      "properties": {
+        "context": {
+          "items": {
+            "$ref": "#/$defs/RelationQuote"
+          },
+          "minItems": 1,
+          "title": "Context",
+          "type": "array"
+        },
+        "current_event": {
+          "title": "Current Event",
+          "type": "boolean"
+        },
+        "customer_confirmation": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RelationQuote"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "date_anchor": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RelationQuote"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "event_id": {
+          "description": "模型分组的事件标识，不是已核实的身份",
+          "minLength": 1,
+          "title": "Event Id",
+          "type": "string"
+        },
+        "modality": {
+          "enum": [
+            "asserted",
+            "suspected",
+            "negated",
+            "unknown"
+          ],
+          "title": "Modality",
+          "type": "string"
+        },
+        "scope": {
+          "description": "业务／设备范围",
+          "minLength": 1,
+          "title": "Scope",
+          "type": "string"
+        },
+        "timezone_anchor": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RelationQuote"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "event_id",
+        "scope",
+        "context",
+        "current_event",
+        "modality"
+      ],
+      "title": "TimeRelation",
+      "type": "object"
     },
     "TimeValue": {
       "additionalProperties": false,
@@ -2755,6 +3053,17 @@
       "default": "1.0",
       "title": "Schema Version",
       "type": "string"
+    },
+    "semantic_assessment": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/SemanticAssessment"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
     },
     "service_identity": {
       "anyOf": [

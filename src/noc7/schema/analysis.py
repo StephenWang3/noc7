@@ -5,6 +5,8 @@ from __future__ import annotations
 from enum import StrEnum
 from typing import Iterator, Literal
 
+from .relations import SemanticAssessment
+
 from pydantic import Field, model_validator
 
 from .bundle import RelatedTicket
@@ -77,6 +79,7 @@ class AnalysisResult(Model):
     materials: list[Material]
     evidence: list[EvidenceSpan]
     events: list[Event] = Field(default_factory=list)
+    semantic_assessment: SemanticAssessment | None = None
     suggestions: list[BusinessSuggestion] = Field(default_factory=list)
     quote_checks: list[QuoteCheck] = Field(default_factory=list)
     elements: SevenElements
@@ -87,6 +90,11 @@ class AnalysisResult(Model):
 
     def iter_evidence_refs(self) -> Iterator[str]:
         yield from self.elements.iter_evidence_refs()
+        if self.semantic_assessment:
+            from ..providers.semantic_constraints import original_refs
+            yield from original_refs(self.semantic_assessment.original)
+            for check in self.semantic_assessment.checks:
+                yield from check.evidence_refs
         for suggestion in self.suggestions:
             yield from suggestion.iter_evidence_refs()
         for check in self.quote_checks:
@@ -118,6 +126,25 @@ class AnalysisResult(Model):
         if missing:
             raise ValueError(f"引用了不存在的证据编号: {missing}")
         spans = {s.id: s for s in self.evidence}
+        if self.semantic_assessment:
+            from ..providers.semantic_constraints import original_quotes, relation_quotes, pending_reason
+            for ref, text in original_quotes(self.semantic_assessment.original):
+                if match_quote(text, spans[ref].text).status == "mismatch":
+                    raise ValueError("原始关系引文与证据不符")
+            for name in ("start_time", "end_time", "cause"):
+                el = getattr(self.elements, name)
+                for c in el.candidates:
+                    for q in relation_quotes(c.relation):
+                        if match_quote(q.quote, spans[q.evidence_id].text).status == "mismatch":
+                            raise ValueError("关系引文与证据不符")
+                if el.value is not None:
+                    chosen = next((c for c in el.candidates if c.id == el.selected), None)
+                    if chosen is None or pending_reason(chosen, name, spans):
+                        raise ValueError("正式结论缺少合格模型关系")
+                    if el.value != (chosen.statement if name == "cause" else chosen.time):
+                        raise ValueError("正式结论与选中候选不一致")
+                    if name == "cause" and el.status == "confirmed":
+                        raise ValueError("自动原因状态最高为 documented")
         for suggestion in self.suggestions:
             expected = [match_quote(text, spans[ref].text, path=path, evidence_id=ref)
                         for path, ref, text in suggestion.quote_requests()]

@@ -31,6 +31,11 @@ class TimePrecision(StrEnum):
 class TimeKind(StrEnum):
     """时间语义。七要素里的时间候选必须标明自己是哪一种时间。"""
 
+    BUSINESS_START = "business_start"
+    BUSINESS_RECOVERY = "business_recovery"
+    CONFIRMATION_ACTION = "confirmation_action"
+    PROTOCOL_DOWN = "protocol_down"
+    PROTOCOL_UP = "protocol_up"
     FAULT_START_FIELD = "fault_start_field"  # 工单“故障发生时间”字段
     RECOVERY_FIELD = "recovery_field"  # 工单“故障恢复时间”字段
     CUSTOMER_REPORTED_START = "customer_reported_start"  # 客户陈述的起障时间

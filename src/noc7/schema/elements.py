@@ -22,6 +22,7 @@ from pydantic import Field, model_validator
 from .common import Attribution, CandidateId, ElementName, ElementStatus, EvidenceId, Model
 from .issues import IssueCode
 from .timeval import TimeKind, TimeValue
+from .relations import TimeRelation, CauseRelation
 
 
 # ---------------------------------------------------------------------------
@@ -37,6 +38,7 @@ class CandidateBase(Model):
 class TimeCandidate(CandidateBase):
     time: TimeValue
     time_kind: TimeKind
+    relation: TimeRelation | None = None
 
 
 class Observation(CandidateBase):
@@ -63,6 +65,8 @@ class PartyCandidate(CandidateBase):
 
 
 class CauseKind(StrEnum):
+    UNCLASSIFIED = "unclassified"  # 未知模型类别保留候选，不升级
+    SUSPECTED_MECHANISM = "suspected_mechanism"
     ROOT_CAUSE_CONFIRMED = "root_cause_confirmed"  # 有现场/诊断依据的根因
     ROOT_CAUSE_CLAIMED = "root_cause_claimed"  # 某方陈述的原因（供应商称……），未经核实
     CANDIDATE_LIST_ITEM = "candidate_list_item"  # 告警的“可能原因”清单中的一项
@@ -86,6 +90,7 @@ CAUSE_KINDS_ALLOWED_AS_VALUE = {
 class CauseCandidate(CandidateBase):
     statement: str
     cause_kind: CauseKind
+    relation: CauseRelation | None = None
 
 
 class StepKind(StrEnum):
@@ -286,3 +291,11 @@ class SevenElements(Model):
             yield from el.evidence_refs
             for c in el.iter_candidates():
                 yield from c.evidence_refs
+                relation = getattr(c, "relation", None)
+                if relation:
+                    for quote in relation.context:
+                        yield quote.evidence_id
+                    for key in ("date_anchor", "timezone_anchor", "customer_confirmation"):
+                        quote = getattr(relation, key, None)
+                        if quote:
+                            yield quote.evidence_id

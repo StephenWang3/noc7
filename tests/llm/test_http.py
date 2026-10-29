@@ -18,7 +18,8 @@ def test_qwen_plain_json_and_optional_bearer(server, sample, monkeypatch):
     provider = OpenAICompatibleTextProvider(config)
     result = provider.extract(sample[0])
     request = server.requests[0]
-    assert result.elements.start_time.value is not None
+    assert result.elements.start_time.status == "unknown"  # 本案例起点只有日期
+    assert result.elements.start_time.candidates[1].relation is not None
     assert request["path"] == "/v1/chat/completions"
     assert request["headers"]["Authorization"] == "Bearer synthetic-key"
     assert "response_format" not in request["body"] and "thinking" not in request["body"]

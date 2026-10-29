@@ -334,6 +334,9 @@
     },
     "IssueCode": {
       "enum": [
+        "SEMANTIC_ASSERTIONS_CONFLICT",
+        "SEMANTIC_RELATION_INCOMPLETE",
+        "SEMANTIC_STATUS_DOWNGRADED",
         "TIME_ORDER_INVERTED",
         "NEGATIVE_DURATION",
         "TIME_PLACEHOLDER",

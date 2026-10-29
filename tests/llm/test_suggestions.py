@@ -170,12 +170,17 @@ def test_nbsp_cause_and_time_keep_strict_semantics(sample):
     for raw, cause in [("2026-01-01\u00a0\u00a008:00:00", "现场确认光纤断裂，\u00a0中断。"),
                        ("2026-01-01 08:00:00", "现场确认光纤断裂， 中断。")]:
         payload["elements"]["cause"] = dict(status="confirmed", value=cause, selected="C1", evidence_refs=[ref],
-            candidates=[dict(id="C1", statement=cause, cause_kind="investigation_finding", attribution="vendor", evidence_refs=[ref])])
+            candidates=[dict(id="C1", statement=cause, cause_kind="root_cause_confirmed", attribution="vendor", evidence_refs=[ref])])
         payload["elements"]["start_time"] = dict(status="documented", value=dict(raw=raw), selected="C1", evidence_refs=[ref],
-            candidates=[dict(id="C1", time=dict(raw=raw), time_kind="other", attribution="customer", evidence_refs=[ref])])
+            candidates=[dict(id="C1", time=dict(raw=raw), time_kind="customer_reported_start", attribution="customer", evidence_refs=[ref])])
+        context = [dict(evidence_id=ref, quote=text)]
+        common = dict(event_id="current", scope="业务", current_event=True, modality="asserted", context=context)
+        payload["elements"]["cause"]["candidates"][0]["relation"] = dict(common,
+            assertion="fault", affects_service=True, occurred=True, speaker="现场")
+        payload["elements"]["start_time"]["candidates"][0]["relation"] = common
         results.append(decode(ctx, payload))
     for result in results:
-        assert result.elements.cause.status == "confirmed"
+        assert result.elements.cause.status == "documented"
         assert result.elements.cause.candidates[0].cause_kind == "root_cause_confirmed"
         assert result.elements.start_time.status == "documented"
         assert result.elements.start_time.candidates[0].time_kind == "customer_reported_start"

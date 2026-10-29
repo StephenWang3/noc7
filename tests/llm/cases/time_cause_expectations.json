@@ -1,0 +1,26 @@
+{
+  "说明": "实现前冻结：程序检验关系约束，不用词表判断句意；语义反例同时用模拟关系和真实模型响应验证。",
+  "cases": {
+    "explicit_zero_offset": "2026-01-02T03:04:05+00:00",
+    "fullwidth_clock": "2026-01-02T03:04:00+08:00",
+    "english_date": "2026-01-02T03:04:00+00:00",
+    "title_difference": "documented",
+    "confirmed_cause": "documented",
+    "suspected_mechanism": "unknown",
+    "self_recovery": "unknown",
+    "alarm_start": "documented",
+    "protocol_down": "unknown",
+    "confirmation_action": "unknown",
+    "missing_date": "unknown",
+    "unknown_timezone": "unknown",
+    "same_instant": "documented",
+    "different_purpose": "documented",
+    "conflicting_recovery": "conflicted",
+    "inverted_business_times": "unknown",
+    "missing_relation": "unknown",
+    "missing_evidence": "EVIDENCE_REF_MISSING",
+    "wrong_quote": "EVIDENCE_QUOTE_MISMATCH",
+    "whitespace_equivalence": "documented",
+    "duplicate_source": "documented"
+  }
+}
