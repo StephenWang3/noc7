@@ -14,7 +14,7 @@ from .test_evidence import empty_extraction
 from .test_fact_recall import context
 
 
-def test_audit_preserves_raw_and_removed_candidates_without_request_headers(server, sample, tmp_path, monkeypatch):
+def test_audit_preserves_raw_suggestions_without_request_headers(server, sample, tmp_path, monkeypatch):
     monkeypatch.setenv("NOC_TEST_KEY", "PRIVATE_TEST_CREDENTIAL")
     ctx = context(sample, "告警位置在 SYN-机房。")
     data = empty_extraction()
@@ -30,9 +30,10 @@ def test_audit_preserves_raw_and_removed_candidates_without_request_headers(serv
     trace = json.loads(raw)
     assert "PRIVATE_TEST_CREDENTIAL" not in raw and "Authorization" not in raw
     assert trace["outcome"] == "accepted" and trace["raw_response"] == server.default.decode()
-    assert len(trace["before_grounding"]["elements"]["location"]["candidates"]) == 1
+    assert trace["before_grounding"]["suggestions"][1]["original"] == data["elements"]["location"]
     assert trace["after_grounding"]["elements"]["location"]["candidates"] == []
-    assert any(c["action"] == "candidate_removed" for c in trace["changes"])
+    assert not any(c["action"] == "candidate_removed" and c["element"] == "location" for c in trace["changes"])
+    assert result.suggestions[1].original == data["elements"]["location"]
     assert root.stat().st_mode & 0o777 == 0o700
     assert f.stat().st_mode & 0o777 == 0o600
 

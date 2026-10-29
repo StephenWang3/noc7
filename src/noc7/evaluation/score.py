@@ -273,6 +273,14 @@ def score(dataset: Path, results: Path, out: Path):
         "by_source": {k: metric(v) for k, v in by_source.items()},
         "by_element": {k: metric(v) for k, v in by_element.items()},
     }
+    run_path = results / "run.json"
+    if run_path.is_file():
+        record = read_json(run_path)
+        if record.get("provider") == "replay:model-audit":
+            if record.get("dataset_sha256") != hashlib.sha256((dataset / "references.json").read_bytes()).hexdigest():
+                raise ValueError("重放统计与冻结集不一致")
+            from .audit_replay import summarize_metrics
+            summary["suggestions"] = summarize_metrics(record["cases"])
     write_json(root / "summary.json", summary)
     write_json(root / "details.json", {"cases": details})
     lines = [
@@ -307,6 +315,10 @@ def score(dataset: Path, results: Path, out: Path):
                     "    " + f["reference_quote"].replace("\n", "\n    "),
                 ]
             )
+    if "suggestions" in summary:
+        lines += ["", "## AI 建议引用核验（独立于正式结论评分）", "",
+                  "候选有据率仅衡量引用可核验，不代表业务正确性。严格匹配与空白等价分列；全部原始候选入分母。重复候选不代表独立佐证。",
+                  "", "```json", __import__("json").dumps(summary["suggestions"], ensure_ascii=False, indent=2), "```"]
     report = root / "report.md"
     report.write_text("\n".join(lines) + "\n", encoding="utf-8")
     report.chmod(0o600)

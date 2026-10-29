@@ -14,6 +14,8 @@ from ..extract.baseline import (
 )
 from ..extract.types import QUALITY_REVIEW_THRESHOLD, Extraction, ExtractionContext
 from ..parsers.text import INSTRUCTION
+from ..quote_match import match_quote
+from ..schema.suggestions import source_refs
 from ..schema import (
     ATTRIBUTION_LABELS_ZH,
     DEFAULT_SEVERITY,
@@ -56,6 +58,8 @@ def validate_extraction(ctx: ExtractionContext, data: Extraction) -> None:
     if data.service_identity:
         refs += [r for i in data.service_identity.identifiers for r in i.evidence_refs]
     refs += [q.evidence_id for q in data.quotes]
+    for suggestion in data.suggestions:
+        refs.extend(suggestion.iter_evidence_refs())
     errors = []
     missing = sorted(set(refs) - spans.keys())
     if missing:
@@ -65,8 +69,22 @@ def validate_extraction(ctx: ExtractionContext, data: Extraction) -> None:
                 f"抽取结果引用不存在的证据：{', '.join(missing)}",
             )
         )
+    checks = []
+    def matches(text, span, path):
+        checked = match_quote(text, span.text, path=path, evidence_id=span.id)
+        checks.append(checked)
+        return checked.status != "mismatch"
+
+    for suggestion in data.suggestions:
+        suggestion.checks = [match_quote(text, spans[ref].text, path=path, evidence_id=ref)
+                             for path, ref, text in suggestion.quote_requests() if ref in spans]
+        for candidate in suggestion.original.get("candidates", []) or []:
+            if not source_refs(candidate):
+                errors.append(issue(IssueCode.EVIDENCE_REF_MISSING, "建议候选缺少来源。"))
+        if suggestion.original.get("value") and not source_refs(suggestion.original):
+            errors.append(issue(IssueCode.EVIDENCE_REF_MISSING, "建议答案缺少来源。"))
     for q in data.quotes:
-        if q.evidence_id in spans and q.quote not in spans[q.evidence_id].text:
+        if q.evidence_id in spans and not matches(q.quote, spans[q.evidence_id], "quotes"):
             errors.append(
                 issue(
                     IssueCode.EVIDENCE_QUOTE_MISMATCH,
@@ -77,7 +95,7 @@ def validate_extraction(ctx: ExtractionContext, data: Extraction) -> None:
     for event in data.events:
         supporting = [spans[r] for r in event.evidence_refs if r in spans]
         if supporting and not any(
-            event.action in s.text or event.action == usable_text(s) for s in supporting
+            matches(event.action, s, f"events/{event.id}") or event.action == usable_text(s) for s in supporting
         ):
             errors.append(
                 issue(
@@ -101,7 +119,7 @@ def validate_extraction(ctx: ExtractionContext, data: Extraction) -> None:
             supporting = [spans[r] for r in candidate.evidence_refs if r in spans]
 
             def supported(s):
-                if text in s.text or text == usable_text(s):
+                if matches(text, s, f"{name.value}/candidates/{candidate.id}") or text == usable_text(s):
                     return True
                 if (
                     s.reading
@@ -148,7 +166,7 @@ def validate_extraction(ctx: ExtractionContext, data: Extraction) -> None:
                 if (
                     raw
                     and supporting
-                    and not any(raw in s.text for s in supporting)
+                    and not any(matches(raw, s, f"{name.value}/candidates/{candidate.id}/time") for s in supporting)
                     and raw not in metadata
                 ):
                     errors.append(
@@ -321,6 +339,7 @@ def validate_extraction(ctx: ExtractionContext, data: Extraction) -> None:
                         name,
                     )
                 )
+    data.quote_checks = checks
     if errors:
         raise ExtractionRejected(errors)
 

@@ -23,7 +23,7 @@ def envelope(data, *, finish="stop"):
 @pytest.fixture(scope="session")
 def sample():
     _, ctx, extraction = analyze_with_context(BUNDLES / "SYN-S01", registry=text_registry())
-    data = extraction.model_dump(mode="json")
+    data = extraction.model_dump(mode="json", exclude={"suggestions", "quote_checks"})
     refs = set(extraction.elements.iter_evidence_refs())
     refs.update(r for event in extraction.events for r in event.evidence_refs)
     if extraction.service_identity:

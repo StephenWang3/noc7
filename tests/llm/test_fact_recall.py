@@ -34,10 +34,10 @@ def test_explicit_claim_is_documented_not_formally_confirmed(server, sample, tex
     ctx = context(sample, text)
     rules = RulesProvider().extract(ctx).elements.responsible_party
     model = model_result(server, ctx, "responsible_party", excerpt, {"basis": "inferred_from_role"}).elements.responsible_party
-    for el in (rules, model):
-        assert el.status == "documented"
-        assert el.candidates[0].basis == "claimed"
-        assert el.evidence_refs == [ctx.evidence[0].id]
+    assert rules.status == "documented"
+    assert rules.candidates[0].basis == "claimed"
+    assert rules.evidence_refs == [ctx.evidence[0].id]
+    assert model.status == "unknown" and model.candidates == []
 
 
 @pytest.mark.parametrize("text", [
@@ -62,9 +62,9 @@ def test_rfo_location_has_same_supported_value_in_both_providers(server, sample)
     ctx = context(sample, RFO)
     rule = RulesProvider().extract(ctx).elements.location
     model = model_result(server, ctx, "location", POINT, {"role": "alarm_location"}).elements.location
-    for el in (rule, model):
-        assert el.status == "documented" and el.value == POINT
-        assert el.candidates[0].role == "located_fault_point"
+    assert rule.status == "documented" and rule.value == POINT
+    assert rule.candidates[0].role == "located_fault_point"
+    assert model.status == "unknown" and model.candidates == []
 
 
 @pytest.mark.parametrize("text", [
@@ -103,7 +103,8 @@ def test_conflicting_explicit_claims_are_not_auto_selected(server, sample):
         evidence_refs=[ctx.evidence[0].id]) for i, party in enumerate(["甲", "乙"], 1)]
     server.default = envelope(data)
     result = OpenAICompatibleTextProvider(qwen_config(server)).extract(ctx)
-    assert result.elements.responsible_party.status == "conflicted"
+    assert result.elements.responsible_party.status == "unknown"
+    assert result.suggestions[0].original == data["elements"]["responsible_party"]
     assert result.elements.responsible_party.value is None
 
 
@@ -131,4 +132,4 @@ def test_rule_keeps_all_rfo_points_in_one_span(sample):
 def test_long_rfo_excerpt_uses_only_complete_point(server, sample):
     ctx = context(sample, RFO)
     el = model_result(server, ctx, "location", RFO, {"role": "located_fault_point"}).elements.location
-    assert el.value == POINT
+    assert el.value is None and el.candidates == []

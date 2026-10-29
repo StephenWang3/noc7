@@ -6,7 +6,8 @@ from typing import Protocol
 from pydantic import Field
 
 from ..bundle import Bundle
-from ..schema import Event, EvidenceSpan, ServiceIdentity, SevenElements
+from ..quote_match import QuoteCheck
+from ..schema import BusinessSuggestion, Event, EvidenceSpan, ServiceIdentity, SevenElements
 from ..schema.common import Model
 
 QUALITY_REVIEW_THRESHOLD = 0.7  # 本地保守阈值，依据与代价见决策 0005。
@@ -18,6 +19,8 @@ class EvidenceQuote(Model):
 
 
 class Extraction(Model):
+    suggestions: list[BusinessSuggestion] = Field(default_factory=list)
+    quote_checks: list[QuoteCheck] = Field(default_factory=list)
     elements: SevenElements
     events: list[Event] = Field(default_factory=list)
     service_identity: ServiceIdentity | None = None

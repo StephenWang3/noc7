@@ -142,6 +142,8 @@ def render(
     env.filters["role"] = lambda v: ROLE[v]
     env.filters["parse"] = lambda v: PARSE[v]
     env.filters["step"] = lambda v: STEP[v]
+    env.filters["quote_status"] = lambda v: {"strict": "严格匹配", "whitespace": "仅空白等价匹配", "mismatch": "待核对：引文不匹配"}[v]
+    env.filters["model_source"] = lambda v: ATTRIBUTION_LABELS_ZH.get(v, v or "未提供") if isinstance(v, str) else str(v or "未提供")
     env.filters["source"] = lambda v: ATTRIBUTION_LABELS_ZH[v]
     rows = [
         {
@@ -156,11 +158,28 @@ def render(
     return env.get_template(f"report.{format}.j2").render(
         result=result,
         rows=rows,
+        suggestions=_suggestion_rows(result),
+        whitespace_checks=[c for c in result.quote_checks if c.status == "whitespace"],
         title="结案草稿" if report_type == "closure" else "阶段报告",
         template_version=TEMPLATE_VERSION,
         duration=final_duration(result),
         generated=result.run.finished_at or result.run.started_at,
     )
+
+
+def _suggestion_rows(result):
+    rows = []
+    for suggestion in result.suggestions:
+        original = suggestion.original
+        candidates = []
+        key = "party" if suggestion.element == "responsible_party" else "description"
+        for i, candidate in enumerate(original.get("candidates", []) or []):
+            checks = [c for c in suggestion.checks if c.path == f"candidates/{i}"]
+            candidates.append(dict(original=candidate, text=candidate.get(key, ""), checks=checks))
+        rows.append(dict(label=ELEMENT_LABELS_ZH[suggestion.element], original=original,
+                         candidates=candidates,
+                         checks=[c for c in suggestion.checks if not c.path.startswith("candidates/")]))
+    return rows
 
 
 OUTPUT_NAMES = (

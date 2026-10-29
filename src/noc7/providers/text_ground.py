@@ -1,7 +1,7 @@
-"""把模型摘录收成规则基线能支持的结论。
+"""两栏建议独立保存；其他模型摘录收成规则基线能支持的结论。
 
-模型只提供带引用的原文。定责、故障点、原因类别、时间语义和能否确认，
-都按 baseline 对引用片段重算；对不上的结论改为 unknown。
+模型责任方和地点在结构补全前保存为建议，正式字段置空。
+其余要素按 baseline 对引用片段重算；对不上的结论改为 unknown。
 现象的 value 与 evidence_refs 在本地写入。旁白和身份文本必须是引用原文的子串。
 """
 
@@ -515,7 +515,7 @@ def normalize_model_payload(payload, offset: str | None, spans=None):
     """先补齐缺字段、收掉非法类别和多余字段，再把时间收成原文。
 
     缺编号、归属、步骤类别，以及写错的枚举、写成纯文字的时间，不再整单拒绝。
-    语义类别仍由后续本地规则按引用原文重算；对不上的结论改成 unknown。
+    两栏业务答案已由 separate_suggestions 隔离，其余语义类别由后续规则重算。
     """
     if isinstance(payload, dict):
         payload = _repair_payload(payload, {span.id: span for span in spans or ()})
@@ -555,9 +555,9 @@ def ground_extraction(ctx: ExtractionContext, data: Extraction) -> Extraction:
     elements = elements.model_copy(update={
         "start_time": _ground_time(elements.start_time, spans, ctx, end=False),
         "end_time": _ground_time(elements.end_time, spans, ctx, end=True),
-        "responsible_party": _ground_party(elements.responsible_party, spans),
+
         "cause": _ground_cause(elements.cause, spans),
-        "location": _ground_location(elements.location, spans),
+
         "phenomenon": _ground_phenomenon(elements.phenomenon, ctx),
         "handling_process": _ground_steps(elements.handling_process, spans),
     })
@@ -955,3 +955,71 @@ def _all_refs(element):
     for candidate in element.iter_candidates():
         refs.extend(candidate.evidence_refs)
     return refs
+
+
+def separate_suggestions(payload):
+    """在结构补全前保存业务字段；不接受模型自报的本地核验或审核记录。"""
+    from copy import deepcopy
+    from ..schema import BusinessSuggestion
+    from ..schema.suggestions import source_refs
+
+    def reject_review(node):
+        if isinstance(node, dict):
+            if any(k in node and (k != "review" or node[k] is not None)
+                   for k in ("review", "suggestions", "quote_checks", "checks")):
+                from .text_config import TextProviderError
+                raise TextProviderError("模型不能提交人工审核或本地核验记录，已拒绝。")
+            for value in node.values():
+                reject_review(value)
+        elif isinstance(node, list):
+            for value in node:
+                reject_review(value)
+
+    if not isinstance(payload, dict):
+        raise ValueError("模型结果必须是对象")
+    reject_review(payload)
+    result = deepcopy(payload)
+    elements = result.get("elements")
+    if not isinstance(elements, dict):
+        raise ValueError("缺少七要素")
+    suggestions = []
+    for name in ("responsible_party", "location"):
+        node = elements.get(name, {})
+        if not isinstance(node, dict):
+            raise ValueError("建议必须是对象")
+        candidates = node.get("candidates")
+        candidates = [] if candidates is None else candidates
+        if not isinstance(candidates, list) or any(not isinstance(c, dict) for c in candidates):
+            raise ValueError("建议候选必须是对象列表")
+        source_refs(node)
+        for candidate in candidates:
+            source_refs(candidate)
+        suggestions.append(BusinessSuggestion(element=name, original=deepcopy(node)))
+        elements[name] = dict(status="unknown", value=None, selected=None,
+                              candidates=[], evidence_refs=[])
+    # 顶层 quotes 没有要素归属；只有建议独占的来源可以移入建议核验。
+    other_refs = set()
+    def collect(node):
+        if isinstance(node, dict):
+            if "evidence_refs" in node:
+                other_refs.update(source_refs(node))
+            for v in node.values():
+                collect(v)
+        elif isinstance(node, list):
+            for v in node:
+                collect(v)
+    collect(elements)
+    collect(result.get("events", []))
+    collect(result.get("service_identity"))
+    kept = []
+    for quote in result.get("quotes") or []:
+        if not isinstance(quote, dict) or not isinstance(quote.get("quote"), str) or not isinstance(quote.get("evidence_id"), str):
+            raise ValueError("引文结构不合格")
+        owners = [s for s in suggestions if quote["evidence_id"] in set(s.iter_evidence_refs())]
+        if owners and quote["evidence_id"] not in other_refs:
+            for owner in owners:
+                owner.quotes.append(dict(quote=quote["quote"], evidence_id=quote["evidence_id"]))
+        else:
+            kept.append(quote)
+    result["quotes"] = kept
+    return result, suggestions

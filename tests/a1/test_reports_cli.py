@@ -157,3 +157,31 @@ def test_cli_cannot_write_generated_files_into_input_bundle(tmp_path):
         p.relative_to(source): p.read_bytes() for p in source.rglob("*") if p.is_file()
     }
     assert before == after
+
+
+def test_suggestions_are_visible_escaped_and_checked(results):
+    from noc7.schema import AnalysisResult, BusinessSuggestion
+    from noc7.quote_match import match_quote
+    from noc7.report import render
+    from pydantic import ValidationError
+    import pytest
+
+    result = results["SYN-S01"].model_copy(deep=True)
+    span = result.evidence[0]
+    suggestion = BusinessSuggestion(element="location", original=dict(
+        status="confirmed", value=None, candidates=[dict(id="X1", description='<script>alert(1)</script>[x](https://example.invalid)',
+            attribution="vendor", role="custom", evidence_refs=[span.id])]))
+    suggestion.checks = [match_quote(suggestion.original["candidates"][0]["description"], span.text,
+                                    path="candidates/0", evidence_id=span.id)]
+    result.suggestions = [suggestion]
+    for fmt in ("md", "html"):
+        output = render(result, format=fmt)
+        assert "AI 建议，待确认" in output and "待核对：引文不匹配" in output
+        assert '<script>' not in output and "confirmed" in output
+        if fmt == "md":
+            assert f'](#e-{span.id})' in output
+            assert f'<a id="e-{span.id}"></a>' in output
+    bad = result.model_dump(mode="json")
+    bad["suggestions"][0]["checks"][0]["status"] = "strict"
+    with pytest.raises(ValidationError, match="核验记录"):
+        AnalysisResult.model_validate(bad)

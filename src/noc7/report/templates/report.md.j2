@@ -27,6 +27,28 @@
 {% else %}- 没有可用候选。
 {% endfor %}
 {% endfor %}
+## AI 建议，待确认
+
+以下内容是模型原始判断，不代表人工认定；“某方声称”及模型自报的 confirmed 均不表示已审核。引用匹配只证明文字存在，不证明业务语义正确。建议不进入正式结论或公司报告。
+
+{% for row in suggestions %}### {{ row.label|md }}建议
+
+模型原始状态：{{ row.original.get('status', '未提供')|md }}；原始值：{{ row.original.get('value')|md }}；选中项：{{ row.original.get('selected')|md }}。
+
+{% if row.original.get('note') %}模型备注：{{ row.original.get('note')|md }}
+
+{% endif %}{% if row.original.get('value') and not row.candidates %}待核对：模型填写了值，但缺少候选依据。
+{% endif %}{% for c in row.candidates %}- {{ c.text|md }}
+  - 模型归因：{{ c.original.get('attribution')|model_source|md }}；原始标签：{{ c.original.get('basis', c.original.get('role', '未提供'))|md }}；粒度：{{ c.original.get('granularity', '未提供')|md }}；候选编号：{{ c.original.get('id', '未提供')|md }}。{% if c.original.get('note') %}模型备注：{{ c.original.get('note')|md }}{% endif %}
+{% for check in c.checks %}  - {{ check.status|quote_status|md }}；[{{ check.evidence_id|md }}](#e-{{ check.evidence_id }})；原文范围 {{ check.start|md }}–{{ check.end|md }}：{{ (check.original or '未找到匹配原文')|md }}。
+{% endfor %}{% else %}- 模型未给出候选。
+{% endfor %}{% for check in row.checks %}- {{ check.path|md }}：{{ check.status|quote_status|md }}；[{{ check.evidence_id|md }}](#e-{{ check.evidence_id }})；模型引文 {{ check.quote|md }}；原文 {{ (check.original or '未匹配')|md }}。
+{% endfor %}{% endfor %}
+{% if whitespace_checks %}### 其他要素的空白等价引用
+
+{% for check in whitespace_checks %}- {{ check.path|md }}：{{ check.quote|md }}；[{{ check.evidence_id|md }}](#e-{{ check.evidence_id }}) 原文范围 {{ check.start|md }}–{{ check.end|md }}：{{ check.original|md }}。
+{% endfor %}{% endif %}
+
 ## 关键处理时间线
 
 {% for event in result.events %}- {{ event.time|time_text|md }} / {{ event.event_kind|step }} / {{ event.attribution|source }} / {{ (event.actor or '')|md }}：{{ event.action|md }}（{{ event.evidence_refs|join('、')|md }}）{% if event.duplicate_of %}；重复自 {{ event.duplicate_of|md }}{% endif %}
@@ -58,7 +80,9 @@
 {% endfor %}
 ## 内部证据索引
 
-{% for s in result.evidence %}### {{ s.id|md }} · {{ s.role|role }}
+{% for s in result.evidence %}<a id="e-{{ s.id }}"></a>
+
+### {{ s.id|md }} · {{ s.role|role }}
 
 定位：{{ s.locator.model_dump_json(exclude_none=True)|md }}；{{ s.extractor|md }}。
 

@@ -6,6 +6,7 @@ from pathlib import Path
 
 from .prepare import prepare
 from .score import run, score
+from .audit_replay import replay_audit
 
 
 def main(argv=None):
@@ -19,7 +20,10 @@ def main(argv=None):
     s = sub.add_parser("score")
     s.add_argument("--dataset", type=Path, required=True)
     s.add_argument("--results", type=Path, required=True)
-    for p in (p, r, s):
+    replay = sub.add_parser("replay-audit")
+    replay.add_argument("--dataset", type=Path, required=True)
+    replay.add_argument("--audit-dir", type=Path, required=True)
+    for p in (p, r, s, replay):
         p.add_argument("--out", type=Path, required=True)
     args = parser.parse_args(argv)
     try:
@@ -28,6 +32,11 @@ def main(argv=None):
             ok = sum(c["status"] == "ok" for c in rows)
             print(f"参考冻结：纳入 {ok}，排除 {len(rows) - ok}")
             return int(not ok)
+        if args.command == "replay-audit":
+            rows = replay_audit(args.dataset.expanduser(), args.audit_dir.expanduser(), args.out)
+            failed = sum(c["status"] != "ok" for c in rows)
+            print(f"离线重放：完成 {len(rows) - failed}，失败 {failed}；没有模型请求。")
+            return int(not rows or bool(failed))
         if args.command == "run":
             rows = run(args.dataset.expanduser(), args.out)
             failed = sum(c["status"] != "ok" for c in rows)

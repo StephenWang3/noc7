@@ -9,14 +9,12 @@ import time
 import urllib.error
 import urllib.request
 
-from pydantic import ValidationError
-
 from ..extract.types import Extraction, ExtractionContext
 from ..rules import ExtractionRejected, issue, validate_extraction
 from ..schema.common import DataClass
 from .gate import ensure_allowed
 from .text_config import TextModelConfig, TextProviderError
-from .text_ground import ground_extraction, normalize_model_payload
+from .text_ground import ground_extraction, normalize_model_payload, separate_suggestions
 from .text_prompt import PROMPT_VERSION, SYSTEM_PROMPT, prepare_evidence
 from .text_audit import AuditStore, grounding_changes
 
@@ -151,18 +149,22 @@ class OpenAICompatibleTextProvider:
         except (ValueError, RecursionError):
             raise TextProviderError("模型输出不是有效 JSON，已拒绝。") from None
         try:
+            separated, suggestions = separate_suggestions(parsed)
             normalized = normalize_model_payload(
-                parsed, ctx.bundle.manifest.default_timezone, ctx.evidence
+                separated, ctx.bundle.manifest.default_timezone, ctx.evidence
             )
             if audit:
                 audit.record(normalized=normalized)
             data = Extraction.model_validate(normalized)
-        except (ValidationError, RecursionError):
+            data.suggestions = suggestions
+        except TextProviderError:
+            raise
+        except (ValueError, TypeError, RecursionError):
             raise TextProviderError("模型七要素结构不合格，已拒绝。") from None
         before = data.model_dump(mode="json")
         if audit:
             audit.record(before_grounding=before)
-        # 语义标签、现象概述和归一时间都以本地规则为准；无依据摘录仍由后面的校验拒绝。
+        # 两栏原始业务判断留在建议区；其余语义标签、现象概述和归一时间沿用规则。
         data = ground_extraction(ctx, data)
         if audit:
             after = data.model_dump(mode="json")

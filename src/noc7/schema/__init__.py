@@ -71,4 +71,6 @@ from .gold import EvidenceAnchor, GoldAnswer, GoldCandidate, GoldElement, GoldIs
 from .issues import DEFAULT_SEVERITY, IssueCode, Severity, ValidationIssue
 from .timeval import TimeKind, TimePrecision, TimeValue, TimeZoneSource
 
+from .suggestions import BusinessSuggestion
+
 __all__ = [name for name in dir() if not name.startswith("_")]

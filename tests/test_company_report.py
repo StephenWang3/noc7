@@ -228,3 +228,18 @@ def test_write_reports_outputs_are_stable_and_gated(results, tmp_path):
 def test_batch_index_links_company_outputs():
     page = _index([{"alias": "R01", "ticket_ref": "SYN-P04", "status": "ok"}])
     assert 'href="R01/company_report.docx"' in page and 'href="R01/company_report.html"' in page
+
+
+def test_company_outputs_exclude_ai_suggestions(results, tmp_path):
+    from noc7.schema import BusinessSuggestion
+    result = results["SYN-P04"].model_copy(deep=True)
+    result.suggestions = [BusinessSuggestion(element="location", original=dict(
+        status="confirmed", value=None, note="SYN-AI-ONLY-LOCATION", candidates=[]))]
+    before = render_company_html(results["SYN-P04"], load_report_profile())
+    after = render_company_html(result, load_report_profile())
+    assert before == after
+    path = tmp_path / "company.docx"
+    write_company_docx(result, path, load_report_profile())
+    doc = Document(path)
+    text = " ".join(p.text for p in doc.paragraphs) + " ".join(c.text for t in doc.tables for r in t.rows for c in r.cells)
+    assert "SYN-AI-ONLY-LOCATION" not in text and "AI 建议" not in text

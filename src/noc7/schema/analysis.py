@@ -8,6 +8,8 @@ from typing import Iterator, Literal
 from pydantic import Field, model_validator
 
 from .bundle import RelatedTicket
+from .suggestions import BusinessSuggestion, source_refs
+from ..quote_match import QuoteCheck, match_quote
 from .common import Attribution, DataClass, EvidenceId, Model, material_of
 from .elements import SevenElements, StepKind
 from .evidence import EvidenceSpan, Material
@@ -75,6 +77,8 @@ class AnalysisResult(Model):
     materials: list[Material]
     evidence: list[EvidenceSpan]
     events: list[Event] = Field(default_factory=list)
+    suggestions: list[BusinessSuggestion] = Field(default_factory=list)
+    quote_checks: list[QuoteCheck] = Field(default_factory=list)
     elements: SevenElements
     issues: list[ValidationIssue] = Field(default_factory=list)
     service_identity: ServiceIdentity | None = None
@@ -83,6 +87,10 @@ class AnalysisResult(Model):
 
     def iter_evidence_refs(self) -> Iterator[str]:
         yield from self.elements.iter_evidence_refs()
+        for suggestion in self.suggestions:
+            yield from suggestion.iter_evidence_refs()
+        for check in self.quote_checks:
+            yield check.evidence_id
         for ev in self.events:
             yield from ev.evidence_refs
         for issue in self.issues:
@@ -109,6 +117,20 @@ class AnalysisResult(Model):
         missing = sorted({r for r in self.iter_evidence_refs() if r not in known})
         if missing:
             raise ValueError(f"引用了不存在的证据编号: {missing}")
+        spans = {s.id: s for s in self.evidence}
+        for suggestion in self.suggestions:
+            if any(not source_refs(c) for c in suggestion.original.get("candidates", []) or []):
+                raise ValueError("建议候选缺少来源")
+            if suggestion.original.get("value") and not source_refs(suggestion.original):
+                raise ValueError("建议答案缺少来源")
+            expected = [match_quote(text, spans[ref].text, path=path, evidence_id=ref)
+                        for path, ref, text in suggestion.quote_requests()]
+            if suggestion.checks != expected:
+                raise ValueError("建议引用核验记录与原文不一致")
+        for check in self.quote_checks:
+            if check != match_quote(check.quote, spans[check.evidence_id].text,
+                                    path=check.path, evidence_id=check.evidence_id):
+                raise ValueError("引用核验记录与原文不一致")
         event_ids = [e.id for e in self.events]
         if len(event_ids) != len(set(event_ids)):
             raise ValueError("事件编号重复")

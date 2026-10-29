@@ -76,7 +76,7 @@ ensure_allowed(minimax, ctx.data_class)   # 真实数据 → 抛 EgressBlocked
 
 - 外部服务默认只放行 `synthetic`。要放行 `real`，配置里必须写 `approval_ref`（批准依据，例如一份决策记录），否则配置本身就无法创建。
 - 没有“临时绕过”开关。测试里也不要 mock 掉这一步。
-- 本项目后续批准的例外：开发期允许向**官方 DeepSeek** 发送真实工单正文及本地 OCR 文字。统一文本配置必须声明 `allowed_data` 包含 `real`，并以 `docs/decisions/llm-text-providers.md` 为 `approval_ref`；仍在请求前调用 `ensure_allowed()`，不修改闸门默认策略。该批准不扩展到其他外部服务或原始图片；附件层 `ensure_attachment_allowed()` 的原图禁发规则保留。文本模型只提交原文摘录；定责、故障点、原因类别、时间语义、确认等级和现象概述由本地规则重算，不采信模型自标的结论。
+- 本项目后续批准的例外：开发期允许向**官方 DeepSeek** 发送真实工单正文及本地 OCR 文字。统一文本配置必须声明 `allowed_data` 包含 `real`，并以 `docs/decisions/llm-text-providers.md` 为 `approval_ref`；仍在请求前调用 `ensure_allowed()`，不修改闸门默认策略。该批准不扩展到其他外部服务或原始图片；附件层 `ensure_attachment_allowed()` 的原图禁发规则保留。文本模型只提交有来源的摘录；责任方和地点在结构补全前独立保存为“AI 建议，待确认”，正式两栏置空，不再用规则重判模型的业务语义。其他要素的原因类别、时间语义、确认等级和现象概述继续本地重算。详见 [AI 建议决策](decisions/ai-suggestions.md)。
 - 内网 Qwen 通过同一文本接口接入，由部署者核实地址及网络边界并声明为内网服务；不能因模型名为 Qwen 就把外部地址视作内网。接口资料到位前仅做兼容协议模拟验收。
 - 调用 MiniMax 时按用户的限流要求：每批 10 个请求，批与批之间隔 30 秒；被限流后等 5 分钟再试。
 
@@ -138,6 +138,12 @@ ensure_allowed(minimax, ctx.data_class)   # 真实数据 → 抛 EgressBlocked
 | 故障地点的结论必须是 `located_fault_point` | 告警位置、业务端点、测试节点都不是故障点（S04） |
 | 责任方不能来自 `inferred_from_role` | 不能因为是供应商或处理部门就定责（S06、S09） |
 | 分析结果里引用的证据编号必须存在 | `AnalysisResult` 校验时拦截编造的引用 |
+
+### AI 建议与引用核验
+
+`Extraction` 和 `AnalysisResult` 新增默认空的 `suggestions`、`quote_checks`，兼容旧结果和旧回放。建议只允许责任方和地点，保存原始业务 JSON 与本地核验记录，不属于 `SevenElements`。建议来源纳入引用完整性校验，不能提交人工审核记录；建议的原状态或角色不会成为正式状态或角色。
+
+来源缺失仍拒绝；建议引文不匹配保留并标待核对，正式引用实质不匹配继续拒绝。共享匹配只折叠连续 Unicode 空白，匹配记录保留原文字符范围，不改源证据。审核报告显示建议和空白等价记录，公司报告和正式评分只读取正式元素。
 
 ## 7. 各条线能改什么
 

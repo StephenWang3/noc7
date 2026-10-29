@@ -529,3 +529,80 @@ def test_numbers_units_and_identifiers_do_not_match_substrings():
     assert not matches_points("OTN_LOF2 告警", point("OTN_LOF"))
     assert matches_points("设备收到 OTN_LOF 告警", point("OTN_LOF"))
     assert not matches_points("Between Ruizy and Tepic", point("Ruiz"))
+
+
+def test_audit_replay_binds_request_and_separates_candidate_metric(sample, monkeypatch):
+    from noc7.extract import analyze
+    from noc7.extract.baseline import RulesProvider
+    from noc7.providers.text_prompt import prepare_evidence
+    from noc7.providers.text_replay import evidence_digest
+    from noc7.evaluation.audit_replay import replay_audit
+    import urllib.request
+
+    tmp, _, selection, _ = sample
+    prepare(selection, tmp / "dataset")
+    audits = tmp / "audit"
+    audits.mkdir()
+
+    class Capture:
+        name = "rules"
+        def extract(self, ctx):
+            clean, request = prepare_evidence(ctx)
+            span = clean.evidence[0]
+            payload = {"elements": {
+                name: dict(status="unknown", value=None, candidates=[], evidence_refs=[])
+                for name in ("start_time", "end_time", "phenomenon", "responsible_party", "cause", "location")}}
+            payload["elements"]["handling_process"] = dict(status="unknown", value=[], evidence_refs=[])
+            payload["elements"]["location"].update(candidates=[dict(
+                id="C1", role="custom", description=span.text, evidence_refs=[span.id], attribution="vendor")])
+            raw = json.dumps(dict(choices=[dict(finish_reason="stop", message=dict(content=json.dumps(payload)))]))
+            dump(audits / "record.json", dict(bundle_sha256=ctx.bundle.manifest_sha256,
+                evidence_sha256=evidence_digest(clean), request_evidence=request, raw_response=raw))
+            return RulesProvider().extract(ctx)
+
+    analyze(tmp / "dataset/inputs/E01", provider=Capture())
+    monkeypatch.setattr(urllib.request.OpenerDirector, "open", lambda *a, **k: pytest.fail("离线回放不能联网"))
+    rows = replay_audit(tmp / "dataset", audits, tmp / "replayed")
+    assert rows[0]["status"] == "ok"
+    metric = json.loads((tmp / "replayed/suggestion-summary.json").read_text())
+    assert metric["counts"]["total"] == 1 and metric["verifiable_rate"] == 1
+    result = json.loads((tmp / "replayed/E01/analysis.json").read_text())
+    assert result["elements"]["location"]["value"] is None
+    summary = score(tmp / "dataset", tmp / "replayed", tmp / "scored-ai")
+    assert summary["totals"]["missing"] == 1
+    assert summary["suggestions"] == metric
+
+    record = json.loads((audits / "record.json").read_text())
+    # 来源缺失导致拒绝，也必须进入候选分母。
+    envelope = json.loads(record["raw_response"])
+    payload = json.loads(envelope["choices"][0]["message"]["content"])
+    payload["elements"]["location"]["candidates"][0]["evidence_refs"] = ["M99/missing"]
+    envelope["choices"][0]["message"]["content"] = json.dumps(payload)
+    record["raw_response"] = json.dumps(envelope)
+    dump(audits / "record.json", record)
+    rejected = replay_audit(tmp / "dataset", audits, tmp / "rejected-ai")
+    assert rejected[0]["status"] == "failed"
+    assert rejected[0]["candidate_metrics"]["missing_source"] == 1
+    assert "EVIDENCE_REF_MISSING" in rejected[0]["issue_codes"]
+
+    record["request_evidence"]["evidence"][0]["text"] = "变更请求正文"
+    dump(audits / "record.json", record)
+    mismatch = replay_audit(tmp / "dataset", audits, tmp / "wrong-request")
+    assert mismatch[0]["status"] == "failed" and "candidate_metrics" not in mismatch[0]
+
+
+def test_candidate_metric_denominator_and_whitespace():
+    from noc7.evaluation.audit_replay import candidate_metrics, summarize_metrics
+    from types import SimpleNamespace
+    payload = dict(elements=dict(location=dict(candidates=[
+        dict(description=text, evidence_refs=refs) for text, refs in [
+            ("A B", ["M01/x"]), ("A\u00a0B", ["M01/x"]), ("C", ["M01/x"]), ("A", []),
+            ("A", ["M01/x", "M99/missing"]), ("A B", ["M01/x"])]
+    ])))
+    metrics = candidate_metrics(payload, {"M01/x": SimpleNamespace(text="A\u00a0B")})
+    assert metrics["total"] == 6 and metrics["strict"] == 1 and metrics["whitespace"] == 2
+    assert metrics["mismatch"] == 1 and metrics["missing_source"] == 2
+    assert summarize_metrics([dict(candidate_metrics=metrics)])["verifiable_rate"] == .5
+    zero = candidate_metrics(dict(elements={}), {})
+    assert zero["zero_candidate_cases"] == 1 and zero["zero_candidate_elements"] == 2
+    assert summarize_metrics([dict(candidate_metrics=zero)])["verifiable_rate"] is None

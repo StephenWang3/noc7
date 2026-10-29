@@ -17,6 +17,49 @@
       "title": "Attribution",
       "type": "string"
     },
+    "BusinessSuggestion": {
+      "additionalProperties": false,
+      "properties": {
+        "checks": {
+          "items": {
+            "$ref": "#/$defs/QuoteCheck"
+          },
+          "title": "Checks",
+          "type": "array"
+        },
+        "element": {
+          "enum": [
+            "responsible_party",
+            "location"
+          ],
+          "title": "Element",
+          "type": "string"
+        },
+        "original": {
+          "additionalProperties": {
+            "$ref": "#/$defs/JsonValue"
+          },
+          "title": "Original",
+          "type": "object"
+        },
+        "quotes": {
+          "items": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "title": "Quotes",
+          "type": "array"
+        }
+      },
+      "required": [
+        "element",
+        "original"
+      ],
+      "title": "BusinessSuggestion",
+      "type": "object"
+    },
     "CauseCandidate": {
       "additionalProperties": false,
       "properties": {
@@ -939,6 +982,7 @@
       "title": "IssueCode",
       "type": "string"
     },
+    "JsonValue": {},
     "LocationCandidate": {
       "additionalProperties": false,
       "properties": {
@@ -1744,6 +1788,78 @@
         "step_kind"
       ],
       "title": "ProcessStep",
+      "type": "object"
+    },
+    "QuoteCheck": {
+      "additionalProperties": false,
+      "properties": {
+        "end": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "End"
+        },
+        "evidence_id": {
+          "title": "Evidence Id",
+          "type": "string"
+        },
+        "original": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Original"
+        },
+        "path": {
+          "title": "Path",
+          "type": "string"
+        },
+        "quote": {
+          "title": "Quote",
+          "type": "string"
+        },
+        "start": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Start"
+        },
+        "status": {
+          "enum": [
+            "strict",
+            "whitespace",
+            "mismatch"
+          ],
+          "title": "Status",
+          "type": "string"
+        }
+      },
+      "required": [
+        "path",
+        "evidence_id",
+        "quote",
+        "status"
+      ],
+      "title": "QuoteCheck",
       "type": "object"
     },
     "RelatedTicket": {
@@ -2621,6 +2737,13 @@
       "title": "Materials",
       "type": "array"
     },
+    "quote_checks": {
+      "items": {
+        "$ref": "#/$defs/QuoteCheck"
+      },
+      "title": "Quote Checks",
+      "type": "array"
+    },
     "related_tickets": {
       "items": {
         "$ref": "#/$defs/RelatedTicket"
@@ -2647,6 +2770,13 @@
         }
       ],
       "default": null
+    },
+    "suggestions": {
+      "items": {
+        "$ref": "#/$defs/BusinessSuggestion"
+      },
+      "title": "Suggestions",
+      "type": "array"
     },
     "ticket_ref": {
       "title": "Ticket Ref",

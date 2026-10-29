@@ -40,11 +40,10 @@ def test_explicit_party_and_fault_point_can_be_extracted(server, sample):
     data["quotes"] = [dict(evidence_id=span.id, quote=text)]
     server.default = envelope(data)
     result = OpenAICompatibleTextProvider(qwen_config(server)).extract(ctx)
-    assert result.elements.responsible_party.value == party
-    assert result.elements.responsible_party.status == "confirmed"
-    assert result.elements.responsible_party.candidates[0].basis == "formal_determination"
-    assert result.elements.location.value == location
-    assert result.elements.location.candidates[0].role == "located_fault_point"
+    assert result.elements.responsible_party.value is None
+    assert result.elements.location.value is None
+    assert result.suggestions[0].original == data["elements"]["responsible_party"]
+    assert result.suggestions[1].original == data["elements"]["location"]
     assert result.elements.cause.status == "unknown"
 
 
@@ -60,8 +59,8 @@ def test_conflicting_claims_remain_candidates(server, sample):
     server.default = envelope(data)
     result = OpenAICompatibleTextProvider(qwen_config(server)).extract(ExtractionContext(sample[0].bundle, [span]))
     assert result.elements.responsible_party.value is None
-    assert result.elements.responsible_party.status == "conflicted"
-    assert len(result.elements.responsible_party.candidates) == 2
+    assert result.elements.responsible_party.status == "unknown"
+    assert result.suggestions[0].original == data["elements"]["responsible_party"]
 
 
 @pytest.mark.parametrize("name,field,attr,tag,corrected", [
@@ -79,7 +78,9 @@ def test_vendor_and_alarm_location_cannot_be_relabelled_as_conclusions(server, s
     result = OpenAICompatibleTextProvider(qwen_config(server)).extract(ExtractionContext(sample[0].bundle, [span]))
     element = getattr(result.elements, name)
     assert element.status == "unknown" and element.value is None and element.selected is None
-    assert getattr(element.candidates[0], corrected[0]) == corrected[1]
+    assert element.candidates == []
+    suggestion = next(s for s in result.suggestions if s.element == name)
+    assert suggestion.original == data["elements"][name]
 
 
 def test_model_cannot_cite_forged_evidence_or_original_text(server, sample):
@@ -137,7 +138,8 @@ def test_free_text_cannot_upgrade_party_location_cause_or_time(server, sample):
     party, location = result.elements.responsible_party, result.elements.location
     cause, start = result.elements.cause, result.elements.start_time
     assert party.status == "unknown" and party.value is None and party.note is None
-    assert party.candidates[0].basis == "inferred_from_role"
+    assert party.candidates == []
+    assert result.suggestions[0].original == data["elements"]["responsible_party"]
     assert location.status == "unknown" and location.value is None and location.note is None
     assert location.candidates == []
     assert cause.status == "unknown" and cause.value is None and cause.candidates == []
