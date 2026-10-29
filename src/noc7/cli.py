@@ -289,6 +289,19 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--gold", type=Path, default=DEFAULT_GOLD)
     p.add_argument("--bundles", type=Path, default=DEFAULT_BUNDLES)
     p.set_defaults(func=cmd_gold_check)
+
+    p = sub.add_parser("serve", help="启动本机演示页：五张合成单，以及上传的工单包")
+    p.add_argument("--host", default="127.0.0.1")
+    p.add_argument("--port", type=int, default=8765)
+    p.add_argument("--inbox", type=Path, default=Path("~/.noc7/demo-inbox"))
+    p.add_argument("--bundles", type=Path, default=DEFAULT_BUNDLES)
+    p.add_argument(
+        "--model-config",
+        type=Path,
+        default=Path("config/models/deepseek.json"),
+        help="「用模型分析」读取的配置；换成内网 Qwen 时只改这份配置",
+    )
+    p.set_defaults(func=cmd_serve)
     return ap
 
 
@@ -306,6 +319,19 @@ def cmd_local_batch(args: argparse.Namespace) -> int:
     failed = sum(c["status"] != "ok" for c in summary["cases"])
     print(f"完成 {len(summary['cases']) - failed}，失败 {failed}；请打开输出目录中的 index.html。")
     return 1 if failed else 0
+
+
+def cmd_serve(args: argparse.Namespace) -> int:
+    import uvicorn
+
+    from .web.app import create_app
+
+    uvicorn.run(
+        create_app(inbox=args.inbox, bundles=args.bundles, model_config=args.model_config),
+        host=args.host,
+        port=args.port,
+    )
+    return 0
 
 
 def main(argv: list[str] | None = None) -> int:

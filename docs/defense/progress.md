@@ -604,3 +604,13 @@ DeepSeek 完成全批，三十张生成审核 Markdown／HTML、公司 HTML／Wo
 原因候选重排后，把 `contradicts` 的原编号用 `_number_ids` 返回的同一张映射表更新。有效的双向或单向矛盾在重排后仍产生 `conflicted`；重复、不存在或碰巧撞上新编号的引用不猜选，对应关系待核实，原始判断保留。新增非法编号、合法编号碰撞、双向／单向关系和歧义目标的完整解码回归。本轮只离线使用保存响应，没有新模型请求，也没有改动先前两项模型语义误放的判断。
 
 本次修正后全量 **569 项测试通过**，Schema／gold 检查通过；默认全链路仍有原有两包 gold 语义差异。使用已保存的三十一份新响应禁网重放，三十份报告及回放成功、一单仍因引文错误拒绝；正式填出仍为起障二十、恢复六、原因十七，独立数值检查仍为八十条匹配、八条未评。最终本机留档为 `~/.noc7/time-cause-review-fixes-final/`，没有新增模型调用，真实数据未入 git。
+
+## 演示页与工单包导入
+
+本机用 `uv run noc7 serve` 打开三个画面：选择工单、七要素与原文出处、公司报告。预先放好的只有五张合成单（SYN-P04、SYN-S09、SYN-P01、SYN-S06、SYN-S02），启动后用规则流水线现算，不扫描 `~/.noc7/real/`。SYN-P04 的故障地点仍是规则给出的「矛盾」，没有把两种人井说法合并。
+
+导入只收标准工单包 zip。可以选规则，或选「用模型分析」。模型走与命令行相同的 `create_text_provider()`，配置默认 `config/models/deepseek.json`，请求前经过 `providers/gate.py`。换成内网 Qwen 只改 `--model-config`。模型给出的建议按结果里的 `suggestions` 展示，不再叠设计稿里的手写示例。校验失败或闸门拒绝不进列表；分析失败则卡片标「失败」，不写报告，也不回退成规则。真实包和产物只留在 `~/.noc7/demo-inbox/`。公司报告用空页眉。
+
+工作台一侧只保留传工单号（链接和校验来源后的 `postMessage`）。取舍见 [决策 0008](../decisions/0008-demo-service-and-bundle-upload.md)。
+
+复现：`uv run pytest -q tests/test_web.py`，再 `uv run noc7 serve`，浏览器打开 `http://127.0.0.1:8765/`。单测不访问网络。
