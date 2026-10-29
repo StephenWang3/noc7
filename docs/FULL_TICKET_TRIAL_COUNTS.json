@@ -1,0 +1,677 @@
+{
+  "date": "2026-10-29",
+  "full": {
+    "cases": 31,
+    "completed": 30,
+    "failures": {
+      "rejected": 1
+    },
+    "elements": {
+      "start_time": {
+        "filled": 7,
+        "candidate_cases": 29,
+        "filled_candidate_traceable": 7,
+        "counts": {
+          "total": 45,
+          "strict": 45,
+          "whitespace": 0,
+          "metadata": 0,
+          "mismatch": 0,
+          "missing_source": 0
+        }
+      },
+      "end_time": {
+        "filled": 2,
+        "candidate_cases": 22,
+        "filled_candidate_traceable": 2,
+        "counts": {
+          "total": 42,
+          "strict": 40,
+          "whitespace": 1,
+          "metadata": 1,
+          "mismatch": 0,
+          "missing_source": 0
+        }
+      },
+      "phenomenon": {
+        "filled": 30,
+        "candidate_cases": 30,
+        "filled_candidate_traceable": 30,
+        "counts": {
+          "total": 100,
+          "strict": 100,
+          "whitespace": 0,
+          "metadata": 0,
+          "mismatch": 0,
+          "missing_source": 0
+        }
+      },
+      "responsible_party": {
+        "filled": 0,
+        "candidate_cases": 0,
+        "filled_candidate_traceable": 0,
+        "counts": {
+          "total": 0,
+          "strict": 0,
+          "whitespace": 0,
+          "metadata": 0,
+          "mismatch": 0,
+          "missing_source": 0
+        }
+      },
+      "cause": {
+        "filled": 1,
+        "candidate_cases": 21,
+        "filled_candidate_traceable": 1,
+        "counts": {
+          "total": 44,
+          "strict": 44,
+          "whitespace": 0,
+          "metadata": 0,
+          "mismatch": 0,
+          "missing_source": 0
+        }
+      },
+      "handling_process": {
+        "filled": 26,
+        "candidate_cases": 26,
+        "filled_candidate_traceable": 26,
+        "counts": {
+          "total": 253,
+          "strict": 253,
+          "whitespace": 0,
+          "metadata": 0,
+          "mismatch": 0,
+          "missing_source": 0
+        }
+      },
+      "location": {
+        "filled": 0,
+        "candidate_cases": 0,
+        "filled_candidate_traceable": 0,
+        "counts": {
+          "total": 0,
+          "strict": 0,
+          "whitespace": 0,
+          "metadata": 0,
+          "mismatch": 0,
+          "missing_source": 0
+        }
+      }
+    },
+    "suggestions": {
+      "responsible_party": {
+        "filled": 0,
+        "candidate_cases": 11,
+        "filled_candidate_traceable": 0,
+        "counts": {
+          "total": 16,
+          "strict": 16,
+          "whitespace": 0,
+          "metadata": 0,
+          "mismatch": 0,
+          "missing_source": 0
+        }
+      },
+      "location": {
+        "filled": 3,
+        "candidate_cases": 30,
+        "filled_candidate_traceable": 3,
+        "counts": {
+          "total": 109,
+          "strict": 109,
+          "whitespace": 0,
+          "metadata": 0,
+          "mismatch": 0,
+          "missing_source": 0
+        }
+      }
+    }
+  },
+  "raw_suggestions": {
+    "responsible_party": {
+      "filled": 0,
+      "candidate_cases": 11,
+      "filled_candidate_traceable": 0,
+      "counts": {
+        "total": 16,
+        "strict": 16,
+        "whitespace": 0,
+        "metadata": 0,
+        "mismatch": 0,
+        "missing_source": 0
+      }
+    },
+    "location": {
+      "filled": 4,
+      "candidate_cases": 31,
+      "filled_candidate_traceable": 4,
+      "counts": {
+        "total": 112,
+        "strict": 112,
+        "whitespace": 0,
+        "metadata": 0,
+        "mismatch": 0,
+        "missing_source": 0
+      }
+    }
+  },
+  "subgroups": {
+    "closed": {
+      "cases": 22,
+      "completed": 21,
+      "failures": {
+        "rejected": 1
+      },
+      "elements": {
+        "start_time": {
+          "filled": 6,
+          "candidate_cases": 21,
+          "filled_candidate_traceable": 6,
+          "counts": {
+            "total": 34,
+            "strict": 34,
+            "whitespace": 0,
+            "metadata": 0,
+            "mismatch": 0,
+            "missing_source": 0
+          }
+        },
+        "end_time": {
+          "filled": 2,
+          "candidate_cases": 21,
+          "filled_candidate_traceable": 2,
+          "counts": {
+            "total": 40,
+            "strict": 38,
+            "whitespace": 1,
+            "metadata": 1,
+            "mismatch": 0,
+            "missing_source": 0
+          }
+        },
+        "phenomenon": {
+          "filled": 21,
+          "candidate_cases": 21,
+          "filled_candidate_traceable": 21,
+          "counts": {
+            "total": 85,
+            "strict": 85,
+            "whitespace": 0,
+            "metadata": 0,
+            "mismatch": 0,
+            "missing_source": 0
+          }
+        },
+        "responsible_party": {
+          "filled": 0,
+          "candidate_cases": 0,
+          "filled_candidate_traceable": 0,
+          "counts": {
+            "total": 0,
+            "strict": 0,
+            "whitespace": 0,
+            "metadata": 0,
+            "mismatch": 0,
+            "missing_source": 0
+          }
+        },
+        "cause": {
+          "filled": 1,
+          "candidate_cases": 15,
+          "filled_candidate_traceable": 1,
+          "counts": {
+            "total": 21,
+            "strict": 21,
+            "whitespace": 0,
+            "metadata": 0,
+            "mismatch": 0,
+            "missing_source": 0
+          }
+        },
+        "handling_process": {
+          "filled": 20,
+          "candidate_cases": 20,
+          "filled_candidate_traceable": 20,
+          "counts": {
+            "total": 229,
+            "strict": 229,
+            "whitespace": 0,
+            "metadata": 0,
+            "mismatch": 0,
+            "missing_source": 0
+          }
+        },
+        "location": {
+          "filled": 0,
+          "candidate_cases": 0,
+          "filled_candidate_traceable": 0,
+          "counts": {
+            "total": 0,
+            "strict": 0,
+            "whitespace": 0,
+            "metadata": 0,
+            "mismatch": 0,
+            "missing_source": 0
+          }
+        }
+      },
+      "suggestions": {
+        "responsible_party": {
+          "filled": 0,
+          "candidate_cases": 10,
+          "filled_candidate_traceable": 0,
+          "counts": {
+            "total": 15,
+            "strict": 15,
+            "whitespace": 0,
+            "metadata": 0,
+            "mismatch": 0,
+            "missing_source": 0
+          }
+        },
+        "location": {
+          "filled": 3,
+          "candidate_cases": 21,
+          "filled_candidate_traceable": 3,
+          "counts": {
+            "total": 81,
+            "strict": 81,
+            "whitespace": 0,
+            "metadata": 0,
+            "mismatch": 0,
+            "missing_source": 0
+          }
+        }
+      }
+    },
+    "other": {
+      "cases": 9,
+      "completed": 9,
+      "failures": {},
+      "elements": {
+        "start_time": {
+          "filled": 1,
+          "candidate_cases": 8,
+          "filled_candidate_traceable": 1,
+          "counts": {
+            "total": 11,
+            "strict": 11,
+            "whitespace": 0,
+            "metadata": 0,
+            "mismatch": 0,
+            "missing_source": 0
+          }
+        },
+        "end_time": {
+          "filled": 0,
+          "candidate_cases": 1,
+          "filled_candidate_traceable": 0,
+          "counts": {
+            "total": 2,
+            "strict": 2,
+            "whitespace": 0,
+            "metadata": 0,
+            "mismatch": 0,
+            "missing_source": 0
+          }
+        },
+        "phenomenon": {
+          "filled": 9,
+          "candidate_cases": 9,
+          "filled_candidate_traceable": 9,
+          "counts": {
+            "total": 15,
+            "strict": 15,
+            "whitespace": 0,
+            "metadata": 0,
+            "mismatch": 0,
+            "missing_source": 0
+          }
+        },
+        "responsible_party": {
+          "filled": 0,
+          "candidate_cases": 0,
+          "filled_candidate_traceable": 0,
+          "counts": {
+            "total": 0,
+            "strict": 0,
+            "whitespace": 0,
+            "metadata": 0,
+            "mismatch": 0,
+            "missing_source": 0
+          }
+        },
+        "cause": {
+          "filled": 0,
+          "candidate_cases": 6,
+          "filled_candidate_traceable": 0,
+          "counts": {
+            "total": 23,
+            "strict": 23,
+            "whitespace": 0,
+            "metadata": 0,
+            "mismatch": 0,
+            "missing_source": 0
+          }
+        },
+        "handling_process": {
+          "filled": 6,
+          "candidate_cases": 6,
+          "filled_candidate_traceable": 6,
+          "counts": {
+            "total": 24,
+            "strict": 24,
+            "whitespace": 0,
+            "metadata": 0,
+            "mismatch": 0,
+            "missing_source": 0
+          }
+        },
+        "location": {
+          "filled": 0,
+          "candidate_cases": 0,
+          "filled_candidate_traceable": 0,
+          "counts": {
+            "total": 0,
+            "strict": 0,
+            "whitespace": 0,
+            "metadata": 0,
+            "mismatch": 0,
+            "missing_source": 0
+          }
+        }
+      },
+      "suggestions": {
+        "responsible_party": {
+          "filled": 0,
+          "candidate_cases": 1,
+          "filled_candidate_traceable": 0,
+          "counts": {
+            "total": 1,
+            "strict": 1,
+            "whitespace": 0,
+            "metadata": 0,
+            "mismatch": 0,
+            "missing_source": 0
+          }
+        },
+        "location": {
+          "filled": 0,
+          "candidate_cases": 9,
+          "filled_candidate_traceable": 0,
+          "counts": {
+            "total": 28,
+            "strict": 28,
+            "whitespace": 0,
+            "metadata": 0,
+            "mismatch": 0,
+            "missing_source": 0
+          }
+        }
+      }
+    }
+  },
+  "paired": {
+    "cut": {
+      "cases": 7,
+      "completed": 7,
+      "failures": {},
+      "elements": {
+        "start_time": {
+          "filled": 0,
+          "candidate_cases": 4,
+          "filled_candidate_traceable": 0,
+          "counts": {
+            "total": 6,
+            "strict": 6,
+            "whitespace": 0,
+            "metadata": 0,
+            "mismatch": 0,
+            "missing_source": 0
+          }
+        },
+        "end_time": {
+          "filled": 0,
+          "candidate_cases": 6,
+          "filled_candidate_traceable": 0,
+          "counts": {
+            "total": 9,
+            "strict": 7,
+            "whitespace": 0,
+            "metadata": 2,
+            "mismatch": 0,
+            "missing_source": 0
+          }
+        },
+        "phenomenon": {
+          "filled": 6,
+          "candidate_cases": 6,
+          "filled_candidate_traceable": 6,
+          "counts": {
+            "total": 22,
+            "strict": 22,
+            "whitespace": 0,
+            "metadata": 0,
+            "mismatch": 0,
+            "missing_source": 0
+          }
+        },
+        "responsible_party": {
+          "filled": 0,
+          "candidate_cases": 0,
+          "filled_candidate_traceable": 0,
+          "counts": {
+            "total": 0,
+            "strict": 0,
+            "whitespace": 0,
+            "metadata": 0,
+            "mismatch": 0,
+            "missing_source": 0
+          }
+        },
+        "cause": {
+          "filled": 0,
+          "candidate_cases": 1,
+          "filled_candidate_traceable": 0,
+          "counts": {
+            "total": 1,
+            "strict": 1,
+            "whitespace": 0,
+            "metadata": 0,
+            "mismatch": 0,
+            "missing_source": 0
+          }
+        },
+        "handling_process": {
+          "filled": 6,
+          "candidate_cases": 6,
+          "filled_candidate_traceable": 6,
+          "counts": {
+            "total": 46,
+            "strict": 45,
+            "whitespace": 1,
+            "metadata": 0,
+            "mismatch": 0,
+            "missing_source": 0
+          }
+        },
+        "location": {
+          "filled": 0,
+          "candidate_cases": 0,
+          "filled_candidate_traceable": 0,
+          "counts": {
+            "total": 0,
+            "strict": 0,
+            "whitespace": 0,
+            "metadata": 0,
+            "mismatch": 0,
+            "missing_source": 0
+          }
+        }
+      },
+      "suggestions": {
+        "responsible_party": {
+          "filled": 1,
+          "candidate_cases": 2,
+          "filled_candidate_traceable": 1,
+          "counts": {
+            "total": 3,
+            "strict": 3,
+            "whitespace": 0,
+            "metadata": 0,
+            "mismatch": 0,
+            "missing_source": 0
+          }
+        },
+        "location": {
+          "filled": 3,
+          "candidate_cases": 6,
+          "filled_candidate_traceable": 3,
+          "counts": {
+            "total": 10,
+            "strict": 10,
+            "whitespace": 0,
+            "metadata": 0,
+            "mismatch": 0,
+            "missing_source": 0
+          }
+        }
+      }
+    },
+    "full": {
+      "cases": 7,
+      "completed": 6,
+      "failures": {
+        "rejected": 1
+      },
+      "elements": {
+        "start_time": {
+          "filled": 1,
+          "candidate_cases": 6,
+          "filled_candidate_traceable": 1,
+          "counts": {
+            "total": 10,
+            "strict": 10,
+            "whitespace": 0,
+            "metadata": 0,
+            "mismatch": 0,
+            "missing_source": 0
+          }
+        },
+        "end_time": {
+          "filled": 0,
+          "candidate_cases": 6,
+          "filled_candidate_traceable": 0,
+          "counts": {
+            "total": 13,
+            "strict": 11,
+            "whitespace": 1,
+            "metadata": 1,
+            "mismatch": 0,
+            "missing_source": 0
+          }
+        },
+        "phenomenon": {
+          "filled": 6,
+          "candidate_cases": 6,
+          "filled_candidate_traceable": 6,
+          "counts": {
+            "total": 25,
+            "strict": 25,
+            "whitespace": 0,
+            "metadata": 0,
+            "mismatch": 0,
+            "missing_source": 0
+          }
+        },
+        "responsible_party": {
+          "filled": 0,
+          "candidate_cases": 0,
+          "filled_candidate_traceable": 0,
+          "counts": {
+            "total": 0,
+            "strict": 0,
+            "whitespace": 0,
+            "metadata": 0,
+            "mismatch": 0,
+            "missing_source": 0
+          }
+        },
+        "cause": {
+          "filled": 0,
+          "candidate_cases": 4,
+          "filled_candidate_traceable": 0,
+          "counts": {
+            "total": 5,
+            "strict": 5,
+            "whitespace": 0,
+            "metadata": 0,
+            "mismatch": 0,
+            "missing_source": 0
+          }
+        },
+        "handling_process": {
+          "filled": 5,
+          "candidate_cases": 5,
+          "filled_candidate_traceable": 5,
+          "counts": {
+            "total": 61,
+            "strict": 61,
+            "whitespace": 0,
+            "metadata": 0,
+            "mismatch": 0,
+            "missing_source": 0
+          }
+        },
+        "location": {
+          "filled": 0,
+          "candidate_cases": 0,
+          "filled_candidate_traceable": 0,
+          "counts": {
+            "total": 0,
+            "strict": 0,
+            "whitespace": 0,
+            "metadata": 0,
+            "mismatch": 0,
+            "missing_source": 0
+          }
+        }
+      },
+      "suggestions": {
+        "responsible_party": {
+          "filled": 0,
+          "candidate_cases": 3,
+          "filled_candidate_traceable": 0,
+          "counts": {
+            "total": 5,
+            "strict": 5,
+            "whitespace": 0,
+            "metadata": 0,
+            "mismatch": 0,
+            "missing_source": 0
+          }
+        },
+        "location": {
+          "filled": 1,
+          "candidate_cases": 6,
+          "filled_candidate_traceable": 1,
+          "counts": {
+            "total": 29,
+            "strict": 29,
+            "whitespace": 0,
+            "metadata": 0,
+            "mismatch": 0,
+            "missing_source": 0
+          }
+        }
+      }
+    }
+  },
+  "verification": {
+    "replayed": 30,
+    "equal": 30,
+    "word_valid": 30,
+    "input_unchanged": true
+  }
+}
