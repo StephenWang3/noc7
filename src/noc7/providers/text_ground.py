@@ -252,6 +252,18 @@ def _repair_quote_element(node, spans, quote_key):
                 shell["granularity"] = item["granularity"]
         candidates.append(shell)
     mapping = _number_ids(candidates, _CANDIDATE_RE, "C")
+    if quote_key == "statement":
+        ids = {item["id"] for item in candidates}
+        for item in candidates:
+            relation = item.get("relation")
+            if relation is None:
+                continue
+            mapped = [mapping.get(ref) for ref in relation["contradicts"]]
+            if any(ref is None or ref not in ids for ref in mapped):
+                # 歧义／不存在的原编号不猜选、不保留成恰好撞上新编号的引用。
+                item["relation"] = None
+            else:
+                relation["contradicts"] = list(dict.fromkeys(mapped))
     patched = dict(node)
     patched["selected"] = _selected(node.get("selected"), mapping, {item["id"] for item in candidates})
     patched["_selection_invalid"] = node.get("selected") is not None and patched["selected"] is None

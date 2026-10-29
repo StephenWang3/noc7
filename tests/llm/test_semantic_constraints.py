@@ -340,3 +340,70 @@ def test_chinese_date_without_separator_keeps_clock():
     value=time_phrase(raw,"+08:00")
     assert value.iso=="2026-01-02T03:04:00+08:00"
     assert value.precision=="minute" and value.raw==raw
+
+
+@pytest.mark.parametrize('phone',['+1-555-0100','+1-555-0000'])
+def test_phone_does_not_override_clock_offset(sample,phone):
+    from noc7.extract.baseline import text_times
+    raw=f'请致电 {phone}，故障自 2026-01-02 03:04:05+00:00 开始'
+    expected='2026-01-02T03:04:05+00:00'
+    assert time_phrase(raw,'+08:00').iso==expected
+    times=list(text_times(raw,None,'+08:00'))
+    assert len(times)==1
+    assert times[0][0].raw=='2026-01-02 03:04:05+00:00'
+    assert times[0][0].iso==expected and times[0][0].tz_source=='explicit'
+    ctx,data=build(sample,raw=raw,field=False)
+    assert decode(ctx,data).elements.start_time.value.iso==expected
+
+
+def test_each_time_binds_its_own_offset_not_earlier_numeric_text():
+    from noc7.extract.baseline import text_times
+    raw='参考 -0100，故障自 2026-01-02 03:04:05+00:00 开始；2026-01-02 12:04:05+08:00 恢复'
+    times=list(text_times(raw,None,None))
+    assert [t.iso for t,_,_ in times]==['2026-01-02T03:04:05+00:00','2026-01-02T12:04:05+08:00']
+    assert time_phrase(raw,None).iso==times[0][0].iso
+    # 单独的号码片段也不能变为当前时刻的显式时区。
+    raw='请致电 +1-555-0100，故障自 2026-01-02 03:04:05 开始'
+    value=time_phrase(raw,'+08:00')
+    assert value.iso=='2026-01-02T03:04:05+08:00' and value.tz_source=='assumed'
+
+
+@pytest.mark.parametrize('first,second',[('1','2'),('bad id','C1'),('A','B')])
+@pytest.mark.parametrize('direction',['selected','opposing','both'])
+def test_cause_contradictions_follow_candidate_renumbering(sample,first,second,direction):
+    ctx,data=build(sample,name='cause')
+    el=data['elements']['cause'];a=el['candidates'][0];a['id']=first;el['selected']=first
+    b=deepcopy(a);b['id']=second;b['relation']['modality']='negated'
+    a['relation']['contradicts']=[second] if direction in ['selected','both'] else []
+    b['relation']['contradicts']=[first] if direction in ['opposing','both'] else []
+    el['candidates'].append(b)
+    result=decode(ctx,data)
+    assert result.elements.cause.status=='conflicted'
+    a,b=result.elements.cause.candidates
+    assert a.relation.contradicts==([b.id] if direction in ['selected','both'] else [])
+    assert b.relation.contradicts==([a.id] if direction in ['opposing','both'] else [])
+    assert result.semantic_assessment.original['cause']==el
+
+
+@pytest.mark.parametrize('target',['duplicate','missing','C2'])
+def test_ambiguous_or_missing_contradiction_never_points_at_generated_id(sample,target):
+    ctx,data=build(sample,name='cause');el=data['elements']['cause']
+    a=el['candidates'][0];a['id']='stable';el['selected']='stable'
+    a['relation']['contradicts']=[target]
+    b=deepcopy(a);b['id']='duplicate';b['relation']['contradicts']=[]
+    c=deepcopy(b)
+    # duplicate 将被编号为 C1/C2；原始 C2 并不存在，不能因新编号碰巧存在而采用。
+    el['candidates'].extend([b,c])
+    result=decode(ctx,data)
+    assert result.elements.cause.value is None
+    assert result.elements.cause.candidates[0].relation is None
+    assert result.semantic_assessment.original['cause']['candidates'][0]['relation']['contradicts']==[target]
+
+
+@pytest.mark.parametrize('zone',['UTC','+00:00'])
+def test_previous_clock_zone_is_not_reused_without_clause_separator(zone):
+    from noc7.extract.baseline import text_times
+    raw=f'2026-01-02 03:04:05 {zone} 起障，2026-01-02 04:04:05 恢复'
+    times=list(text_times(raw,None,'+08:00'))
+    assert [t.iso for t,_,_ in times]==['2026-01-02T03:04:05+00:00','2026-01-02T04:04:05+08:00']
+    assert times[1][0].tz_source=='assumed'

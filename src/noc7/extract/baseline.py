@@ -47,7 +47,7 @@ from .fact_phrases import responsibility_claims, rfo_fault_points
 DATE = r"\d{4}[-/.年]\d{1,2}[-/.月]\d{1,2}日?"
 CLOCK = r"\d{1,2}[:：]\d{2}(?:[:：]\d{2})?"
 ZONE_RE = re.compile(
-    r"\b(?:GMT|UTC)\b(?:\s*[+-]\s*\d{1,2}(?::?\d{2})?)?|(?<![A-Za-z_-])[+-](?:0\d|1[0-4]):?[0-5]\d(?!\d)|\bZ\b|北京时间|香港时间",
+    r"\b(?:GMT|UTC)\b(?:\s*[+-]\s*\d{1,2}(?::?\d{2})?)?|(?:(?<![\w-])|(?<=\d[:：]\d{2}))[+-](?:0\d|1[0-4]):?[0-5]\d(?!\d)|\bZ\b|北京时间|香港时间",
     re.I,
 )
 TIME_RE = re.compile(
@@ -219,6 +219,27 @@ def _time_bounds(text: str, start: int, end: int) -> tuple[int, int]:
     return left, right
 
 
+def _zone_for_time(text: str, start: int, end: int):
+    """时区只在当前时间的分句/相邻时刻边界内绑定，后置时区优先。"""
+    left, right = _time_bounds(text, start, end)
+    zones = list(ZONE_RE.finditer(text, left, right))
+    for zone in zones:
+        if zone.start() >= end:
+            gap = text[end:zone.start()]
+            # 裸数字偏移必须紧邻时间（允许空白和括号），不跨旁边的电话号码。
+            if zone.group()[0] not in "+-" or re.fullmatch(r"[\s()（）]*", gap):
+                return zone
+    # 左边界若是上一个时刻的末尾，后面的时区属于它，不能再借给当前时刻。
+    if any(other.end() == left for other in _time_matches(text)):
+        return None
+    for zone in reversed(zones):
+        if zone.end() <= start:
+            gap = text[zone.end():start]
+            if zone.group()[0] not in "+-" or re.fullmatch(r"[\s()（）]*", gap):
+                return zone
+    return None
+
+
 def time_phrase(raw: str, offset: str | None, record: str | None = None) -> TimeValue:
     """解析含间隔词的时间短语；归一时去掉间隔词，raw 始终保留原文。"""
     # 与引用核验采用相同的空白口径；原始 raw 与证据位置不改写。
@@ -230,7 +251,7 @@ def time_phrase(raw: str, offset: str | None, record: str | None = None) -> Time
     if not match:
         return TimeValue(raw=raw)
     core = match.group()
-    zone = ZONE_RE.search(parse_raw)
+    zone = _zone_for_time(parse_raw, match.start(), match.end())
     value = core + (" " + zone.group() if zone else "")
     clock_only = bool(re.fullmatch(CLOCK, core))
     if clock_only and record:
@@ -305,7 +326,7 @@ def text_times(
 ):
     for m in _time_matches(text):
         left, right = _time_bounds(text, m.start(), m.end())
-        zone = ZONE_RE.search(text, left, right)
+        zone = _zone_for_time(text, m.start(), m.end())
         start, end = m.start(), m.end()
         if zone:
             start, end = min(start, zone.start()), max(end, zone.end())
