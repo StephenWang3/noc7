@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="zh-CN">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>SYN-S02 · 故障处理报告 Failure Report</title><link rel="stylesheet" href="report.css"></head>
+<body><main class="company">
+<header class="company-header"></header>
+<h1>故障处理报告 Failure Report</h1>
+<p class="notice">合成演示数据，不代表真实工单或真实模型质量。</p>
+<p class="company-date">2026年 10 月 29 日</p>
+<table class="company-table"><colgroup><col class="c0"><col class="c1"><col class="c2"><col class="c3"></colgroup><tbody>
+<tr><th rowspan="7" class="group"><p>故障基本情况</p><p>The basic situation of failure</p></th><th><p>客户名称Customer</p></th><td colspan="2"><p>示例客户乙（合成）</p></td></tr>
+<tr><th><p>电路编号</p><p>Circuit ID.</p></th><td colspan="2"><p>SYN-CKT-1002</p></td></tr>
+<tr><th><p>故障号: </p><p>Fault Ticket no.</p></th><td colspan="2"><p>SYN-S02</p></td></tr>
+<tr><th><p>业务类型 Service</p></th><td colspan="2"><p>业务中断</p></td></tr>
+<tr><th rowspan="3"><p>故障时间 Downtime</p></th><th><p>申报时间</p><p>Time to declare</p></th><td><p>2026-09-12 01:05:00 (GMT+8)</p></td></tr>
+<tr><th><p>恢复时间</p><p>Resumed time</p></th><td><p>2026-09-12 02:16:00 (GMT+8)</p></td></tr>
+<tr><th><p>故障历时</p><p>Fault duration</p></th><td><p>71分钟</p></td></tr>
+<tr><th class="group"><p>故障现象</p><p>Failure</p></th><td colspan="3"><p>客户反馈：北京时间 2026-09-12 01:06，自动报障系统检测到客户专线 SYN-CKT-1002 Z 端不通，客户业务中断。；检查显示：Z 端检测到 SYN-CKT-1002 不通，自动建单。；检查显示：查告警：A 端接入端口 01:04 出现 LINK DOWN 告警，Z 端随后上报业务中断。</p></td></tr>
+<tr><th class="group"><p>处理过程</p><p>Process</p></th><td colspan="3"><p>2026-09-12 01:12:05 GMT+8 自动报障系统 Z 端检测到 SYN-CKT-1002 不通，自动建单。</p><p>2026-09-12 01:14:30 GMT+8 值班员E 已受理。</p><p>2026-09-12 01:20:12 GMT+8 值班员E 查告警：A 端接入端口 01:04 出现 LINK DOWN 告警，Z 端随后上报业务中断。</p><p>2026-09-12 01:31:48 GMT+8 值班员E 电话联系客户维护人员，对方称正在进行计划割接，割接窗口 01:00—03:00。</p><p>2026-09-12 02:18:26 GMT+8 工程师F A 端接入端口 02:15 恢复 UP，业务流量恢复。</p><p>2026-09-12 02:31:05 GMT+8 工程师F 经与客户维护人员电话确认：本次为客户 A 端接入设备计划升级割接（窗口 01:00—03:00），Z 端自动报障未同步切换；客户确认当前线路已正常，同意结单。</p><p>2026-09-12 02:52:00 GMT+8 工程师F 返单。</p><p>2026-09-12 08:30:15 GMT+8 值班员G 结单。</p></td></tr>
+<tr><th class="group"><p>故障原因</p><p>分析</p><p>Failure Analysis</p></th><td colspan="3"><p>客户 A 端接入设备按计划进行升级割接，Z 端自动报障系统未同步切换，产生中断报障。</p><p>责任方：<mark>【待核实】</mark>；故障位置：<mark>【待核实】</mark></p></td></tr>
+<tr><th class="group"><p>改进及预防措施</p><p>Improvement and preventive measures</p></th><td colspan="3"><p>国际公司将持续关注线路运行情况，监控线路运行情况，发现隐患尽早处理，快速响应处置故障。<mark>【系统默认表述，待审核】</mark></p></td></tr>
+</tbody></table>
+<footer class="company-signatures"><p>故障处理报告人(Failure Reporter)：</p><p>故障处理报告审核(Failure Report Audit): </p><p>审核日期(Audit Date)：</p><p class="muted">公司格式模板 1.1；系统生成草稿，标记处待人工核实，证据与候选见 <a href="report.html">审核报告</a>。</p></footer>
+</main></body></html>

@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="zh-CN">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>SYN-S09 · 故障处理报告 Failure Report</title><link rel="stylesheet" href="report.css"></head>
+<body><main class="company">
+<header class="company-header"></header>
+<h1>故障处理报告 Failure Report</h1>
+<p class="notice">合成演示数据，不代表真实工单或真实模型质量。</p>
+<p class="company-date">2026年 10 月 29 日</p>
+<table class="company-table"><colgroup><col class="c0"><col class="c1"><col class="c2"><col class="c3"></colgroup><tbody>
+<tr><th rowspan="7" class="group"><p>故障基本情况</p><p>The basic situation of failure</p></th><th><p>客户名称Customer</p></th><td colspan="2"><p>Example Corp B（合成）</p></td></tr>
+<tr><th><p>电路编号</p><p>Circuit ID.</p></th><td colspan="2"><p>SYN-CKT-1009</p></td></tr>
+<tr><th><p>故障号: </p><p>Fault Ticket no.</p></th><td colspan="2"><p>SYN-S09</p></td></tr>
+<tr><th><p>业务类型 Service</p></th><td colspan="2"><p>业务性能-丢包</p></td></tr>
+<tr><th rowspan="3"><p>故障时间 Downtime</p></th><th><p>申报时间</p><p>Time to declare</p></th><td><p>2026-09-28 13:00:00 (GMT+8)</p></td></tr>
+<tr><th><p>恢复时间</p><p>Resumed time</p></th><td><p>2026-09-28 13:36:00 (GMT+8)</p></td></tr>
+<tr><th><p>故障历时</p><p>Fault duration</p></th><td><p>约 36 分钟<mark>【待核实：恢复未确认】</mark></p></td></tr>
+<tr><th class="group"><p>故障现象</p><p>Failure</p></th><td colspan="3"><p>客户反馈：Circuit ID: SYN-CKT-1009</p><p>Time Circuit Failed: NA</p><p>Issue: We see about 25% packet loss from our proxy 198.51.100.20 (Frankfurt) to target 203.0.113.50 (Hong Kong).</p><p>Note: Intrusive testing is NOT approved. Please schedule a test window with us in advance.；检查显示：本端 PE ping 客户 CE 互联地址：100 发 100 收，无丢包，平均 RTT 2 ms。；检查显示：本端 PE ping 香港侧目标网段网关：100 发 100 收，无丢包，平均 RTT 3 ms。；检查显示：返单：本端 ping 测试 100 发 100 收，无丢包，端口流量正常；请客户提供故障时的源/目的地址及 ping/trace 结果。</p></td></tr>
+<tr><th class="group"><p>处理过程</p><p>Process</p></th><td colspan="3"><p>2026-09-28 13:02:41 GMT+8 系统 根据客户邮件建单。</p><p>2026-09-28 13:05:10 GMT+8 值班员N 已受理。</p><p>2026-09-28 13:09:55 GMT+8 值班员N 本端 PE ping 客户 CE 互联地址：100 发 100 收，无丢包，平均 RTT 2 ms。</p><p>2026-09-28 13:14:20 GMT+8 值班员N 本端 PE ping 香港侧目标网段网关：100 发 100 收，无丢包，平均 RTT 3 ms。</p><p>2026-09-28 13:18:02 GMT+8 值班员N 检查 PE 端口流量与错包计数：流量正常，无 CRC 错包。</p><p>2026-09-28 13:20:47 GMT+8 值班员N 返单：本端 ping 测试 100 发 100 收，无丢包，端口流量正常；请客户提供故障时的源/目的地址及 ping/trace 结果。</p><p>2026-09-28 13:40:30 GMT+8 客户经理P 已转告客户，请其提供故障时源/目的地址及 ping/trace 结果。</p><p>2026-09-29 10:00:12 GMT+8 客户经理P 客户暂未提供测试资料。</p><p>2026-09-29 10:02:00 GMT+8 系统 工单进入索要报告/结单签收环节。</p></td></tr>
+<tr><th class="group"><p>故障原因</p><p>分析</p><p>Failure Analysis</p></th><td colspan="3"><p><mark>【待核实】</mark></p><p>责任方：<mark>【待核实】</mark>；故障位置：<mark>【待核实】</mark></p></td></tr>
+<tr><th class="group"><p>改进及预防措施</p><p>Improvement and preventive measures</p></th><td colspan="3"><p>国际公司将持续关注线路运行情况，监控线路运行情况，发现隐患尽早处理，快速响应处置故障。<mark>【系统默认表述，待审核】</mark></p></td></tr>
+</tbody></table>
+<footer class="company-signatures"><p>故障处理报告人(Failure Reporter)：</p><p>故障处理报告审核(Failure Report Audit): </p><p>审核日期(Audit Date)：</p><p class="muted">公司格式模板 1.1；系统生成草稿，标记处待人工核实，证据与候选见 <a href="report.html">审核报告</a>。</p></footer>
+</main></body></html>
