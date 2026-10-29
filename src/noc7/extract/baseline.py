@@ -221,11 +221,13 @@ def _time_bounds(text: str, start: int, end: int) -> tuple[int, int]:
 
 def time_phrase(raw: str, offset: str | None, record: str | None = None) -> TimeValue:
     """解析含间隔词的时间短语；归一时去掉间隔词，raw 始终保留原文。"""
-    match = next(iter(_time_matches(raw)), None)
+    # 与引用核验采用相同的空白口径；原始 raw 与证据位置不改写。
+    parse_raw = re.sub(r"\s+", " ", raw)
+    match = next(iter(_time_matches(parse_raw)), None)
     if not match:
         return TimeValue(raw=raw)
     core = match.group()
-    zone = ZONE_RE.search(raw)
+    zone = ZONE_RE.search(parse_raw)
     value = core + (" " + zone.group() if zone else "")
     clock_only = bool(re.fullmatch(CLOCK, core))
     if clock_only and record:

@@ -36,11 +36,7 @@
           "type": "string"
         },
         "original": {
-          "additionalProperties": {
-            "$ref": "#/$defs/JsonValue"
-          },
-          "title": "Original",
-          "type": "object"
+          "$ref": "#/$defs/JsonValue"
         },
         "quotes": {
           "items": {

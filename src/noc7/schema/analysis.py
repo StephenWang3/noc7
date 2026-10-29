@@ -8,7 +8,7 @@ from typing import Iterator, Literal
 from pydantic import Field, model_validator
 
 from .bundle import RelatedTicket
-from .suggestions import BusinessSuggestion, source_refs
+from .suggestions import BusinessSuggestion
 from ..quote_match import QuoteCheck, match_quote
 from .common import Attribution, DataClass, EvidenceId, Model, material_of
 from .elements import SevenElements, StepKind
@@ -119,10 +119,6 @@ class AnalysisResult(Model):
             raise ValueError(f"引用了不存在的证据编号: {missing}")
         spans = {s.id: s for s in self.evidence}
         for suggestion in self.suggestions:
-            if any(not source_refs(c) for c in suggestion.original.get("candidates", []) or []):
-                raise ValueError("建议候选缺少来源")
-            if suggestion.original.get("value") and not source_refs(suggestion.original):
-                raise ValueError("建议答案缺少来源")
             expected = [match_quote(text, spans[ref].text, path=path, evidence_id=ref)
                         for path, ref, text in suggestion.quote_requests()]
             if suggestion.checks != expected:

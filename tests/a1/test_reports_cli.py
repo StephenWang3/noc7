@@ -177,6 +177,8 @@ def test_suggestions_are_visible_escaped_and_checked(results):
     for fmt in ("md", "html"):
         output = render(result, format=fmt)
         assert "AI 建议，待确认" in output and "待核对：引文不匹配" in output
+        assert "原文范围 None" not in output and "None–None" not in output
+        assert "未找到匹配原文" in output
         assert '<script>' not in output and "confirmed" in output
         if fmt == "md":
             assert f'](#e-{span.id})' in output

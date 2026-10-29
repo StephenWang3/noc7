@@ -33,14 +33,19 @@
 
 {% for row in suggestions %}### {{ row.label|md }}建议
 
-模型原始状态：{{ row.original.get('status', '未提供')|md }}；原始值：{{ row.original.get('value')|md }}；选中项：{{ row.original.get('selected')|md }}。
+{% if row.unprovided %}模型未给出有效建议；原始返回：{{ row.raw|md }}。
+
+{% endif %}{% if row.missing_value_source %}缺少来源，待核对。
+
+{% endif %}模型原始状态：{{ row.original.get('status', '未提供')|md }}；原始值：{{ row.original.get('value')|md }}；选中项：{{ row.original.get('selected')|md }}。
 
 {% if row.original.get('note') %}模型备注：{{ row.original.get('note')|md }}
 
 {% endif %}{% if row.original.get('value') and not row.candidates %}待核对：模型填写了值，但缺少候选依据。
-{% endif %}{% for c in row.candidates %}- {{ c.text|md }}
+{% endif %}{% for c in row.candidates %}- {% if c.malformed %}候选格式不完整；原始返回：{{ c.raw|md }}{% else %}{{ c.text|md }}{% endif %}
+{% if c.missing_source %}  - 缺少来源，待核对。{% endif %}
   - 模型归因：{{ c.original.get('attribution')|model_source|md }}；原始标签：{{ c.original.get('basis', c.original.get('role', '未提供'))|md }}；粒度：{{ c.original.get('granularity', '未提供')|md }}；候选编号：{{ c.original.get('id', '未提供')|md }}。{% if c.original.get('note') %}模型备注：{{ c.original.get('note')|md }}{% endif %}
-{% for check in c.checks %}  - {{ check.status|quote_status|md }}；[{{ check.evidence_id|md }}](#e-{{ check.evidence_id }})；原文范围 {{ check.start|md }}–{{ check.end|md }}：{{ (check.original or '未找到匹配原文')|md }}。
+{% for check in c.checks %}  - {{ check.status|quote_status|md }}；[{{ check.evidence_id|md }}](#e-{{ check.evidence_id }})；{% if check.start is not none %}原文范围 {{ check.start|md }}–{{ check.end|md }}：{% endif %}{{ (check.original or '未找到匹配原文')|md }}。
 {% endfor %}{% else %}- 模型未给出候选。
 {% endfor %}{% for check in row.checks %}- {{ check.path|md }}：{{ check.status|quote_status|md }}；[{{ check.evidence_id|md }}](#e-{{ check.evidence_id }})；模型引文 {{ check.quote|md }}；原文 {{ (check.original or '未匹配')|md }}。
 {% endfor %}{% endfor %}

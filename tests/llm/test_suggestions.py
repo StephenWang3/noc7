@@ -61,8 +61,8 @@ def test_shared_source_explicit_quote_still_rejects_formal_mismatch(sample):
         decode(ctx, payload)
 
 
-@pytest.mark.parametrize("refs", [[], ["M99/forged"], ["bad ref"]])
-def test_missing_or_unknown_suggestion_source_rejects(sample, refs):
+@pytest.mark.parametrize("refs", [["M99/forged"], ["bad ref"]])
+def test_unknown_suggestion_source_rejects(sample, refs):
     ctx, payload = suggestion_case(sample, refs=refs)
     with pytest.raises(ExtractionRejected):
         decode(ctx, payload)
@@ -112,3 +112,71 @@ def test_quote_matching_changes_only_whitespace(quote, source, status):
     assert match.status == status
     if status != "mismatch":
         assert match.original == source[match.start:match.end]
+
+
+@pytest.mark.parametrize("node", [None, "模型未给出", 0, [],
+    {"candidates": [None]}, {"candidates": ["原样保留"]},
+    {"value": "无来源的地点", "evidence_refs": None,
+     "candidates": [{"description": "无来源的地点", "evidence_refs": None}]},
+    {"candidates": [{"description": "缺少引用"}]},
+    {"candidates": [{"description": "空引用", "evidence_refs": []}]},
+])
+@pytest.mark.parametrize("name", ["location", "responsible_party"])
+def test_incomplete_suggestions_survive_decode_result_and_reports(sample, node, name):
+    from noc7.extract import analyze
+    from noc7.report import render
+    from noc7.schema import AnalysisResult
+    from tests.a1.conftest import text_registry
+
+    payload = empty_extraction()
+    payload["elements"][name] = deepcopy(node)
+    class Provider:
+        name = "test:incomplete-model"
+        def extract(self, ctx):
+            return decode(ctx, payload)
+    result = analyze(sample[0].bundle.root, provider=Provider(), registry=text_registry())
+    result = AnalysisResult.model_validate_json(result.model_dump_json())
+    suggestion = next(s for s in result.suggestions if s.element == name)
+    assert suggestion.original == node
+    assert getattr(result.elements, name).value is None
+    for fmt in ("md", "html"):
+        report = render(result, format=fmt)
+        assert "AI 建议，待确认" in report
+        if isinstance(node, dict) and node.get("candidates"):
+            assert "缺少来源，待核对" in report
+        else:
+            assert "模型未给出" in report
+
+
+def test_nbsp_actions_use_same_context_as_strict_actions(sample):
+    ctx, payload = suggestion_case(sample, "预计明日上门。已联系\u00a0现场。")
+    ref = ctx.evidence[0].id
+    results = []
+    for action in ("已联系\u00a0现场。", "已联系 现场。"):
+        payload["events"] = [dict(id="EV1", action=action, event_kind="communication",
+                                  attribution="vendor", evidence_refs=[ref])]
+        payload["elements"]["handling_process"] = dict(status="documented", evidence_refs=[ref], value=[
+            dict(id="C1", action=action, step_kind="communication", attribution="vendor", evidence_refs=[ref])])
+        results.append(decode(ctx, payload))
+    assert [r.events[0].event_kind for r in results] == ["planned", "planned"]
+    assert [r.elements.handling_process.value[0].step_kind for r in results] == ["planned", "planned"]
+
+
+def test_nbsp_cause_and_time_keep_strict_semantics(sample):
+    text = "客户反映：自 2026-01-01\u00a0\u00a008:00:00 起业务中断。现场确认光纤断裂，\u00a0中断。"
+    ctx, payload = suggestion_case(sample, text)
+    ref = ctx.evidence[0].id
+    results = []
+    for raw, cause in [("2026-01-01\u00a0\u00a008:00:00", "现场确认光纤断裂，\u00a0中断。"),
+                       ("2026-01-01 08:00:00", "现场确认光纤断裂， 中断。")]:
+        payload["elements"]["cause"] = dict(status="confirmed", value=cause, selected="C1", evidence_refs=[ref],
+            candidates=[dict(id="C1", statement=cause, cause_kind="investigation_finding", attribution="vendor", evidence_refs=[ref])])
+        payload["elements"]["start_time"] = dict(status="documented", value=dict(raw=raw), selected="C1", evidence_refs=[ref],
+            candidates=[dict(id="C1", time=dict(raw=raw), time_kind="other", attribution="customer", evidence_refs=[ref])])
+        results.append(decode(ctx, payload))
+    for result in results:
+        assert result.elements.cause.status == "confirmed"
+        assert result.elements.cause.candidates[0].cause_kind == "root_cause_confirmed"
+        assert result.elements.start_time.status == "documented"
+        assert result.elements.start_time.candidates[0].time_kind == "customer_reported_start"
+    assert results[0].elements.start_time.value.iso == results[1].elements.start_time.value.iso

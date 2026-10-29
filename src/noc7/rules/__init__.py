@@ -15,7 +15,6 @@ from ..extract.baseline import (
 from ..extract.types import QUALITY_REVIEW_THRESHOLD, Extraction, ExtractionContext
 from ..parsers.text import INSTRUCTION
 from ..quote_match import match_quote
-from ..schema.suggestions import source_refs
 from ..schema import (
     ATTRIBUTION_LABELS_ZH,
     DEFAULT_SEVERITY,
@@ -78,11 +77,6 @@ def validate_extraction(ctx: ExtractionContext, data: Extraction) -> None:
     for suggestion in data.suggestions:
         suggestion.checks = [match_quote(text, spans[ref].text, path=path, evidence_id=ref)
                              for path, ref, text in suggestion.quote_requests() if ref in spans]
-        for candidate in suggestion.original.get("candidates", []) or []:
-            if not source_refs(candidate):
-                errors.append(issue(IssueCode.EVIDENCE_REF_MISSING, "建议候选缺少来源。"))
-        if suggestion.original.get("value") and not source_refs(suggestion.original):
-            errors.append(issue(IssueCode.EVIDENCE_REF_MISSING, "建议答案缺少来源。"))
     for q in data.quotes:
         if q.evidence_id in spans and not matches(q.quote, spans[q.evidence_id], "quotes"):
             errors.append(

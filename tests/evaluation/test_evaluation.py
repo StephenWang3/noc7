@@ -606,3 +606,13 @@ def test_candidate_metric_denominator_and_whitespace():
     zero = candidate_metrics(dict(elements={}), {})
     assert zero["zero_candidate_cases"] == 1 and zero["zero_candidate_elements"] == 2
     assert summarize_metrics([dict(candidate_metrics=zero)])["verifiable_rate"] is None
+
+
+@pytest.mark.parametrize("node", [None, "未给出", {"candidates": [None, {}, {"evidence_refs": None}]}])
+def test_incomplete_suggestion_metrics_are_not_unavailable(node):
+    from noc7.evaluation.audit_replay import candidate_metrics
+    result = candidate_metrics(dict(elements=dict(location=node)), {})
+    expected = 3 if isinstance(node, dict) else 0
+    assert result["total"] == expected
+    assert result["missing_source"] == expected
+    assert result["strict"] == result["whitespace"] == 0

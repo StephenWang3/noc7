@@ -12,6 +12,7 @@ from ..providers.text_http import OpenAICompatibleTextProvider
 from ..providers.text_prompt import prepare_evidence
 from ..providers.text_replay import evidence_digest
 from ..quote_match import match_quote
+from ..schema.suggestions import source_refs
 from ..report import write_reports
 from ..rules import ExtractionRejected
 from .prepare import load_dataset, new_root, private_path, write_json
@@ -24,20 +25,20 @@ def candidate_metrics(payload, spans, *, element=None):
     for name, key in (("responsible_party", "party"), ("location", "description")):
         if element is not None and name != element:
             continue
-        node = payload.get("elements", {}).get(name) or {}
-        candidates = node.get("candidates") or []
+        node = payload.get("elements", {}).get(name)
+        node = node if isinstance(node, dict) else {}
+        candidates = node.get("candidates")
+        candidates = candidates if isinstance(candidates, list) else []
         if not candidates:
             counts["zero_candidate_elements"] += 1
         for candidate in candidates:
             total += 1
             counts["total"] += 1
             if not isinstance(candidate, dict):
-                counts["mismatch"] += 1
+                counts["missing_source"] += 1
                 continue
-            refs = candidate.get("evidence_refs", [])
-            if isinstance(refs, str):
-                refs = [refs]
-            if not isinstance(refs, list) or not refs or any(not isinstance(r, str) or r not in spans for r in refs):
+            refs = source_refs(candidate)
+            if not refs or any(r not in spans for r in refs):
                 counts["missing_source"] += 1
                 continue
             text = candidate.get(key)

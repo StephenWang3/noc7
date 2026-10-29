@@ -168,15 +168,21 @@ def render(
 
 
 def _suggestion_rows(result):
+    from ..schema.suggestions import source_refs
+
     rows = []
     for suggestion in result.suggestions:
-        original = suggestion.original
+        original = suggestion.node
         candidates = []
         key = "party" if suggestion.element == "responsible_party" else "description"
-        for i, candidate in enumerate(original.get("candidates", []) or []):
+        for i, candidate in enumerate(suggestion.candidates):
             checks = [c for c in suggestion.checks if c.path == f"candidates/{i}"]
-            candidates.append(dict(original=candidate, text=candidate.get(key, ""), checks=checks))
+            node = candidate if isinstance(candidate, dict) else {}
+            candidates.append(dict(original=node, raw=candidate, malformed=not isinstance(candidate, dict),
+                                   missing_source=not source_refs(candidate), text=node.get(key, ""), checks=checks))
         rows.append(dict(label=ELEMENT_LABELS_ZH[suggestion.element], original=original,
+                         unprovided=not isinstance(suggestion.original, dict), raw=suggestion.original,
+                         missing_value_source=bool(original.get("value")) and not source_refs(original),
                          candidates=candidates,
                          checks=[c for c in suggestion.checks if not c.path.startswith("candidates/")]))
     return rows

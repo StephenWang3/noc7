@@ -15,14 +15,11 @@ from ..extract.baseline import (
     cause_kind,
     conclusion_observations,
     confirms_recovery,
-    location_role,
-    responsibility_basis,
     step_kind,
     time_phrase,
     usable_text,
 )
 from ..extract.types import Extraction, ExtractionContext
-from ..extract.fact_phrases import responsibility_claims, rfo_fault_points
 from ..schema import (
     ATTRIBUTION_LABELS_ZH,
     CAUSE_KINDS_ALLOWED_AS_VALUE,
@@ -38,6 +35,7 @@ from ..schema import (
     TimeKind,
 )
 from ..schema.timeval import TimeValue
+from ..quote_match import match_quote
 
 # 与 RulesProvider 的字段时间和流程动作一致。
 _FIELD_TIME = {
@@ -191,9 +189,10 @@ def _step_label(value, action, refs, spans):
     text = action if isinstance(action, str) else ""
     for ref in refs:
         span = spans.get(ref)
-        if span is not None and text and text in span.text:
-            text = span.text
-            break
+        if span is not None and text:
+            matched = match_quote(text, span.text)
+            if matched.start is not None:
+                return step_kind(span.text, matched.original).value
     if text:
         return step_kind(text, action if isinstance(action, str) else "").value
     parsed = _one_of(value, StepKind)
@@ -555,9 +554,7 @@ def ground_extraction(ctx: ExtractionContext, data: Extraction) -> Extraction:
     elements = elements.model_copy(update={
         "start_time": _ground_time(elements.start_time, spans, ctx, end=False),
         "end_time": _ground_time(elements.end_time, spans, ctx, end=True),
-
         "cause": _ground_cause(elements.cause, spans),
-
         "phenomenon": _ground_phenomenon(elements.phenomenon, ctx),
         "handling_process": _ground_steps(elements.handling_process, spans),
     })
@@ -592,25 +589,8 @@ def _field_key(span) -> str:
     return getattr(span.locator, "field_key", "") or ""
 
 
-def _trusted(span) -> bool:
-    return span.role != SpanRole.QUOTED
-
-
-def _clause(text: str, excerpt: str) -> str:
-    index = text.find(excerpt)
-    if index < 0:
-        return excerpt
-    left = 0
-    for boundary in re.finditer(r"[。；;!?！？\n]", text):
-        if boundary.end() <= index:
-            left = boundary.end()
-        elif boundary.start() >= index + len(excerpt):
-            return text[left:boundary.start()]
-    return text[left:]
-
-
 def _excerpt_in(text: str, spans) -> bool:
-    return bool(text) and any(text in span.text or text == usable_text(span) for span in spans)
+    return bool(text) and any(match_quote(text, span.text).start is not None or text == usable_text(span) for span in spans)
 
 
 def _clear(element, candidates, note):
@@ -624,131 +604,13 @@ def _clear(element, candidates, note):
     })
 
 
-def _party_basis(excerpt: str, spans):
-    found = []
-    for span in spans:
-        if excerpt not in span.text and excerpt != usable_text(span):
-            continue
-        clause = _clause(span.text, excerpt)
-        basis = responsibility_basis(clause, _field_key(span), trusted=_trusted(span))
-        if basis == ResponsibilityBasis.CLAIMED and _field_key(span) != "responsible_party":
-            if not any(excerpt in claim or claim in excerpt for claim in responsibility_claims(clause)):
-                basis = None
-        found.append(basis)
-    found = [item for item in found if item is not None]
-    if len(set(found)) == 1:
-        return found[0]
-    return None
-
-
-def _ground_party(element, spans):
-    revised = []
-    for candidate in element.candidates:
-        support = _support(candidate.evidence_refs, spans)
-        blob = _blob(candidate.evidence_refs, spans)
-        if not _excerpt_in(candidate.party, support):
-            revised.append(candidate.model_copy(update={"note": _note(candidate.note, blob)}))
-            continue
-        basis = _party_basis(candidate.party, support) or ResponsibilityBasis.INFERRED_FROM_ROLE
-        revised.append(candidate.model_copy(update={
-            "basis": basis, "note": _note(candidate.note, blob)
-        }))
-    note = _note(element.note, _blob(_all_refs(element), spans))
-    # 模型可以只交候选；明确归因是否能成为记载由本地证据决定。
-    if element.status == ElementStatus.UNKNOWN:
-        explicit = [c for c in revised if c.basis == ResponsibilityBasis.CLAIMED
-                    and _excerpt_in(c.party, _support(c.evidence_refs, spans))]
-        if explicit:
-            from ..extract.baseline import _text_element
-            return _text_element(type(element), revised, "party",
-                                 lambda c: c in explicit)
-    chosen = next((item for item in revised if item.id == element.selected), None)
-
-    def supported(candidate, status):
-        if candidate.basis is ResponsibilityBasis.FORMAL_DETERMINATION:
-            return status in _CONCLUSIVE
-        if candidate.basis is ResponsibilityBasis.CLAIMED:
-            return status is ElementStatus.DOCUMENTED
-        return False
-
-    if element.status in _CONCLUSIVE and (chosen is None or not supported(chosen, element.status)):
-        return _clear(element, revised, note)
-    if element.status is ElementStatus.CONFLICTED and len(revised) < 2:
-        return _clear(element, revised, note)
-    return element.model_copy(update={"candidates": revised, "note": note})
-
-
-def _location_of(excerpt: str, spans):
-    found = []
-    for span in spans:
-        if excerpt not in span.text and excerpt != usable_text(span):
-            continue
-        points = rfo_fault_points(span.text)
-        if points:
-            # RFO 角色只赋给覆盖完整故障段的摘录，不能借整句转移给告警点。
-            complete = any(point in excerpt for point in points)
-            role = location_role(span.text, _field_key(span), trusted=_trusted(span))
-            if complete and _trusted(span) and role == LocationRole.LOCATED_FAULT_POINT:
-                found.append(role)
-            else:
-                own_role = location_role(excerpt, _field_key(span), trusted=False)
-                found.append(own_role)
-            continue
-        found.append(location_role(
-            _clause(span.text, excerpt), _field_key(span), trusted=_trusted(span)
-        ))
-    found = [item for item in found if item is not None]
-    if len(set(found)) == 1:
-        return found[0]
-    return None
-
-
-def _ground_location(element, spans):
-    revised = []
-    for candidate in element.candidates:
-        support = _support(candidate.evidence_refs, spans)
-        blob = _blob(candidate.evidence_refs, spans)
-        if not _excerpt_in(candidate.description, support):
-            revised.append(candidate.model_copy(update={"note": _note(candidate.note, blob)}))
-            continue
-        role = _location_of(candidate.description, support)
-        if role is None:
-            continue
-        description = candidate.description
-        if role == LocationRole.LOCATED_FAULT_POINT:
-            complete = [p for span in support for p in rfo_fault_points(span.text) if p in description]
-            if len(set(complete)) == 1:
-                description = complete[0]
-        revised.append(candidate.model_copy(update={
-            "description": description, "role": role, "note": _note(candidate.note, blob)
-        }))
-    note = _note(element.note, _blob(_all_refs(element), spans))
-    if element.status == ElementStatus.UNKNOWN:
-        explicit = [c for c in revised if c.role == LocationRole.LOCATED_FAULT_POINT
-                    and _excerpt_in(c.description, _support(c.evidence_refs, spans))]
-        if explicit:
-            from ..extract.baseline import _text_element
-            return _text_element(type(element), revised, "description", lambda c: c in explicit)
-    chosen = next((item for item in revised if item.id == element.selected), None)
-    supported = (
-        chosen is not None
-        and chosen.role is LocationRole.LOCATED_FAULT_POINT
-        and element.status is ElementStatus.DOCUMENTED
-    )
-    if element.status in _CONCLUSIVE and not supported:
-        return _clear(element, revised, note)
-    if element.status is ElementStatus.CONFLICTED and len(revised) < 2:
-        return _clear(element, revised, note)
-    return element.model_copy(update={"candidates": revised, "note": note,
-                                      "value": chosen.description if supported else element.value})
-
-
 def _cause_of(excerpt: str, spans):
     found = []
     for span in spans:
-        if excerpt not in span.text and excerpt != usable_text(span):
+        matched = match_quote(excerpt, span.text)
+        if matched.start is None and excerpt != usable_text(span):
             continue
-        found.append(cause_kind(excerpt, _field_key(span)))
+        found.append(cause_kind(matched.original or excerpt, _field_key(span)))
     found = [item for item in found if item is not None]
     if len(set(found)) == 1:
         return found[0]
@@ -790,25 +652,27 @@ def _time_of(raw: str, spans, ctx: ExtractionContext):
     found = []
     for span in spans:
         key = _field_key(span)
-        if key in _FIELD_TIME and raw in span.text:
+        matched = match_quote(raw, span.text)
+        if key in _FIELD_TIME and matched.start is not None:
             found.append(_FIELD_TIME[key])
             continue
         if getattr(span.locator, "type", "") == "log_entry":
             entry = ctx.bundle.process_log.entry(span.locator.seq)
-            if entry and entry.recorded_at and raw == entry.recorded_at.strip():
+            recorded = entry.recorded_at.strip() if entry and entry.recorded_at else ""
+            recorded_match = match_quote(raw, recorded)
+            if recorded and recorded_match.start == 0 and recorded_match.end == len(recorded):
                 if "同意结单" in span.text:
                     found.append(TimeKind.TICKET_CLOSED)
                 elif entry.action in _WORKFLOW_TIME:
                     found.append(_WORKFLOW_TIME[entry.action])
                 continue
-        if raw in span.text:
-            start = span.text.find(raw)
+        if matched.start is not None:
             planned = step_kind(span.text) is StepKind.PLANNED
-            found.append(_time_kind(span.text, start, start + len(raw), planned))
+            found.append(_time_kind(span.text, matched.start, matched.end, planned))
             continue
         reading = span.reading
         if reading and reading.type == "chart":
-            if any(series.first_nonzero and raw in series.first_nonzero for series in reading.series):
+            if any(series.first_nonzero and match_quote(raw, series.first_nonzero).start is not None for series in reading.series):
                 found.append(TimeKind.CHART_FIRST_NONZERO)
     if len(set(found)) == 1:
         return found[0]
@@ -819,16 +683,16 @@ def _time_grounded(raw: str, spans, ctx: ExtractionContext) -> bool:
     if not raw:
         return False
     for span in spans:
-        if raw in span.text:
+        if match_quote(raw, span.text).start is not None:
             return True
         reading = span.reading
         if reading and reading.type == "chart" and any(
-            series.first_nonzero and raw in series.first_nonzero for series in reading.series
+            series.first_nonzero and match_quote(raw, series.first_nonzero).start is not None for series in reading.series
         ):
             return True
         if getattr(span.locator, "type", "") == "log_entry":
             entry = ctx.bundle.process_log.entry(span.locator.seq)
-            if entry and entry.recorded_at and raw in entry.recorded_at:
+            if entry and entry.recorded_at and match_quote(raw, entry.recorded_at).start is not None:
                 return True
     return False
 
@@ -985,15 +849,6 @@ def separate_suggestions(payload):
     suggestions = []
     for name in ("responsible_party", "location"):
         node = elements.get(name, {})
-        if not isinstance(node, dict):
-            raise ValueError("建议必须是对象")
-        candidates = node.get("candidates")
-        candidates = [] if candidates is None else candidates
-        if not isinstance(candidates, list) or any(not isinstance(c, dict) for c in candidates):
-            raise ValueError("建议候选必须是对象列表")
-        source_refs(node)
-        for candidate in candidates:
-            source_refs(candidate)
         suggestions.append(BusinessSuggestion(element=name, original=deepcopy(node)))
         elements[name] = dict(status="unknown", value=None, selected=None,
                               candidates=[], evidence_refs=[])

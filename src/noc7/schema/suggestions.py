@@ -9,26 +9,22 @@ from ..quote_match import QuoteCheck
 
 
 def source_refs(node):
-    refs = node.get("evidence_refs", [])
+    if not isinstance(node, dict):
+        return []
+    refs = node.get("evidence_refs")
     if isinstance(refs, str):
-        return [refs]
-    if not isinstance(refs, list) or any(not isinstance(r, str) for r in refs):
-        raise ValueError("建议引用必须是证据编号列表")
-    return refs
+        return [refs] if refs else []
+    return [ref for ref in refs if isinstance(ref, str) and ref] if isinstance(refs, list) else []
 
 
 class BusinessSuggestion(Model):
     element: Literal["responsible_party", "location"]
-    original: dict[str, JsonValue]
+    original: JsonValue
     quotes: list[dict[str, str]] = Field(default_factory=list)
     checks: list[QuoteCheck] = Field(default_factory=list)
 
     @model_validator(mode="after")
     def _original_shape(self):
-        candidates = self.original.get("candidates")
-        candidates = [] if candidates is None else candidates
-        if not isinstance(candidates, list) or any(not isinstance(c, dict) for c in candidates):
-            raise ValueError("建议候选必须是对象列表")
         def check(node):
             if isinstance(node, dict):
                 if any(k in node and (k != "review" or node[k] is not None)
@@ -40,16 +36,22 @@ class BusinessSuggestion(Model):
                 for v in node:
                     check(v)
         check(self.original)
-        source_refs(self.original)
-        for candidate in candidates:
-            source_refs(candidate)
         if any(set(q) != {"evidence_id", "quote"} for q in self.quotes):
             raise ValueError("建议显式引文必须包含来源和引文")
         return self
 
+    @property
+    def node(self):
+        return self.original if isinstance(self.original, dict) else {}
+
+    @property
+    def candidates(self):
+        candidates = self.node.get("candidates")
+        return candidates if isinstance(candidates, list) else []
+
     def iter_evidence_refs(self):
         yield from source_refs(self.original)
-        for candidate in self.original.get("candidates", []) or []:
+        for candidate in self.candidates:
             if isinstance(candidate, dict):
                 yield from source_refs(candidate)
         for quote in self.quotes:
@@ -57,12 +59,12 @@ class BusinessSuggestion(Model):
 
     def quote_requests(self):
         key = "party" if self.element == "responsible_party" else "description"
-        for i, candidate in enumerate(self.original.get("candidates", []) or []):
+        for i, candidate in enumerate(self.candidates):
             if isinstance(candidate, dict):
                 text = candidate.get(key)
                 for ref in source_refs(candidate):
                     yield f"candidates/{i}", ref, text if isinstance(text, str) else ""
-        value = self.original.get("value")
+        value = self.node.get("value")
         if isinstance(value, str) and value:
             for ref in source_refs(self.original):
                 yield "value", ref, value
