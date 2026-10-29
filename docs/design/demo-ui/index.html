@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>NOC 工单预处理 · 演示页面设计稿</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="app">
+  <header class="topbar">
+    <div class="brand"><span class="logo">N7</span><div><b>NOC 故障七要素</b><small>工单预处理 · 演示页面设计稿</small></div></div>
+    <nav class="stepper" id="stepper" aria-label="步骤"></nav>
+    <div class="top-right">
+      <span class="source-chip" id="source-chip"></span>
+      <button class="btn ghost" id="open-drawer" type="button">接入 NOC 工作台 ⇢</button>
+    </div>
+  </header>
+  <div class="synthetic-bar">合成演示数据（来自仓库 fixtures/），不是真实工单，也不代表真实模型质量。</div>
+  <main class="screen" id="screen" tabindex="-1"></main>
+</div>
+
+<aside class="drawer" id="drawer" aria-hidden="true" aria-label="接入 NOC 工作台">
+  <div class="drawer-head"><b>怎么接进 NOC 工作台</b><button class="btn ghost" id="close-drawer" type="button">关闭 ✕</button></div>
+  <div class="drawer-body" id="drawer-body"></div>
+</aside>
+<div class="scrim" id="scrim"></div>
+<div class="toast" id="toast" role="status"></div>
+
+<script src="demo-data.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
