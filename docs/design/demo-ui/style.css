@@ -27,7 +27,7 @@ code, .mono { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size:
 .top-right { margin-left: auto; display: flex; align-items: center; gap: 12px; }
 .source-chip { font-size: .8rem; color: var(--muted); background: var(--soft); border: 1px solid var(--line); padding: 3px 10px; border-radius: 99px; }
 .synthetic-bar { background: var(--warn-bg); border-bottom: 1px solid #f0d99b; color: var(--warn); font-size: .8rem; padding: 3px 20px; text-align: center; }
-body.embed .brand, body.embed #open-drawer, body.embed .synthetic-bar { display: none; }
+body.embed .brand, body.embed #open-drawer { display: none; }
 body.embed .topbar { border-top: 0; }
 
 .stepper { display: flex; gap: 6px; flex: 1; justify-content: center; }

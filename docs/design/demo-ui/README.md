@@ -66,9 +66,9 @@
 uv run python docs/design/demo-ui/build_demo_data.py
 ```
 
-- `samples/` 里的 Word 和网页版是 `write_company_docx` / `render_company_html` 的真实输出，页眉用空配置，不读取本机 `~/.noc7/report_profile`。页面上点“下载 Word”拿到的就是这些文件。
+- `samples/` 里的 Word 和网页版是 `write_company_docx` / `render_company_html` 的真实输出，页眉用空配置，不读取本机 `~/.noc7/report_profile`。页面上点“下载 Word”拿到的就是这些文件。网页版页脚的“审核报告”链接指向同目录的 `<工单号>-review-report.html`（同样由 `render` 生成），不会 404。
 - 五张单合起来覆盖：已确认（P04 的责任方/原因/结束时间）、大量未知（S09）、矛盾（P01 结束时间、S06 起障时间、P04 故障地点）、重复记录合并（S02）。
-- **「AI 建议」是例外：规则基线不产生建议，S09 的两条建议是设计稿手写的**，结构仿 `BusinessSuggestion`，页面上标了“示例”。第二条故意引了一句原文里不存在的话，用来演示“待核对”。真实建议要等模型链路接入。
+- **「AI 建议」是例外：规则基线不产生建议，S09 的两条建议是设计稿手写的**，页面上标了“示例”。数据是真实的 `BusinessSuggestion` 形状（`element`、`original`、`checks`），`checks` 由 `match_quote` 生成，整份结果过了 `AnalysisResult` 校验；画面读 `original.candidates[].party/description` 和 `checks[].status`（`strict`、`whitespace` 都算核对通过，`mismatch` 画成“待核对”）。第一条取原文里确有的子串（`strict`），第二条是原文里没有的推测（`mismatch`）。其余四张单的 AI 建议页明确写“规则基线不产生建议”，不说成模型没给。真实建议要等模型链路接入。
 - 没有任何真实工单内容。
 
 ## 已知问题和需要前端任务处理的点

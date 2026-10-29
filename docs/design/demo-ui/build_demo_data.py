@@ -19,7 +19,10 @@ from noc7.report.company import (
     render_company_html,
     write_company_docx,
 )
-from noc7.schema import ELEMENT_LABELS_ZH
+from noc7.quote_match import match_quote
+from noc7.report import render
+from noc7.schema import ELEMENT_LABELS_ZH, AnalysisResult
+from noc7.schema.suggestions import BusinessSuggestion
 
 ROOT = Path(__file__).resolve().parents[3]
 OUT = Path(__file__).with_name("demo-data.js")
@@ -30,40 +33,55 @@ NO_PROFILE = ReportProfile()
 TICKETS = ["SYN-P04", "SYN-S09", "SYN-P01", "SYN-S06", "SYN-S02"]
 ELEMENT_ORDER = list(ELEMENT_LABELS_ZH)
 
-# 「AI 建议，待确认」的示例。规则基线不产生建议，这里按 BusinessSuggestion 的形状手写，
-# 引文取自 SYN-S09 的合成证据，仅用来演示三种展示状态；前端实现时由模型输出取代。
+# 「AI 建议，待确认」的示例。规则基线不产生建议，这里手写 original（模型原始两栏 JSON 的形状），
+# 再由 BusinessSuggestion 和 match_quote 生成真正的 checks，整份结果过 AnalysisResult 校验。
+# 通过的一条取原文里确有的子串（strict），另一条是原文里没有的推测（mismatch）。
 SAMPLE_SUGGESTIONS = {
     "SYN-S09": [
         {
             "element": "location",
-            "label": "故障地点",
-            "design_sample": True,
-            "candidates": [
-                {
-                    "text": "法兰克福代理节点至香港目标网段之间的跨境段（客户感知丢包的路径）",
-                    "role": "客户感知路径，不是已定位的故障点",
-                    "evidence_refs": ["M01/f:description"],
-                    "quote": "25% packet loss from our proxy 198.51.100.20 (Frankfurt) to target 203.0.113.50 (Hong Kong)",
-                    "quote_check": "match",
-                }
-            ],
+            "original": {
+                "status": "unknown", "value": None, "selected": None,
+                "candidates": [{
+                    "id": "L1", "evidence_refs": ["M01/f:description"], "attribution": "customer",
+                    "description": "25% packet loss from our proxy 198.51.100.20 (Frankfurt) to target 203.0.113.50 (Hong Kong)",
+                    "role": "service_endpoint", "granularity": "segment",
+                    "note": "客户感知丢包的路径，不是已定位的故障点",
+                }],
+            },
         },
         {
             "element": "responsible_party",
-            "label": "故障责任方",
-            "design_sample": True,
-            "candidates": [
-                {
-                    "text": "境外对端运营商",
-                    "role": "模型推测，材料里没有任何一方被认定为责任方",
-                    "evidence_refs": ["M01/f:description"],
-                    "quote": "the remote carrier is dropping packets",
-                    "quote_check": "mismatch",
-                }
-            ],
+            "original": {
+                "status": "unknown", "value": None, "selected": None,
+                "candidates": [{
+                    "id": "P1", "evidence_refs": ["M01/f:description"], "attribution": "unknown",
+                    "party": "境外对端运营商", "basis": "inferred_from_role",
+                    "note": "模型推测，材料里没有任何一方被认定为责任方",
+                }],
+            },
         },
     ]
 }
+
+
+def with_suggestions(result, name):
+    """把示例建议接到结果上，checks 用真实的 match_quote 生成，最后整体重新校验。"""
+    raw = SAMPLE_SUGGESTIONS.get(name)
+    if not raw:
+        return result
+    spans = {s.id: s for s in result.evidence}
+    suggestions = []
+    for item in raw:
+        draft = BusinessSuggestion(element=item["element"], original=item["original"])
+        checks = [
+            match_quote(text, spans[ref].text, path=path, evidence_id=ref)
+            for path, ref, text in draft.quote_requests()
+        ]
+        suggestions.append(BusinessSuggestion(element=item["element"], original=item["original"], checks=checks))
+    data = result.model_dump(mode="json")
+    data["suggestions"] = [x.model_dump(mode="json") for x in suggestions]
+    return AnalysisResult.model_validate(data)
 
 
 def span_view(span) -> dict:
@@ -78,13 +96,18 @@ def span_view(span) -> dict:
 
 def build_ticket(name: str) -> dict:
     bundle_dir = ROOT / "fixtures" / "bundles" / name
-    result = analyze(bundle_dir)
+    result = with_suggestions(analyze(bundle_dir), name)
     ticket = json.loads((bundle_dir / "ticket.json").read_text(encoding="utf-8"))
     data = result.model_dump(mode="json", exclude_none=True)
     report = build_company_report(result)
     write_company_docx(result, SAMPLES / f"{name}-company-report.docx", NO_PROFILE)
+    # 公司网页版页脚链到“审核报告”（report.html）；示例里按工单写成真实存在的文件名。
+    review = f"{name}-review-report.html"
+    (SAMPLES / review).write_text(render(result, format="html"), encoding="utf-8")
+    company_html = render_company_html(result, NO_PROFILE)
+    assert 'href="report.html"' in company_html
     (SAMPLES / f"{name}-company-report.html").write_text(
-        render_company_html(result, NO_PROFILE), encoding="utf-8"
+        company_html.replace('href="report.html"', f'href="{review}"'), encoding="utf-8"
     )
     company = {
         "ticket_ref": report.ticket_ref,
@@ -127,7 +150,7 @@ def build_ticket(name: str) -> dict:
                 {k: i.get(k) for k in ("code", "severity", "message", "element", "evidence_refs")}
                 for i in data["issues"]
             ],
-            "suggestions": SAMPLE_SUGGESTIONS.get(name, []),
+            "suggestions": data["suggestions"],
         },
         "company_report": company,
     }

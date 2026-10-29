@@ -32,7 +32,7 @@ window.NOC7_DEMO = {
      "provider": "rules",
      "rules_version": "1.2",
      "prompt_version": null,
-     "finished_at": "2026-10-29T04:53:45.916892+00:00"
+     "finished_at": "2026-10-29T05:26:06.962579+00:00"
     },
     "materials": [
      {
@@ -1778,7 +1778,7 @@ window.NOC7_DEMO = {
      "provider": "rules",
      "rules_version": "1.2",
      "prompt_version": null,
-     "finished_at": "2026-10-29T04:53:45.958449+00:00"
+     "finished_at": "2026-10-29T05:26:07.018469+00:00"
     },
     "materials": [
      {
@@ -2578,33 +2578,63 @@ window.NOC7_DEMO = {
     "suggestions": [
      {
       "element": "location",
-      "label": "故障地点",
-      "design_sample": true,
-      "candidates": [
+      "original": {
+       "status": "unknown",
+       "value": null,
+       "selected": null,
+       "candidates": [
+        {
+         "id": "L1",
+         "evidence_refs": [
+          "M01/f:description"
+         ],
+         "attribution": "customer",
+         "description": "25% packet loss from our proxy 198.51.100.20 (Frankfurt) to target 203.0.113.50 (Hong Kong)",
+         "role": "service_endpoint",
+         "granularity": "segment",
+         "note": "客户感知丢包的路径，不是已定位的故障点"
+        }
+       ]
+      },
+      "quotes": [],
+      "checks": [
        {
-        "text": "法兰克福代理节点至香港目标网段之间的跨境段（客户感知丢包的路径）",
-        "role": "客户感知路径，不是已定位的故障点",
-        "evidence_refs": [
-         "M01/f:description"
-        ],
+        "path": "candidates/0",
+        "evidence_id": "M01/f:description",
         "quote": "25% packet loss from our proxy 198.51.100.20 (Frankfurt) to target 203.0.113.50 (Hong Kong)",
-        "quote_check": "match"
+        "status": "strict",
+        "start": 69,
+        "end": 160,
+        "original": "25% packet loss from our proxy 198.51.100.20 (Frankfurt) to target 203.0.113.50 (Hong Kong)"
        }
       ]
      },
      {
       "element": "responsible_party",
-      "label": "故障责任方",
-      "design_sample": true,
-      "candidates": [
+      "original": {
+       "status": "unknown",
+       "value": null,
+       "selected": null,
+       "candidates": [
+        {
+         "id": "P1",
+         "evidence_refs": [
+          "M01/f:description"
+         ],
+         "attribution": "unknown",
+         "party": "境外对端运营商",
+         "basis": "inferred_from_role",
+         "note": "模型推测，材料里没有任何一方被认定为责任方"
+        }
+       ]
+      },
+      "quotes": [],
+      "checks": [
        {
-        "text": "境外对端运营商",
-        "role": "模型推测，材料里没有任何一方被认定为责任方",
-        "evidence_refs": [
-         "M01/f:description"
-        ],
-        "quote": "the remote carrier is dropping packets",
-        "quote_check": "mismatch"
+        "path": "candidates/0",
+        "evidence_id": "M01/f:description",
+        "quote": "境外对端运营商",
+        "status": "mismatch"
        }
       ]
      }
@@ -3194,7 +3224,7 @@ window.NOC7_DEMO = {
      "provider": "rules",
      "rules_version": "1.2",
      "prompt_version": null,
-     "finished_at": "2026-10-29T04:53:45.995183+00:00"
+     "finished_at": "2026-10-29T05:26:07.070617+00:00"
     },
     "materials": [
      {
@@ -4406,7 +4436,7 @@ window.NOC7_DEMO = {
      "provider": "rules",
      "rules_version": "1.2",
      "prompt_version": null,
-     "finished_at": "2026-10-29T04:53:46.032895+00:00"
+     "finished_at": "2026-10-29T05:26:07.122277+00:00"
     },
     "materials": [
      {
@@ -6020,7 +6050,7 @@ window.NOC7_DEMO = {
      "provider": "rules",
      "rules_version": "1.2",
      "prompt_version": null,
-     "finished_at": "2026-10-29T04:53:46.071494+00:00"
+     "finished_at": "2026-10-29T05:26:07.174728+00:00"
     },
     "materials": [
      {

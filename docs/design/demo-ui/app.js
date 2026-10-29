@@ -172,6 +172,9 @@
     }).join("");
     const from = { local: "来源：本地工单包", workbench: `来源：NOC 工作台传入${state.ref ? " · " + state.ref : ""}`, link: `来源：链接传入${state.ref ? " · " + state.ref : ""}` };
     $("#source-chip").textContent = from[state.entry];
+    // 只要数据是合成的，嵌入模式也必须保留“合成数据”提示。
+    const synthetic = state.data ? state.data.analysis.data_class === "synthetic" : state.tickets.some((t) => t.data_class === "synthetic");
+    $(".synthetic-bar").hidden = !synthetic;
   }
 
   // ───────────────────────── 画面 1：选择工单 ─────────────────────────
@@ -187,7 +190,7 @@
       const a = full.analysis, c = counts(a), open = openIssues(a).length;
       return `<button class="ticket ${state.pick === t.ticket_ref ? "selected" : ""}" data-pick="${esc(t.ticket_ref)}" aria-pressed="${state.pick === t.ticket_ref}">
         <div class="t-top"><span class="t-ref">${esc(t.ticket_ref)}</span><span class="badge b-info">${esc(t.list_status)}</span></div>
-        <div class="t-title">${esc(t.title.replace("【合成】", ""))}</div>
+        <div class="t-title">${esc(t.title)}</div>
         <div class="dots" title="按顺序：${ELEMENTS.map((n) => LABEL[n] + "=" + STATUS[a.elements[n].status].label).join("；")}">${ELEMENTS.map((n) => `<span class="dot ${a.elements[n].status}"></span>`).join("")}</div>
         <div class="t-sum">${c.confirmed + c.documented} 个有结论 · ${c.unknown} 个未知${c.conflicted ? ` · <b style="color:var(--conf)">${c.conflicted} 个矛盾</b>` : ""} · <span class="badge b-warn">待核实 ${open}</span></div>
         <div class="t-meta"><span>${esc(t.category || "")}</span></div></button>`;
@@ -256,7 +259,7 @@
     const { left, refs } = state.tab === "main" ? mainPane(a, name, el) : state.tab === "cands" ? candsPane(a, name, el) : aiPane(a, name, sug);
     $("#screen").innerHTML = `
       <section class="card summary">
-        <span class="who">${esc(t.ticket_ref)}</span><span class="muted">${esc(t.title.replace("【合成】", ""))}</span><span class="sep"></span>
+        <span class="who">${esc(t.ticket_ref)}</span><span class="muted">${esc(t.title)}</span><span class="sep"></span>
         ${Object.keys(STATUS).map((s) => `<span class="badge s-${s}">${STATUS[s].icon} ${STATUS[s].label} ${c[s]}</span>`).join("")}
         <span class="badge b-warn">⚠ 待核实 ${openIssues(a).length}</span>
         <button class="btn ghost" id="toggle-legend" type="button">${state.legend ? "收起图例" : "怎么读？"}</button></section>
@@ -277,11 +280,18 @@
     $("#pane-ev").scrollTop = 0;
   }
 
-  function flagsFor(a, name) {
-    const list = a.issues.filter((i) => i.element === name);
+  // info 属于“提示”，不挂在“待核实”标题下：kind = "verify"（warning/critical）或 "info"
+  function flagsFor(a, name, kind) {
+    const list = a.issues.filter((i) => i.element === name && (i.severity === "info") === (kind === "info"));
     if (!list.length) return "";
+    const cands = a.elements[name].candidates || [];
     return list.map((i) => {
-      const p = ISSUE[i.code] || [i.code, i.message], [sev, cls] = SEVERITY[i.severity];
+      let p = ISSUE[i.code] || [i.code, i.message];
+      // 候选里已有“已定位的故障点”时，不能再说“没有定位到故障点”
+      if (i.code === "LOCATION_NOT_LOCATED" && cands.some((c) => c.role === "located_fault_point")) {
+        p = ["候选都是已定位的故障点，只是写法不同", "各处说法指向同一处故障点的不同措辞，系统不擅自合并，所以并列展示、不选边。下方“系统原话”是基线对“没有唯一结论”的通用提示。"];
+      }
+      const [sev, cls] = SEVERITY[i.severity];
       return `<div class="flag ${cls}"><b><span class="badge ${i.severity === "info" ? "b-info" : "b-warn"}">${i.severity === "info" ? "ℹ" : "⚠"} ${sev}</span>${esc(p[0])}</b><p>${esc(p[1])}</p><p class="sys">系统原话：${esc(i.message)}</p></div>`;
     }).join("");
   }
@@ -305,7 +315,7 @@
     (el.evidence_refs || []).forEach((r) => refs.push(r));
     (el.candidates || []).forEach((c) => c.evidence_refs.forEach((r) => refs.push(r)));
     if (name === "handling_process") (el.value || []).forEach((s) => s.evidence_refs.forEach((r) => refs.push(r)));
-    return { left: `<h3>结论</h3>${body}${flagsFor(a, name) ? `<h3 style="margin-top:16px">待核实</h3>${flagsFor(a, name)}` : ""}`, refs: [...new Set(refs)] };
+    return { left: `<h3>结论</h3>${body}${flagsFor(a, name, "verify") ? `<h3 style="margin-top:16px">待核实</h3>${flagsFor(a, name, "verify")}` : ""}${flagsFor(a, name, "info") ? `<h3 style="margin-top:16px">提示</h3>${flagsFor(a, name, "info")}` : ""}`, refs: [...new Set(refs)] };
   }
 
   function candsPane(a, name, el) {
@@ -318,22 +328,28 @@
     return { left: `<h3>系统读到的全部说法（并列保留，不丢弃）</h3><div class="conflict-grid">${items}</div>`, refs: [...new Set(refs)] };
   }
 
+  // 读 BusinessSuggestion：original.candidates[] 里的 party / description，checks[].status 为 strict / whitespace / mismatch
   function aiPane(a, name, sug) {
     const refs = [];
-    const inner = sug.length ? sug.map((s) => s.candidates.map((c) => {
-      c.evidence_refs.forEach((r) => refs.push(r));
-      const ok = c.quote_check === "match";
-      return `<div class="ai-cand"><div class="c-top"><span class="badge b-ai">AI 建议</span><span class="sample-tag">示例（设计稿手写，结构同 BusinessSuggestion）</span></div>
-        <div style="font-weight:600">${esc(c.text)}</div><div class="muted small">${esc(c.role)}</div>
-        <blockquote>“${esc(c.quote)}”</blockquote>
-        <div class="refs-line">引用出处：${chips(c.evidence_refs)} ${ok ? '<span class="badge s-confirmed">✓ 原文核对通过</span>' : '<span class="badge b-warn">⚠ 待核对：引文在原文里找不到</span>'}</div></div>`;
-    }).join("")).join("") : `<div class="none-box">本单模型没有给出${LABEL[name]}的建议。</div>`;
+    const rules = a.run.provider === "rules";
+    const items = sug.flatMap((s) => (Array.isArray(s.original.candidates) ? s.original.candidates : []).map((c, i) => ({ s, c, i })));
+    const inner = items.length ? items.map(({ s, c, i }) => {
+      (c.evidence_refs || []).forEach((r) => refs.push(r));
+      const text = c.party || c.description || "", check = s.checks.find((k) => k.path === `candidates/${i}`);
+      const ok = check && check.status !== "mismatch";
+      const kind = c.basis ? BASIS[c.basis] : c.role ? ROLE[c.role] : "";
+      return `<div class="ai-cand"><div class="c-top"><span class="badge b-ai">AI 建议</span>${rules ? '<span class="sample-tag">示例：规则基线不产生建议，这条是设计稿手写的</span>' : ""}</div>
+        <div style="font-weight:600">${esc(text)}</div><div class="muted small">${esc([kind, c.note].filter(Boolean).join("；"))}</div>
+        <div class="refs-line">引用出处：${chips(c.evidence_refs || [])} ${ok ? `<span class="badge s-confirmed">✓ 原文核对通过${check.status === "whitespace" ? "（仅空白不同）" : ""}</span>` : '<span class="badge b-warn">⚠ 待核对：这句话在原文里找不到</span>'}</div></div>`;
+    }).join("") : rules
+      ? `<div class="none-box">规则基线不产生 AI 建议，只有模型链路才会。设计稿只在 SYN-S09 手写了两条示例，本单没有。</div>`
+      : `<div class="none-box">本单模型没有给出${LABEL[name]}的建议。</div>`;
     return { left: `<div class="ai-box"><b>AI 建议，待确认</b><p style="margin:4px 0 0" class="small">这是模型的推测，<b>不是结论</b>：不会写进公司报告，也不会改变上面的“${STATUS[state.data.analysis.elements[name].status].label}”。引用核对只证明那句话在原文里，不证明建议正确。要不要采纳，由 NOC 工作台里的审核人决定。</p></div>${inner}`, refs: [...new Set(refs)] };
   }
 
   function evidencePane(a, name, refs) {
     const el = a.elements[name];
-    const quotes = state.tab === "ai" ? elementSuggestions(a, name).flatMap((s) => s.candidates.map((c) => c.quote)) : [];
+    const quotes = state.tab === "ai" ? elementSuggestions(a, name).flatMap((s) => s.checks.filter((k) => k.status !== "mismatch")).map((k) => k.quote) : [];
     const concl = new Set(el.evidence_refs || []);
     let head = "原文出处";
     if (state.tab === "main" && !concl.size) head = el.status === "conflicted" ? "原文出处：各方说法所依据的原文" : "原文出处：该要素没有结论依据，下面是系统查看过的相关原文";
@@ -357,8 +373,11 @@
   // ───────────────────────── 画面 3：公司报告 ─────────────────────────
   const ROW_LABEL = { 4: "申报时间", 5: "恢复时间", 6: "故障历时", 7: "故障现象", 8: "处理过程", 9: "故障原因分析", 10: "改进及预防措施" };
   function pendingTarget(row, lineIdx, before) {
+    const els = state.data.analysis.elements;
     if (row === 4) return "start_time";
-    if (row === 5 || row === 6) return "end_time";
+    if (row === 5) return "end_time";
+    // 历时算不出来：起障没有可用结论（未知/矛盾）先去发生时间，否则是恢复未确认，去结束时间
+    if (row === 6) return els.start_time.value == null ? "start_time" : "end_time";
     if (row === 7) return "phenomenon";
     if (row === 8) return "handling_process";
     if (row === 9) {
@@ -511,18 +530,23 @@ GET /api/tickets/{ref}/company-report.html 公司报告网页版</pre>
   }
 
   // ───────────────────────── 启动 ─────────────────────────
-  async function init() {
+  // 地址里的 ?ticket= 或 #/步骤/工单号/要素/标签 → 页面状态。工作台改 hash 时也走这里（replaceState 不触发它）。
+  async function applyLocation() {
     const q = new URLSearchParams(location.search);
-    if (q.get("embed") === "1") document.body.classList.add("embed");
-    state.tickets = await source.list();
     const m = location.hash.match(/^#\/(\d)\/([^/]*)\/?([^/]*)\/?([^/]*)/);
     const ref = q.get("ticket") || (m && m[2]) || "";
     if (ref && (await openTicket(ref, "link"))) {
-      state.step = q.get("ticket") ? 2 : Math.min(+m[1], 3) || 2;
+      state.step = q.get("ticket") && !m ? 2 : Math.min(+m[1], 3) || 2;
       if (m && ELEMENTS.includes(m[3])) state.element = m[3];
       if (m && ["cands", "ai"].includes(m[4])) state.tab = m[4];
     }
     render();
+  }
+  async function init() {
+    if (new URLSearchParams(location.search).get("embed") === "1") document.body.classList.add("embed");
+    state.tickets = await source.list();
+    await applyLocation();
+    window.addEventListener("hashchange", applyLocation);
   }
   init();
 })();
