@@ -52,3 +52,37 @@ def test_rejected_raw_suggestions_still_count(tmp_path):
     assert summary['completed'] == 0
     assert summary['suggestions']['location']['candidate_cases'] == 1
     assert summary['suggestions']['location']['counts']['strict'] == 1
+
+
+def test_complete_version_wins_in_both_directory_orders():
+    old = dict(source='/old', closed=False, closure_actions=[], log_entries=18,
+               materials=9, bundle_sha256='old')
+    closed = dict(source='/closed', closed=True,
+                  closure_actions=['销障', '结单签收', '回访结单'], log_entries=21,
+                  materials=10, bundle_sha256='closed')
+    assert trial.choose_complete_version([old, closed]) == closed
+    assert trial.choose_complete_version([closed, old]) == closed
+    partial = dict(closed, source='/partial', closure_actions=['销障'], bundle_sha256='partial')
+    assert trial.choose_complete_version([partial, closed]) == closed
+    import pytest
+    with pytest.raises(ValueError, match='清单哈希不同'):
+        trial.choose_complete_version([closed, dict(closed, bundle_sha256='conflict')])
+    assert trial.choose_complete_version([closed, dict(closed)]) == closed
+
+
+def test_result_metrics_uses_bundle_recorded_at():
+    from noc7.bundle import load_bundle
+    from noc7.schema import AnalysisResult
+    from noc7.extract.pipeline import analyze
+    bundle = load_bundle(Path(__file__).parents[1] / 'fixtures/bundles/SYN-S01')
+    result = analyze(bundle.root)
+    # 使用真实 schema 的合成结果，在原文不含时间的日志片段上加入时间候选。
+    span = next(s for s in result.evidence if s.locator.type == 'log_entry')
+    recorded = bundle.process_log.entry(span.locator.seq).recorded_at
+    payload = result.model_dump(mode='json')
+    payload['elements']['end_time'] = dict(status='unknown', value=None, candidates=[dict(
+        id='Cmetadata', evidence_refs=[span.id], attribution='noc_check',
+        time=dict(raw=recorded), time_kind='other')])
+    result = AnalysisResult.model_validate(payload)
+    counts = trial.result_metrics(result, bundle)['elements']['end_time']['counts']
+    assert counts['metadata'] == 1 and counts['mismatch'] == 0

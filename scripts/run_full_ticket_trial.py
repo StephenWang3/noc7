@@ -62,15 +62,14 @@ def measure(name, node, spans, metadata=None):
     return dict(filled=filled, filled_candidate_traceable=traced, candidate_cases=int(bool(candidates)), counts=dict(counts), checks=checks)
 
 
-def result_metrics(result, bundle=None):
+def result_metrics(result, bundle):
     spans = {s.id: s for s in result.evidence}
     metadata = {}
-    if bundle is not None:
-        for ref, span in spans.items():
-            if span.locator.type == 'log_entry':
-                entry = bundle.process_log.entry(span.locator.seq)
-                if entry and entry.recorded_at:
-                    metadata[ref] = [entry.recorded_at]
+    for ref, span in spans.items():
+        if span.locator.type == 'log_entry':
+            entry = bundle.process_log.entry(span.locator.seq)
+            if entry and entry.recorded_at:
+                metadata[ref] = [entry.recorded_at]
     elements = {n.value: measure(n.value, e.model_dump(mode='json'), spans, metadata) for n, e in result.elements.items()}
     suggestions = {s.element: measure(s.element, s.original, spans) for s in result.suggestions}
     return dict(elements=elements, suggestions=suggestions)
@@ -111,6 +110,28 @@ def raw_suggestions(target, status):
     return row
 
 
+def version_info(bundle):
+    """只比较导出版本覆盖，不用模型输出选择输入。"""
+    actions = {name for name in ('销障', '结单签收', '回访结单')
+               if any(name in e.action for e in bundle.process_log.entries)}
+    return dict(source=str(bundle.root), ticket_ref=bundle.ticket.ticket_ref,
+                bundle_sha256=bundle.manifest_sha256,
+                closed=bundle.ticket.status.detail_status == '已结单',
+                closure_actions=sorted(actions), log_entries=len(bundle.process_log.entries),
+                materials=len(bundle.manifest.materials))
+
+
+def choose_complete_version(versions):
+    """同号异版优先已结单、结案动作更全的包，不能按目录先后丢弃。"""
+    def rank(v):
+        return v['closed'], len(v['closure_actions']), v['log_entries'], v['materials']
+    best_rank = max(map(rank, versions))
+    best = [v for v in versions if rank(v) == best_rank]
+    if len({v['bundle_sha256'] for v in best}) != 1:
+        raise ValueError('同工单版本覆盖相同但清单哈希不同，须先核实版本，不能任选。')
+    return min(best, key=lambda v: v['source'])
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument('roots', nargs='+', type=Path)
@@ -123,8 +144,8 @@ def main():
     ensure_output_allowed(DataClass.REAL, out)
     if out.exists():
         raise ValueError('输出必须为新目录')
-    mapping, seen, duplicates = [], set(), 0
-    # 全部输入先校验；按源工单身份去重，切分包不作为本轮输入。
+    versions_by_ticket = {}
+    # 全部输入先校验并收集版本，选择完成后才发送模型。
     for root in args.roots:
         root = root.expanduser().resolve()
         if out.is_relative_to(root) or root.is_relative_to(out):
@@ -132,14 +153,11 @@ def main():
         for p in sorted(root.iterdir()):
             if not (p / 'manifest.json').is_file():
                 continue
-            b = load_bundle(p)
-            if b.ticket.ticket_ref in seen:
-                duplicates += 1
-                continue
-            seen.add(b.ticket.ticket_ref)
-            mapping.append(dict(alias=f'F{len(mapping)+1:02d}', source=str(p),
-                ticket_ref=b.ticket.ticket_ref, bundle_sha256=b.manifest_sha256,
-                closed=b.ticket.status.detail_status == '已结单'))
+            version = version_info(load_bundle(p))
+            versions_by_ticket.setdefault(version['ticket_ref'], []).append(version)
+    mapping = [dict(choose_complete_version(versions), alias=f'F{i:02d}', versions=versions)
+               for i, versions in enumerate(versions_by_ticket.values(), 1)]
+    duplicates = sum(len(v) - 1 for v in versions_by_ticket.values())
     if not mapping:
         raise ValueError('没有输入包')
     out.mkdir(parents=True, mode=0o700)

@@ -8,12 +8,12 @@
     },
     "elements": {
       "start_time": {
-        "filled": 6,
-        "candidate_cases": 28,
-        "filled_candidate_traceable": 6,
+        "filled": 7,
+        "candidate_cases": 29,
+        "filled_candidate_traceable": 7,
         "counts": {
-          "total": 44,
-          "strict": 44,
+          "total": 45,
+          "strict": 45,
           "whitespace": 0,
           "metadata": 0,
           "mismatch": 0,
@@ -22,11 +22,11 @@
       },
       "end_time": {
         "filled": 2,
-        "candidate_cases": 21,
+        "candidate_cases": 22,
         "filled_candidate_traceable": 2,
         "counts": {
-          "total": 40,
-          "strict": 38,
+          "total": 42,
+          "strict": 40,
           "whitespace": 1,
           "metadata": 1,
           "mismatch": 0,
@@ -77,8 +77,8 @@
         "candidate_cases": 26,
         "filled_candidate_traceable": 26,
         "counts": {
-          "total": 249,
-          "strict": 249,
+          "total": 253,
+          "strict": 253,
           "whitespace": 0,
           "metadata": 0,
           "mismatch": 0,
@@ -118,8 +118,8 @@
         "candidate_cases": 30,
         "filled_candidate_traceable": 3,
         "counts": {
-          "total": 108,
-          "strict": 108,
+          "total": 109,
+          "strict": 109,
           "whitespace": 0,
           "metadata": 0,
           "mismatch": 0,
@@ -147,8 +147,8 @@
       "candidate_cases": 31,
       "filled_candidate_traceable": 4,
       "counts": {
-        "total": 111,
-        "strict": 111,
+        "total": 112,
+        "strict": 112,
         "whitespace": 0,
         "metadata": 0,
         "mismatch": 0,
@@ -158,19 +158,19 @@
   },
   "subgroups": {
     "closed": {
-      "cases": 21,
-      "completed": 20,
+      "cases": 22,
+      "completed": 21,
       "failures": {
         "rejected": 1
       },
       "elements": {
         "start_time": {
-          "filled": 5,
-          "candidate_cases": 20,
-          "filled_candidate_traceable": 5,
+          "filled": 6,
+          "candidate_cases": 21,
+          "filled_candidate_traceable": 6,
           "counts": {
-            "total": 33,
-            "strict": 33,
+            "total": 34,
+            "strict": 34,
             "whitespace": 0,
             "metadata": 0,
             "mismatch": 0,
@@ -179,11 +179,11 @@
         },
         "end_time": {
           "filled": 2,
-          "candidate_cases": 20,
+          "candidate_cases": 21,
           "filled_candidate_traceable": 2,
           "counts": {
-            "total": 38,
-            "strict": 36,
+            "total": 40,
+            "strict": 38,
             "whitespace": 1,
             "metadata": 1,
             "mismatch": 0,
@@ -191,12 +191,12 @@
           }
         },
         "phenomenon": {
-          "filled": 20,
-          "candidate_cases": 20,
-          "filled_candidate_traceable": 20,
+          "filled": 21,
+          "candidate_cases": 21,
+          "filled_candidate_traceable": 21,
           "counts": {
-            "total": 83,
-            "strict": 83,
+            "total": 85,
+            "strict": 85,
             "whitespace": 0,
             "metadata": 0,
             "mismatch": 0,
@@ -218,11 +218,11 @@
         },
         "cause": {
           "filled": 1,
-          "candidate_cases": 14,
+          "candidate_cases": 15,
           "filled_candidate_traceable": 1,
           "counts": {
-            "total": 20,
-            "strict": 20,
+            "total": 21,
+            "strict": 21,
             "whitespace": 0,
             "metadata": 0,
             "mismatch": 0,
@@ -230,12 +230,12 @@
           }
         },
         "handling_process": {
-          "filled": 19,
-          "candidate_cases": 19,
-          "filled_candidate_traceable": 19,
+          "filled": 20,
+          "candidate_cases": 20,
+          "filled_candidate_traceable": 20,
           "counts": {
-            "total": 217,
-            "strict": 217,
+            "total": 229,
+            "strict": 229,
             "whitespace": 0,
             "metadata": 0,
             "mismatch": 0,
@@ -272,11 +272,11 @@
         },
         "location": {
           "filled": 3,
-          "candidate_cases": 20,
+          "candidate_cases": 21,
           "filled_candidate_traceable": 3,
           "counts": {
-            "total": 78,
-            "strict": 78,
+            "total": 81,
+            "strict": 81,
             "whitespace": 0,
             "metadata": 0,
             "mismatch": 0,
@@ -286,8 +286,8 @@
       }
     },
     "other": {
-      "cases": 10,
-      "completed": 10,
+      "cases": 9,
+      "completed": 9,
       "failures": {},
       "elements": {
         "start_time": {
@@ -317,12 +317,12 @@
           }
         },
         "phenomenon": {
-          "filled": 10,
-          "candidate_cases": 10,
-          "filled_candidate_traceable": 10,
+          "filled": 9,
+          "candidate_cases": 9,
+          "filled_candidate_traceable": 9,
           "counts": {
-            "total": 17,
-            "strict": 17,
+            "total": 15,
+            "strict": 15,
             "whitespace": 0,
             "metadata": 0,
             "mismatch": 0,
@@ -344,11 +344,11 @@
         },
         "cause": {
           "filled": 0,
-          "candidate_cases": 7,
+          "candidate_cases": 6,
           "filled_candidate_traceable": 0,
           "counts": {
-            "total": 24,
-            "strict": 24,
+            "total": 23,
+            "strict": 23,
             "whitespace": 0,
             "metadata": 0,
             "mismatch": 0,
@@ -356,12 +356,12 @@
           }
         },
         "handling_process": {
-          "filled": 7,
-          "candidate_cases": 7,
-          "filled_candidate_traceable": 7,
+          "filled": 6,
+          "candidate_cases": 6,
+          "filled_candidate_traceable": 6,
           "counts": {
-            "total": 32,
-            "strict": 32,
+            "total": 24,
+            "strict": 24,
             "whitespace": 0,
             "metadata": 0,
             "mismatch": 0,
@@ -398,11 +398,11 @@
         },
         "location": {
           "filled": 0,
-          "candidate_cases": 10,
+          "candidate_cases": 9,
           "filled_candidate_traceable": 0,
           "counts": {
-            "total": 30,
-            "strict": 30,
+            "total": 28,
+            "strict": 28,
             "whitespace": 0,
             "metadata": 0,
             "mismatch": 0,
@@ -439,8 +439,8 @@
             "total": 9,
             "strict": 7,
             "whitespace": 0,
-            "metadata": 0,
-            "mismatch": 2,
+            "metadata": 2,
+            "mismatch": 0,
             "missing_source": 0
           }
         },
