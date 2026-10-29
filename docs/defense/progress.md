@@ -609,7 +609,7 @@ DeepSeek 完成全批，三十张生成审核 Markdown／HTML、公司 HTML／Wo
 
 本机用 `uv run noc7 serve` 打开三个画面：选择工单、七要素与原文出处、公司报告。预先放好的只有五张合成单（SYN-P04、SYN-S09、SYN-P01、SYN-S06、SYN-S02），启动后用规则流水线现算，不扫描 `~/.noc7/real/`。SYN-P04 的故障地点仍是规则给出的「矛盾」，没有把两种人井说法合并。
 
-导入只收标准工单包 zip。可以选规则，或选「用模型分析」。模型走与命令行相同的 `create_text_provider()`，配置默认 `config/models/deepseek.json`，请求前经过 `providers/gate.py`。换成内网 Qwen 只改 `--model-config`。模型给出的建议按结果里的 `suggestions` 展示，不再叠设计稿里的手写示例。校验失败或闸门拒绝不进列表；分析失败则卡片标「失败」，不写报告，也不回退成规则。真实包和产物只留在 `~/.noc7/demo-inbox/`。公司报告用空页眉。
+导入只收标准工单包 zip。可以选规则，或选「用模型分析」。模型走与命令行相同的 `create_text_provider()`，配置默认 `config/models/deepseek.json`，请求前经过 `providers/gate.py`。换成内网 Qwen 只改 `--model-config`。模型给出的建议按结果里的 `suggestions` 展示，不再叠设计稿里的手写示例。校验失败或闸门拒绝不进列表；分析失败则卡片标「失败」，不写报告，也不回退成规则。重启时，已经完成或已经记下失败的模型单不再请求模型；只有分析中途退出、磁盘上没有终态的才重新入队。真实包和产物只留在 `~/.noc7/demo-inbox/`。公司报告用空页眉。
 
 工作台一侧只保留传工单号（链接和校验来源后的 `postMessage`）。取舍见 [决策 0008](../decisions/0008-demo-service-and-bundle-upload.md)。
 

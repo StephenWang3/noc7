@@ -192,6 +192,9 @@ class JobRunner:
             if ref in PREPARED or ref in self.jobs or not BUNDLE_ID.fullmatch(ref):
                 continue
             job = self._make(ref, provider, bundle_dir, home, prepared=False)
+            if self._restore_terminal(job, bundle.manifest_sha256):
+                self._add(job)
+                continue
             if provider == "llm":
                 try:
                     self._preflight(bundle.manifest.data_class)
@@ -202,6 +205,26 @@ class JobRunner:
                     continue
             self._add(job)
             self._queue.put(ref)
+
+    def _restore_terminal(self, job: Job, sha: str) -> bool:
+        """模型单已有终态就装回来。没有终态（请求中途退出）返回 False，由调用方重新入队。"""
+        if job.provider != "llm":
+            return False
+        ready = _load_ready(job.out_dir / "analysis.json", sha)
+        if ready is not None:
+            job.result = ready
+            job.status = "ready"
+            job.issues = []
+            job.problems = []
+            return True
+        failed = _load_failure(job.home / "failure.json")
+        if failed is None:
+            return False
+        job.result = None
+        job.status = "failed"
+        job.issues = failed["issues"]
+        job.problems = failed["problems"] or [item["message"] for item in failed["issues"]]
+        return True
 
     def _make(self, ref: str, provider: str, bundle_dir: Path, home: Path, *, prepared: bool) -> Job:
         summary = _summary(bundle_dir, ref)
@@ -272,6 +295,7 @@ class JobRunner:
                 ),
                 encoding="utf-8",
             )
+            _clear_failure(job.home / "failure.json")
         except ExtractionRejected as e:
             self._fail(job, issues=[
                 {"code": i.code.value, "severity": i.severity.value, "message": i.message}
@@ -292,13 +316,63 @@ class JobRunner:
             job.problems = []
 
     def _fail(self, job: Job, *, issues: list[dict] | None = None, problems: list[str] | None = None) -> None:
+        recorded_issues = issues or []
+        recorded_problems = problems or [i["message"] for i in recorded_issues]
         if job.out_dir.exists():
             shutil.rmtree(job.out_dir, ignore_errors=True)
+        if job.provider == "llm":
+            _write_failure(job.home / "failure.json", recorded_issues, recorded_problems)
         with self._lock:
             job.result = None
             job.status = "failed"
-            job.issues = issues or []
-            job.problems = problems or [i["message"] for i in job.issues]
+            job.issues = recorded_issues
+            job.problems = recorded_problems
+
+
+def _load_ready(path: Path, sha: str) -> AnalysisResult | None:
+    if not path.is_file():
+        return None
+    try:
+        result = AnalysisResult.model_validate_json(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    if result.run.bundle_sha256 != sha:
+        return None
+    return result
+
+
+def _load_failure(path: Path) -> dict | None:
+    if not path.is_file():
+        return None
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return None
+    if not isinstance(data, dict):
+        return None
+    raw_issues = data.get("issues") if isinstance(data.get("issues"), list) else []
+    raw_problems = data.get("problems") if isinstance(data.get("problems"), list) else []
+    issues = [
+        item for item in raw_issues
+        if isinstance(item, dict) and isinstance(item.get("message"), str) and item["message"]
+    ]
+    problems = [item for item in raw_problems if isinstance(item, str) and item]
+    if not issues and not problems:
+        return None
+    return {"issues": issues, "problems": problems}
+
+
+def _write_failure(path: Path, issues: list[dict], problems: list[str]) -> None:
+    path.write_text(
+        json.dumps({"issues": issues, "problems": problems}, ensure_ascii=False) + "\n",
+        encoding="utf-8",
+    )
+    os.chmod(path, 0o600)
+
+
+def _clear_failure(path: Path) -> None:
+    if path.is_file():
+        path.unlink()
 
 
 def _summary(bundle_dir: Path, ref: str) -> dict:

@@ -14,9 +14,10 @@ import pytest
 from fastapi.testclient import TestClient
 
 from noc7.extract.pipeline import analyze
+from noc7.report import write_reports
 from noc7.schema import AnalysisResult
 from noc7.web.app import create_app
-from noc7.web.jobs import PREPARED
+from noc7.web.jobs import PREPARED, JobRunner
 
 ROOT = Path(__file__).resolve().parents[1]
 BUNDLES = ROOT / "fixtures" / "bundles"
@@ -155,3 +156,59 @@ def test_demo_service(client: TestClient, tmp_path: Path):
     refs = [item["ticket_ref"] for item in client.get("/api/tickets").json()["tickets"]]
     assert "REAL01" not in refs
     assert not (tmp_path / "inbox" / "upload" / "REAL01" / "out").exists()
+
+
+def test_second_runner_does_not_recall_llm(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    calls: list[str] = []
+
+    def boom(*_args, **_kwargs):
+        calls.append("analyze_with_context")
+        raise AssertionError("同一 inbox 上不应再次调用模型")
+
+    monkeypatch.setattr("noc7.web.jobs.analyze_with_context", boom)
+
+    inbox = tmp_path / "inbox"
+    ready_home = inbox / "upload" / "SYN-S01"
+    bundle_dir = ready_home / "bundle"
+    shutil.copytree(BUNDLES / "SYN-S01", bundle_dir)
+    (ready_home / "meta.json").write_text(json.dumps({"provider": "llm"}) + "\n", encoding="utf-8")
+    write_reports(analyze(bundle_dir), ready_home / "out")
+
+    failed_home = inbox / "upload" / "SYN-S03"
+    shutil.copytree(BUNDLES / "SYN-S03", failed_home / "bundle")
+    (failed_home / "meta.json").write_text(json.dumps({"provider": "llm"}) + "\n", encoding="utf-8")
+    (failed_home / "failure.json").write_text(
+        json.dumps(
+            {
+                "issues": [{"code": "quote_not_found", "severity": "error", "message": "引文对不上"}],
+                "problems": ["引文对不上"],
+            },
+            ensure_ascii=False,
+        ) + "\n",
+        encoding="utf-8",
+    )
+
+    config = tmp_path / "model.json"
+    config.write_text(json.dumps(SYNTHETIC_MODEL), encoding="utf-8")
+    bundles = tmp_path / "no-prepared"
+
+    def run_once() -> JobRunner:
+        runner = JobRunner(inbox, bundles, config)
+        runner.start()
+        return runner
+
+    first = run_once()
+    first.stop()
+    second = run_once()
+    try:
+        ready = second.jobs["SYN-S01"]
+        failed = second.jobs["SYN-S03"]
+        assert ready.status == "ready"
+        assert ready.result is not None
+        assert ready.result.run.provider == "rules"
+        assert failed.status == "failed"
+        assert failed.problems == ["引文对不上"]
+        assert calls == []
+        assert (ready_home / "out" / "analysis.json").is_file()
+    finally:
+        second.stop()

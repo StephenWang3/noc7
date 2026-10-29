@@ -147,7 +147,7 @@
   }
 
   // ───────────────────────── 状态与事件 ─────────────────────────
-  const state = { step: 1, entryTab: "local", tickets: [], pick: null, ref: null, data: null, entry: "local", element: "start_time", tab: "main", legend: true, log: [], workbenchOrigins: [], importError: "", poll: null, listSig: "" };
+  const state = { step: 1, entryTab: "local", tickets: [], pick: null, ref: null, data: null, entry: "local", element: "start_time", tab: "main", legend: true, log: [], workbenchOrigins: [], importError: "", importProvider: "rules", poll: null, listSig: "" };
   const embedded = window.parent !== window;
 
   function extraOrigins() { return (state.workbenchOrigins || []).join(","); }
@@ -214,20 +214,22 @@
     }).join("");
     const from = { local: "来源：本地工单包", workbench: `来源：NOC 工作台传入${state.ref ? " · " + state.ref : ""}`, link: `来源：链接传入${state.ref ? " · " + state.ref : ""}` };
     $("#source-chip").textContent = from[state.entry];
-    // 只要数据是合成的，嵌入模式也必须保留“合成数据”提示。
-    const synthetic = state.data ? state.data.analysis.data_class === "synthetic" : state.tickets.some((t) => t.data_class === "synthetic");
-    $(".synthetic-bar").hidden = !synthetic;
+    // 只在当前打开的那张是合成数据时提示。列表上不把导入的工单说成 fixtures。
+    const bar = $(".synthetic-bar");
+    const opened = state.data && state.data.analysis && state.data.analysis.data_class === "synthetic";
+    bar.hidden = !opened;
+    if (opened) {
+      const ref = (state.data.ticket && state.data.ticket.ticket_ref) || state.ref || "";
+      const prepared = ["SYN-P04", "SYN-S09", "SYN-P01", "SYN-S06", "SYN-S02"];
+      bar.textContent = prepared.indexOf(ref) >= 0
+        ? "合成演示数据（来自仓库 fixtures/），不是真实工单，也不代表真实模型质量。"
+        : "合成数据，不是真实工单，也不代表真实模型质量。";
+    }
   }
 
   // ───────────────────────── 画面 1：选择工单 ─────────────────────────
-  function renderStep1() {
-    const flow = `<div class="flow" aria-label="整体流程">
-      <div class="node"><b>① 原始工单</b>字段 · 处理过程 · 邮件 · 附件</div><span class="arrow">→</span>
-      <div class="node"><b>② 大模型预处理</b>只读带编号的原文片段，不能凭空下结论</div><span class="arrow">→</span>
-      <div class="node"><b>③ 七要素 + 原文出处</b>每条结论点得回原文；拿不准就留空或标待核实</div><span class="arrow">→</span>
-      <div class="node"><b>④ 标准化公司报告</b>可下载 Word</div><span class="arrow">→</span>
-      <div class="node out-of-scope"><b>人工审核</b>在 NOC 工作台完成，不在本页</div></div>`;
-    const local = state.tickets.map((t) => {
+  function ticketCards() {
+    return state.tickets.map((t) => {
       const selected = state.pick === t.ticket_ref;
       if (t.status !== "ready" || !t.element_status) {
         const failed = t.status === "failed";
@@ -247,10 +249,35 @@
         <div class="t-sum">${c.confirmed + c.documented} 个有结论 · ${c.unknown} 个未知${c.conflicted ? ` · <b style="color:var(--conf)">${c.conflicted} 个矛盾</b>` : ""} · <span class="badge b-warn">待核实 ${open}</span></div>
         <div class="t-meta"><span>${esc(t.category || "")}</span></div></button>`;
     }).join("");
+  }
+  function patchStep1List() {
+    const box = document.querySelector("#screen .tickets");
+    if (!box || state.step !== 1 || state.entryTab !== "local") return false;
+    box.innerHTML = ticketCards();
+    const picked = pickedTicket();
+    const hint = document.querySelector("#screen .screen-foot .hint");
+    const next = document.getElementById("next1");
+    if (hint) {
+      hint.textContent = state.pick
+        ? `已选：${state.pick}${picked && picked.status !== "ready" ? " · " + (picked.status === "failed" ? "失败" : "分析中") : ""}`
+        : "请先选择一张工单";
+    }
+    if (next) next.disabled = !(picked && picked.status === "ready");
+    return true;
+  }
+  function renderStep1() {
+    const flow = `<div class="flow" aria-label="整体流程">
+      <div class="node"><b>① 原始工单</b>字段 · 处理过程 · 邮件 · 附件</div><span class="arrow">→</span>
+      <div class="node"><b>② 大模型预处理</b>只读带编号的原文片段，不能凭空下结论</div><span class="arrow">→</span>
+      <div class="node"><b>③ 七要素 + 原文出处</b>每条结论点得回原文；拿不准就留空或标待核实</div><span class="arrow">→</span>
+      <div class="node"><b>④ 标准化公司报告</b>可下载 Word</div><span class="arrow">→</span>
+      <div class="node out-of-scope"><b>人工审核</b>在 NOC 工作台完成，不在本页</div></div>`;
+    const local = ticketCards();
+    const chosen = state.importProvider === "llm" ? "llm" : "rules";
     const importer = `<form id="import-form" class="wb-form import-row">
         <input id="import-file" type="file" accept=".zip,application/zip" aria-label="工单包 zip" required>
-        <label><input type="radio" name="provider" value="rules" checked> 规则</label>
-        <label><input type="radio" name="provider" value="llm"> 用模型分析</label>
+        <label><input type="radio" name="provider" value="rules"${chosen === "rules" ? " checked" : ""}> 规则</label>
+        <label><input type="radio" name="provider" value="llm"${chosen === "llm" ? " checked" : ""}> 用模型分析</label>
         <button class="btn primary" type="submit">导入</button></form>
       <p class="err" id="import-err" ${state.importError ? "" : "hidden"}>${esc(state.importError || "")}</p>
       <p class="job-note small muted">预先放好的五张合成单用规则计算。导入标准工单包时，可以选规则，或用当前模型配置现场分析。模型通常要等一两分钟，卡片会停在「分析中」。</p>`;
@@ -552,7 +579,11 @@ POST /api/tickets                          上传工单包 zip，provider=rules 
     const d = t.dataset;
     if (d.step) return go(+d.step);
     if (d.etab) { state.entryTab = d.etab; return render(); }
-    if (d.pick) { state.pick = d.pick; return render(); }
+    if (d.pick) {
+      state.pick = d.pick;
+      if (patchStep1List()) return;
+      return render();
+    }
     if (t.id === "next1" && state.pick) { if (await openTicket(state.pick, "local")) go(2); return; }
     if (t.id === "wb-load") return loadFromWorkbenchTab();
     if (d.el) { state.element = d.el; state.tab = "main"; return render(); }
@@ -601,7 +632,7 @@ POST /api/tickets                          上传工单包 zip，provider=rules 
         const changed = sig !== state.listSig;
         state.tickets = tickets;
         state.listSig = sig;
-        if (changed && state.step === 1) render();
+        if (changed && state.step === 1 && !patchStep1List()) render();
         if (!tickets.some((t) => t.status === "running")) {
           clearInterval(state.poll);
           state.poll = null;
@@ -610,13 +641,19 @@ POST /api/tickets                          上传工单包 zip，provider=rules 
     }, 1000);
   }
 
+  document.addEventListener("change", (e) => {
+    const input = e.target;
+    if (!input || input.name !== "provider" || !input.form || input.form.id !== "import-form") return;
+    state.importProvider = input.value === "llm" ? "llm" : "rules";
+  });
+
   document.addEventListener("submit", async (e) => {
     const form = e.target;
     if (!form || form.id !== "import-form") return;
     e.preventDefault();
     const file = form.querySelector("#import-file").files[0];
     if (!file) { state.importError = "请选择一个 zip 工单包"; render(); return; }
-    const provider = new FormData(form).get("provider") || "rules";
+    const provider = state.importProvider === "llm" ? "llm" : "rules";
     const body = new FormData();
     body.append("bundle", file, file.name);
     body.append("provider", provider);
