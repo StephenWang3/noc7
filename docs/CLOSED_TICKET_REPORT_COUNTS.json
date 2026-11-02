@@ -257,6 +257,28 @@
   "known_semantic_errors": {
     "closed": 2,
     "end_time": 1,
-    "cause": 1
+    "cause": 1,
+    "unit": "错误项数，closed=2 表示同一张已结单工单上的两处错误，不是两张工单",
+    "closed_affected_cases": 1,
+    "confirmed_end_time_false_accepts": 1,
+    "confirmed_end_time_review_is_null": true,
+    "note": "唯一 confirmed 是协议 Up 恢复语义误放，由 business_recovery 与客户确认锚点自动升级，不代表人工核实；原始状态计数保留。"
+  },
+  "closed_after_excluding_known_semantic_errors": {
+    "end_time": {
+      "filled": 5,
+      "states": {
+        "confirmed": 0,
+        "documented": 5
+      }
+    },
+    "cause": {
+      "filled": 15,
+      "states": {
+        "documented": 15
+      }
+    },
+    "independently_verified_correct": false,
+    "note": "只剔除已知误放，不是独立正确率；剩余正式值均为 documented。"
   }
 }
