@@ -407,3 +407,95 @@ def test_previous_clock_zone_is_not_reused_without_clause_separator(zone):
     times=list(text_times(raw,None,'+08:00'))
     assert [t.iso for t,_,_ in times]==['2026-01-02T03:04:05+00:00','2026-01-02T04:04:05+08:00']
     assert times[1][0].tz_source=='assumed'
+
+
+@pytest.mark.parametrize('field_matches,whitespace', [(True, False), (True, True), (False, False)])
+def test_mixed_refs_require_field_containing_raw(sample, field_matches, whitespace):
+    from noc7.schema import TextRangeLocator
+    raw = '2026-09-23 13:04:05'
+    ctx, data = build(sample, raw=raw, name='end_time', kind='business_recovery')
+    field = ctx.evidence[0]
+    field = field.model_copy(update={'text': raw.replace(' ', '\u00a0') if whitespace else raw if field_matches else '其他字段'})
+    body = field.model_copy(update={'id': 'M01/t:1', 'locator': TextRangeLocator(line=1), 'text': '本次业务恢复于 ' + raw})
+    c = data['elements']['end_time']['candidates'][0]
+    c['evidence_refs'].append(body.id)
+    c['relation']['context'] = [dict(evidence_id=body.id, quote=body.text)]
+    ctx = ExtractionContext(ctx.bundle, [field, body])
+    result = decode(ctx, data)
+    el = result.elements.end_time
+    assert el.candidates[0].time.tz_source == ('assumed' if field_matches else 'unknown')
+    assert bool(el.value) == field_matches
+    if field_matches:
+        validate_extraction(ctx, result)
+        from noc7.extract.pipeline import analyze
+        from tests.a1.conftest import text_registry
+        from tests.llm.conftest import BUNDLES
+        report_result = analyze(BUNDLES/'SYN-S01', registry=text_registry()).model_copy(update=dict(
+            evidence=ctx.evidence, elements=result.elements, semantic_assessment=result.semantic_assessment,
+            suggestions=[], events=[], quote_checks=result.quote_checks, issues=[], service_identity=None))
+        assert '时区按系统口径假设' in str(build_company_report(report_result).cells)
+
+
+@pytest.mark.parametrize('anchor,expected', [(False, 'assumed'), (True, 'unknown')])
+def test_field_does_not_borrow_body_zone(sample, anchor, expected):
+    from noc7.schema import TextRangeLocator
+    raw = '2026-09-23 13:04:05'
+    ctx, data = build(sample, raw=raw, name='end_time', kind='business_recovery')
+    body = ctx.evidence[0].model_copy(update={'id':'M01/t:1', 'locator':TextRangeLocator(line=1),
+                                             'text':'另一条记录 2026-09-23 13:04:05 UTC'})
+    c = data['elements']['end_time']['candidates'][0]
+    c['evidence_refs'].append(body.id)
+    if anchor:
+        c['relation']['timezone_anchor'] = dict(evidence_id=body.id,quote=body.text)
+    ctx = ExtractionContext(ctx.bundle, [ctx.evidence[0], body])
+    result = decode(ctx,data)
+    assert result.elements.end_time.candidates[0].time.tz_source == expected
+    if anchor: assert result.elements.end_time.value is None
+    else: assert result.elements.end_time.value.utc_offset == ctx.bundle.manifest.default_timezone
+
+
+def test_mixed_field_unselected_stays_unselected(sample):
+    ctx,data=build(sample,raw='2026-09-23 13:04:05',name='end_time',kind='business_recovery')
+    el=data['elements']['end_time']
+    el.update(status='unknown',value=None,selected=None)
+    result=decode(ctx,data)
+    assert result.elements.end_time.candidates[0].time.tz_source=='assumed'
+    assert result.elements.end_time.value is None and result.elements.end_time.selected is None
+
+
+@pytest.mark.parametrize('raw,expected', [
+    ('Restored at 09/23/2026 1:04:05 PM UTC', '2026-09-23T13:04:05+00:00'),
+    ('Restored at 09/23/2026 12:04 AM UTC', '2026-09-23T00:04:00+00:00'),
+    ('Restored at 09/23/2026 13:04 PM UTC', None),
+    ('Restored at 09/10/2026 1:04 PM UTC', None),
+    ('Restored at 02/30/2026 1:04 PM UTC', None),
+    ('Restored at 09/23/2026 1:04 PM; checked 2026-09-23 15:00 UTC', '2026-09-23T13:04:00+08:00'),
+])
+def test_twelve_hour_phrase_no_partial_fallback(raw, expected):
+    value=time_phrase(raw,'+08:00')
+    assert value.iso==expected and value.raw==raw
+
+
+def test_twelve_hour_body_complete_decode(sample):
+    ctx,data=build(sample,raw='09/23/2026 1:04:05 PM UTC',name='end_time',kind='business_recovery',field=False)
+    result=decode(ctx,data)
+    validate_extraction(ctx,result)
+    assert result.elements.end_time.value.iso=='2026-09-23T13:04:05+00:00'
+    assert result.elements.end_time.value.tz_source=='explicit'
+
+
+@pytest.mark.parametrize('zone,expected', [('+00:00','conflicted'), ('+08:00','documented')])
+def test_mixed_field_and_body_compete_by_existing_intervals(sample,zone,expected):
+    from noc7.schema import TextRangeLocator
+    raw='2026-09-23 13:04:05'
+    ctx,data=build(sample,raw=raw,name='end_time',kind='business_recovery')
+    body=ctx.evidence[0].model_copy(update={'id':'M01/t:1','locator':TextRangeLocator(line=1), 'text':raw+' '+zone})
+    first=data['elements']['end_time']['candidates'][0]
+    first['evidence_refs'].append(body.id)
+    second=deepcopy(first);second.update(id='C2',evidence_refs=[body.id],time=dict(raw=body.text))
+    second['relation']['context']=[dict(evidence_id=body.id,quote=body.text)]
+    data['elements']['end_time']['candidates'].append(second)
+    result=decode(ExtractionContext(ctx.bundle,[ctx.evidence[0],body]),data)
+    assert result.elements.end_time.status==expected
+    assert result.elements.end_time.candidates[0].time.tz_source=='assumed'
+    assert result.elements.end_time.candidates[1].time.tz_source=='explicit'

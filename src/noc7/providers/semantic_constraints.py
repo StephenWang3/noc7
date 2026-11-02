@@ -71,8 +71,10 @@ def _normalized_time(candidate, ctx):
     spans = {s.id: s for s in ctx.evidence}
     relation = candidate.relation
     source = [spans[r] for r in candidate.evidence_refs if r in spans]
-    offset = ctx.bundle.manifest.default_timezone if source and all(s.locator.type == "field" for s in source) else None
     raw = candidate.time.raw
+    field_backed = any(s.locator.type == "field" and match_quote(raw, s.text).status != "mismatch"
+                       for s in source)
+    offset = ctx.bundle.manifest.default_timezone if field_backed else None
     value = time_phrase(raw, offset)
     if not relation:
         return value
@@ -93,7 +95,10 @@ def _normalized_time(candidate, ctx):
     if relation.timezone_anchor:
         zone = ZONE_RE.search(relation.timezone_anchor.quote)
         if zone:
+            # 字段的口径不能被另一段正文的时区覆盖；矛盾的显式锚点留待核实。
             anchored = time_phrase("2000-01-01 00:00 " + zone.group(), None)
+            if field_backed and value.utc_offset and anchored.utc_offset != value.utc_offset:
+                return TimeValue(raw=raw)
             if value.tz_source == TimeZoneSource.EXPLICIT:
                 if anchored.utc_offset != value.utc_offset:
                     return TimeValue(raw=raw)

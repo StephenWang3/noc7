@@ -40,7 +40,7 @@ from ..schema import (
     ElementStatus as Status,
 )
 from ..schema.elements import CAUSE_KINDS_ALLOWED_AS_VALUE
-from ..timeparse import parse_time
+from ..timeparse import parse_time, TWELVE_TIME_PATTERN
 from .types import QUALITY_REVIEW_THRESHOLD, Extraction, ExtractionContext
 from .fact_phrases import responsibility_claims, rfo_fault_points
 
@@ -51,7 +51,7 @@ ZONE_RE = re.compile(
     re.I,
 )
 TIME_RE = re.compile(
-    rf"{DATE}(?:[ T]+{CLOCK})?|(?<![\d:.]){CLOCK}|\{{\{{\s*[\w.]+\s*\}}\}}", re.I
+    rf"{TWELVE_TIME_PATTERN}|{DATE}(?:[ T]+{CLOCK})?|(?<![\d:.]){CLOCK}|\{{\{{\s*[\w.]+\s*\}}\}}", re.I
 )
 CONFIRMATION_TIME_NOTE = "客户确认时刻，仅表示此时已正常，不替代实际恢复时刻。"
 METRIC = re.compile(

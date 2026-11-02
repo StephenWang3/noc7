@@ -24,7 +24,8 @@ from noc7.providers.text_prompt import prepare_evidence
 from noc7.providers.text_replay import evidence_digest, save_replay, ReplayProvider
 from noc7.report import write_reports
 from noc7.rules import validate_extraction, ExtractionRejected
-from noc7.schema import EvidenceSpan, DataClass
+from noc7.schema import EvidenceSpan, DataClass, AnalysisResult
+from noc7.quote_match import match_quote
 
 
 def read(path):
@@ -73,29 +74,50 @@ def independent_time_metrics(result, default_timezone):
         return f'{m[1]}{int(m[2]):02d}:{int(m[3] or 0):02d}' if m else None
     for name in ('start_time','end_time'):
         for c in getattr(result.elements,name).candidates:
-            text=c.time.raw.strip().replace('：',':')
+            text=re.sub(r'\s+', ' ', c.time.raw.strip()).replace('：',':')
             m=re.fullmatch(r'(\d{4})[-/.年](\d{1,2})[-/.月](\d{1,2})日?\s*(?:T?\s*(\d{1,2}):(\d{2})(?::(\d{2}))?)?\s*(.*?)',text)
             dayfirst=re.fullmatch(r'(\d{1,2})\.(\d{1,2})\.(\d{4})\s+(\d{1,2}):(\d{2})\s*(.*)',text)
+            slash=re.fullmatch(r'(\d{1,2})/(\d{1,2})/(\d{4})\s+(\d{1,2}):(\d{2})(?::(\d{2}))?\s+(AM|PM)\s*(.*)',text,re.I)
+            meridiem=None
             expected=None
             try:
-                if m or dayfirst:
+                if slash:
+                    first,second,y,h,mi,se,meridiem,tail=slash.groups()
+                    a,b=int(first),int(second)
+                    if (a>12)==(b>12): raise ValueError('日月不明确')
+                    mo,da=(b,a) if a>12 else (a,b)
+                if m or dayfirst or slash:
                     if m: y,mo,da,h,mi,se,tail=m.groups()
-                    else: da,mo,y,h,mi,tail=dayfirst.groups(); se=None
+                    elif dayfirst: da,mo,y,h,mi,tail=dayfirst.groups(); se=None
+                    ampm=re.fullmatch(r'(AM|PM)\s*(.*)',tail,re.I)
+                    if ampm: meridiem,tail=ampm.groups()
+                    if meridiem:
+                        if not 1<=int(h)<=12: raise ValueError('非法十二小时制')
+                        h=int(h)%12+(12 if meridiem.upper()=='PM' else 0)
                     if h is None:
                         expected=dict(iso=f'{int(y):04d}-{int(mo):02d}-{int(da):02d}',precision='day',tz_source='unknown',utc_offset=None)
                     elif not tail or zone_offset(tail):
                         zone=zone_offset(tail) if tail else None
                         explicit=zone is not None
+                        field_backed=any(r in spans and spans[r].locator.type=='field'
+                                         and match_quote(c.time.raw,spans[r].text).status!='mismatch'
+                                         for r in c.evidence_refs)
+                        if zone is None and field_backed:
+                            zone=default_timezone
                         anchor=c.relation.timezone_anchor if c.relation else None
-                        if not explicit and anchor:
+                        invalid_anchor=False
+                        if anchor:
                             matches=re.findall(r'\b(?:UTC|GMT)(?:\s*[+-]\s*\d{1,2}(?::?\d{2})?)?|[+-]\d{2}:?\d{2}|北京时间|香港时间',anchor.quote,re.I)
                             if len(set(matches))==1:
-                                zone=zone_offset(matches[0]); explicit=zone is not None
-                        if zone is None and all(spans[r].locator.type=='field' for r in c.evidence_refs):
-                            zone=default_timezone
+                                anchored=zone_offset(matches[0])
+                                invalid_anchor=bool(zone and zone!=anchored)
+                                if not invalid_anchor:
+                                    zone=anchored; explicit=True
                         dt=datetime(int(y),int(mo),int(da),int(h),int(mi),int(se or 0))
                         expected=dict(iso=dt.isoformat()+(zone or ''),precision='second' if se else 'minute',
                                       utc_offset=zone,tz_source='explicit' if explicit else 'assumed' if zone else 'unknown')
+                        if invalid_anchor:
+                            expected=dict(iso=None,precision=None,utc_offset=None,tz_source='unknown')
                 elif re.match('[A-Za-z]{3},',text):
                     dt=parsedate_to_datetime(text); zone=dt.strftime('%z');zone=zone[:3]+':'+zone[3:]
                     expected=dict(iso=dt.isoformat(),precision='second',tz_source='explicit',utc_offset=zone)
@@ -104,6 +126,91 @@ def independent_time_metrics(result, default_timezone):
             state='not_assessed' if expected is None else 'match' if all(getattr(c.time,k)==v for k,v in expected.items()) else 'mismatch'
             rows.append(dict(element=name,candidate=c.id,state=state))
     return dict(counts=dict(Counter(r['state'] for r in rows)),items=rows)
+
+
+def load_comparison(path, inputs):
+    """比较前验证完整集合、唯一绑定及成功结果身份；不把失败伪造成空七栏。"""
+    bindings = read(path / 'source-binding.json')
+    runs = read(path / 'run.json')
+    aliases = {entry['alias'] for entry, _, _, _ in inputs}
+    if (len(aliases) != len(inputs) or len(bindings) != len(aliases)
+        or len(runs) != len(aliases) or {r['alias'] for r in bindings} != aliases
+        or {r['alias'] for r in runs} != aliases):
+        raise ValueError('旧结果集合不唯一或不完整')
+    bindings = {r['alias']: r for r in bindings}
+    runs = {r['alias']: r for r in runs}
+    output = {}
+    for entry, bundle, record, _ in inputs:
+        alias = entry['alias']
+        expected = dict(alias=alias, bundle_sha256=bundle.manifest_sha256,
+                        evidence_sha256=record['evidence_sha256'],
+                        response_sha256=hashlib.sha256(record['raw_response'].encode()).hexdigest())
+        if bindings[alias] != expected:
+            raise ValueError('旧结果输入或响应绑定不一致')
+        result = None
+        if runs[alias]['status'] == 'ok':
+            result = AnalysisResult.model_validate(read(path / alias / 'analysis.json'))
+            if (result.bundle_id != bundle.manifest.bundle_id
+                or result.ticket_ref != bundle.ticket.ticket_ref
+                or result.run.bundle_sha256 != bundle.manifest_sha256):
+                raise ValueError('旧结果身份或包哈希不一致')
+        output[alias] = dict(status=runs[alias]['status'], result=result)
+    return output
+
+
+def compare_result(previous, result, status):
+    """记录原始值和归一值差异；私有输出，不冒充语义判断。"""
+    old = previous['result']
+    changes = []
+    if old is not None and result is not None:
+        for name in ('start_time', 'end_time', 'cause'):
+            before = getattr(old.elements, name).model_dump(mode='json')
+            after = getattr(result.elements, name).model_dump(mode='json')
+            formal = ('value', 'status', 'selected', 'evidence_refs')
+            changed = {k: dict(before=before[k], after=after[k]) for k in formal if before[k] != after[k]}
+            left = {c['id']: c for c in before['candidates']}
+            right = {c['id']: c for c in after['candidates']}
+            candidates = [dict(id=key, before=left.get(key), after=right.get(key))
+                          for key in sorted(left.keys() | right.keys()) if left.get(key) != right.get(key)]
+            if changed or candidates:
+                changes.append(dict(element=name, formal=changed, candidates=candidates))
+        for name in ('events', 'suggestions', 'service_identity'):
+            before = old.model_dump(mode='json')[name]
+            after = result.model_dump(mode='json')[name]
+            if before != after:
+                changes.append(dict(element=name, before=before, after=after))
+        before_steps = old.elements.handling_process.model_dump(mode='json')
+        after_steps = result.elements.handling_process.model_dump(mode='json')
+        if before_steps != after_steps:
+            changes.append(dict(element='handling_process', before=before_steps, after=after_steps))
+    return dict(before_status=previous['status'], after_status=status, changes=changes)
+
+
+def comparison_summary(inputs, previous, rows):
+    runs = {r['alias']: r for r in rows}
+    output = {}
+    for label, closed in (('closed', True), ('other', False)):
+        entries = [e for e, _, _, _ in inputs if e['closed'] == closed]
+        group = dict(total=len(entries), before_ok=0, after_ok=0, elements={})
+        for e in entries:
+            group['before_ok'] += previous[e['alias']]['status'] == 'ok'
+            group['after_ok'] += runs[e['alias']]['status'] == 'ok'
+        for name in ('start_time', 'end_time', 'cause'):
+            counts = dict(before=0, after=0, added=0, removed=0)
+            for e in entries:
+                old = previous[e['alias']]['result']
+                row = runs[e['alias']]
+                a = bool(old and getattr(old.elements, name).value)
+                b = bool(row.get('elements', {}).get(name, {}).get('filled'))
+                counts['before'] += a; counts['after'] += b
+                # 拒绝与成功的转换单列，不算同一已交付报告的新增/撤回。
+                if old is not None and row['status'] == 'ok':
+                    counts['added'] += b and not a; counts['removed'] += a and not b
+            group['elements'][name] = counts
+        group['status_transitions'] = dict(Counter(
+            previous[e['alias']]['status'] + '->' + runs[e['alias']]['status'] for e in entries))
+        output[label] = group
+    return output
 
 
 def evaluate(result, targets):
@@ -123,6 +230,7 @@ def main():
     ap.add_argument('mode', choices=['replay','trial'])
     ap.add_argument('--baseline', type=Path, required=True)
     ap.add_argument('--responses', type=Path, help='离线复核新试跑保存的响应；仍与原基线输入绑定')
+    ap.add_argument('--compare-results', type=Path, help='离线模式比较已绑定的旧完整结果')
     ap.add_argument('--expectations', type=Path, required=True)
     ap.add_argument('--out', type=Path, required=True)
     ap.add_argument('--model-config', type=Path, default=Path('config/models/deepseek.json'))
@@ -137,6 +245,9 @@ def main():
     if args.mode == "trial" and args.responses:
         raise ValueError("在线试跑不能指定替代响应")
     inputs=load_inputs(baseline, args.responses.expanduser().resolve() if args.responses else None)
+    if args.compare_results and args.mode != 'replay':
+        raise ValueError('只允许离线比较')
+    previous=load_comparison(args.compare_results.expanduser().resolve(),inputs) if args.compare_results else None
     targets=read(args.expectations.expanduser())
     out.mkdir(mode=0o700)
     write(out/'frozen-expectations.json',targets)
@@ -155,6 +266,7 @@ def main():
         entry,bundle,record,request_ctx=item
         alias=entry['alias']; folder=out/alias; folder.mkdir()
         row=dict(alias=alias,mode=args.mode,status='failed')
+        result=None
         try:
             if args.mode=='replay':
                 class BoundProvider:
@@ -200,6 +312,8 @@ def main():
             row.update(status='rejected' if isinstance(exc,ExtractionRejected) else 'failed',
                        issue_codes=sorted({i.code.value for i in getattr(exc,'issues',[])}))
             write(folder/'failure.json',dict(type=type(exc).__name__,traceback=traceback.format_exc()))
+        if previous is not None:
+            write(folder/'comparison.json',compare_result(previous[alias],result,row['status']))
         write(folder/'metrics.json',row)
         return row
 
@@ -216,6 +330,8 @@ def main():
                  normalization=dict(sum((Counter(r.get('normalization',{}).get('counts',{})) for r in rows),Counter())),
                  external_services=args.mode=='trial',semantic_accuracy=None,
                  limitation='冻结目标的语义与推测范围必须逐项复核；旧响应缺新关系不算新语义能力。')
+    if previous is not None:
+        summary['comparison']=comparison_summary(inputs,previous,rows)
     write(out/'summary.json',summary)
     print(json.dumps(summary,ensure_ascii=False),flush=True)
 

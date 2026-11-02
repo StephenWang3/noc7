@@ -21,12 +21,19 @@ _PLACEHOLDER = re.compile(r"\{\{\s*[\w.]+\s*\}\}")
 _EMPTY = {"", "na", "n/a", "none", "null", "-", "--", "无", "暂无", "空"}
 _LOCAL_ZONES = {"北京时间": "+08:00", "香港时间": "+08:00"}
 
+# 整体匹配，防止正文提取时将 PM 丢掉或只取出其中的时钟。
+TWELVE_TIME_PATTERN = (
+    r"(?<![\d/])(?:\d{4}[-/.年]\d{1,2}[-/.月]\d{1,2}日?|"
+    r"\d{1,2}[/\.]\d{1,2}[/\.]\d{4})[ T]+"
+    r"\d{1,2}[:：]\d{2}(?:[:：]\d{2})?\s*(?:AM|PM)\b"
+)
+
 _MAIN = re.compile(
     r"""^
     (?P<zone_prefix>北京时间|香港时间)?\s*
     (?P<y>\d{4})[-/.年](?P<m>\d{1,2})[-/.月](?P<d>\d{1,2})日?
     (?:[\sT]+(?P<H>\d{1,2})[:：时](?P<M>\d{2})(?:分|[:：分](?P<S>\d{2})秒?)?)?
-    \s*\(?\s*
+    \s*(?P<ampm>AM|PM)?\s*\(?\s*
     (?P<tz>
         (?:GMT|UTC)\s*[+-]\s*\d{1,2}(?::?\d{2})?
       | GMT | UTC | Z
@@ -79,9 +86,21 @@ def parse_time(raw: str | None, default_offset: str | None = None) -> TimeValue:
     if day_first:
         normalized = f"{day_first[3]}-{int(day_first[2]):02d}-{int(day_first[1]):02d}" + (day_first[4] or "")
         return parse_time(normalized, default_offset).model_copy(update={"raw": raw or ""})
+    slash = re.fullmatch(r"(\d{1,2})/(\d{1,2})/(\d{4})([ T]+.*)?", text)
+    if slash:
+        first, second = int(slash[1]), int(slash[2])
+        if (first > 12) == (second > 12):
+            return TimeValue(raw=raw or "")
+        month, day = (second, first) if first > 12 else (first, second)
+        normalized = f"{slash[3]}-{month:02d}-{day:02d}" + (slash[4] or "")
+        return parse_time(normalized, default_offset).model_copy(update={"raw": raw or ""})
     m = _MAIN.match(text)
     if m:
         y, mo, d = int(m["y"]), int(m["m"]), int(m["d"])
+        try:
+            datetime(y, mo, d)
+        except ValueError:
+            return TimeValue(raw=raw or "")
         if m["H"] is None:
             return TimeValue(
                 raw=raw or "",
@@ -90,7 +109,15 @@ def parse_time(raw: str | None, default_offset: str | None = None) -> TimeValue:
                 tz_source=TimeZoneSource.UNKNOWN,
             )
         sec = int(m["S"]) if m["S"] else 0
-        dt = datetime(y, mo, d, int(m["H"]), int(m["M"]), sec)
+        hour = int(m["H"])
+        if m["ampm"]:
+            if not 1 <= hour <= 12:
+                return TimeValue(raw=raw or "")
+            hour = hour % 12 + (12 if m["ampm"].upper() == "PM" else 0)
+        try:
+            dt = datetime(y, mo, d, hour, int(m["M"]), sec)
+        except ValueError:
+            return TimeValue(raw=raw or "")
         precision = TimePrecision.SECOND if m["S"] else TimePrecision.MINUTE
         zone = m["tz"] or m["zone_prefix"]
         if zone:

@@ -40,3 +40,24 @@ def test_utc_and_gmt8_cross_day_are_equal():
     a = parse_time("Tue, 06 Oct 2026 17:20:00 +0000").as_datetime()
     b = parse_time("2026-10-07 01:20", "+08:00").as_datetime()
     assert a == b
+
+
+@pytest.mark.parametrize('raw,iso,precision', [
+    ('09/23/2026 1:04:05 PM UTC', '2026-09-23T13:04:05+00:00', 'second'),
+    ('23/09/2026 12:04 am UTC', '2026-09-23T00:04:00+00:00', 'minute'),
+    ('2026-09-23 12:04 PM UTC', '2026-09-23T12:04:00+00:00', 'minute'),
+    ('2026-09-23 1:04 pm +02:00', '2026-09-23T13:04:00+02:00', 'minute'),
+    ('23.09.2026 1:04 PM UTC', '2026-09-23T13:04:00+00:00', 'minute'),
+])
+def test_twelve_hour_complete_dates(raw, iso, precision):
+    value = parse_time(raw, '+08:00')
+    assert (value.iso, value.precision, value.tz_source, value.raw) == (iso, precision, 'explicit', raw)
+
+
+@pytest.mark.parametrize('raw', [
+    '09/10/2026 1:04 PM UTC', '13/23/2026 1:04 PM UTC',
+    '09/23/2026 00:04 PM UTC', '09/23/2026 13:04 PM UTC',
+    '02/30/2026 1:04 PM UTC', '2026-09-23 1:60 PM UTC',
+])
+def test_invalid_or_ambiguous_twelve_hour_time(raw):
+    assert parse_time(raw, '+08:00').iso is None
