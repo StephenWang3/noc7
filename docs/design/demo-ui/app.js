@@ -180,7 +180,7 @@
   // ───────────────────────── 画面 1：选择工单 ─────────────────────────
   function renderStep1() {
     const flow = `<div class="flow" aria-label="整体流程">
-      <div class="node"><b>① 原始工单</b>字段 · 处理过程 · 邮件 · 附件</div><span class="arrow">→</span>
+      <div class="node"><b>① 已结单工单</b>完整导出材料 · 含结案说明与附件</div><span class="arrow">→</span>
       <div class="node"><b>② 大模型预处理</b>只读带编号的原文片段，不能凭空下结论</div><span class="arrow">→</span>
       <div class="node"><b>③ 七要素 + 原文出处</b>每条结论点得回原文；拿不准就留空或标待核实</div><span class="arrow">→</span>
       <div class="node"><b>④ 标准化公司报告</b>可下载 Word</div><span class="arrow">→</span>

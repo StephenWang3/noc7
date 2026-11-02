@@ -1,0 +1,262 @@
+{
+  "all": {
+    "cases": 31,
+    "delivered": 30,
+    "elements": {
+      "start_time": {
+        "filled": 20,
+        "unfilled_success": 10,
+        "rejected": 1,
+        "states": {
+          "documented": 20,
+          "unknown": 5,
+          "conflicted": 5
+        },
+        "candidate_cases": 29
+      },
+      "end_time": {
+        "filled": 6,
+        "unfilled_success": 24,
+        "rejected": 1,
+        "states": {
+          "unknown": 14,
+          "conflicted": 10,
+          "confirmed": 1,
+          "documented": 5
+        },
+        "candidate_cases": 22
+      },
+      "phenomenon": {
+        "filled": 30,
+        "unfilled_success": 0,
+        "rejected": 1,
+        "states": {
+          "documented": 30
+        },
+        "candidate_cases": 30
+      },
+      "responsible_party": {
+        "filled": 0,
+        "unfilled_success": 30,
+        "rejected": 1,
+        "states": {
+          "unknown": 30
+        },
+        "candidate_cases": 0
+      },
+      "cause": {
+        "filled": 17,
+        "unfilled_success": 13,
+        "rejected": 1,
+        "states": {
+          "unknown": 13,
+          "documented": 17
+        },
+        "candidate_cases": 29
+      },
+      "handling_process": {
+        "filled": 29,
+        "unfilled_success": 1,
+        "rejected": 1,
+        "states": {
+          "documented": 29,
+          "unknown": 1
+        },
+        "candidate_cases": 29
+      },
+      "location": {
+        "filled": 0,
+        "unfilled_success": 30,
+        "rejected": 1,
+        "states": {
+          "unknown": 30
+        },
+        "candidate_cases": 0
+      }
+    },
+    "suggestions": {
+      "responsible_party": 7,
+      "location": 30
+    }
+  },
+  "closed": {
+    "cases": 22,
+    "delivered": 21,
+    "elements": {
+      "start_time": {
+        "filled": 15,
+        "unfilled_success": 6,
+        "rejected": 1,
+        "states": {
+          "documented": 15,
+          "conflicted": 5,
+          "unknown": 1
+        },
+        "candidate_cases": 21
+      },
+      "end_time": {
+        "filled": 6,
+        "unfilled_success": 15,
+        "rejected": 1,
+        "states": {
+          "unknown": 6,
+          "conflicted": 9,
+          "confirmed": 1,
+          "documented": 5
+        },
+        "candidate_cases": 21
+      },
+      "phenomenon": {
+        "filled": 21,
+        "unfilled_success": 0,
+        "rejected": 1,
+        "states": {
+          "documented": 21
+        },
+        "candidate_cases": 21
+      },
+      "responsible_party": {
+        "filled": 0,
+        "unfilled_success": 21,
+        "rejected": 1,
+        "states": {
+          "unknown": 21
+        },
+        "candidate_cases": 0
+      },
+      "cause": {
+        "filled": 16,
+        "unfilled_success": 5,
+        "rejected": 1,
+        "states": {
+          "unknown": 5,
+          "documented": 16
+        },
+        "candidate_cases": 21
+      },
+      "handling_process": {
+        "filled": 21,
+        "unfilled_success": 0,
+        "rejected": 1,
+        "states": {
+          "documented": 21
+        },
+        "candidate_cases": 21
+      },
+      "location": {
+        "filled": 0,
+        "unfilled_success": 21,
+        "rejected": 1,
+        "states": {
+          "unknown": 21
+        },
+        "candidate_cases": 0
+      }
+    },
+    "suggestions": {
+      "responsible_party": 7,
+      "location": 21
+    }
+  },
+  "other": {
+    "cases": 9,
+    "delivered": 9,
+    "elements": {
+      "start_time": {
+        "filled": 5,
+        "unfilled_success": 4,
+        "rejected": 0,
+        "states": {
+          "documented": 5,
+          "unknown": 4
+        },
+        "candidate_cases": 8
+      },
+      "end_time": {
+        "filled": 0,
+        "unfilled_success": 9,
+        "rejected": 0,
+        "states": {
+          "unknown": 8,
+          "conflicted": 1
+        },
+        "candidate_cases": 1
+      },
+      "phenomenon": {
+        "filled": 9,
+        "unfilled_success": 0,
+        "rejected": 0,
+        "states": {
+          "documented": 9
+        },
+        "candidate_cases": 9
+      },
+      "responsible_party": {
+        "filled": 0,
+        "unfilled_success": 9,
+        "rejected": 0,
+        "states": {
+          "unknown": 9
+        },
+        "candidate_cases": 0
+      },
+      "cause": {
+        "filled": 1,
+        "unfilled_success": 8,
+        "rejected": 0,
+        "states": {
+          "unknown": 8,
+          "documented": 1
+        },
+        "candidate_cases": 8
+      },
+      "handling_process": {
+        "filled": 8,
+        "unfilled_success": 1,
+        "rejected": 0,
+        "states": {
+          "documented": 8,
+          "unknown": 1
+        },
+        "candidate_cases": 8
+      },
+      "location": {
+        "filled": 0,
+        "unfilled_success": 9,
+        "rejected": 0,
+        "states": {
+          "unknown": 9
+        },
+        "candidate_cases": 0
+      }
+    },
+    "suggestions": {
+      "responsible_party": 0,
+      "location": 9
+    }
+  },
+  "method": "saved_results_only_no_network",
+  "missing_review": {
+    "start_time": {
+      "source_or_semantic_conflict": 5,
+      "model_not_selected": 1
+    },
+    "end_time": {
+      "comparable_source_conflict": 8,
+      "mixed_field_log_timezone_limit": 4,
+      "model_not_selected_with_eligible_candidate": 1,
+      "format_limit_and_model_not_selected": 1,
+      "model_conflicted_confirmation_context": 1
+    },
+    "cause": {
+      "model_not_selected_alternative_eligible": 1,
+      "no_established_causal_assertion": 2,
+      "incomplete_model_relation": 2
+    }
+  },
+  "known_semantic_errors": {
+    "closed": 2,
+    "end_time": 1,
+    "cause": 1
+  }
+}
