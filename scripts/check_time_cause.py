@@ -75,9 +75,9 @@ def independent_time_metrics(result, default_timezone):
     for name in ('start_time','end_time'):
         for c in getattr(result.elements,name).candidates:
             text=re.sub(r'\s+', ' ', c.time.raw.strip()).replace('：',':')
-            m=re.fullmatch(r'(\d{4})[-/.年](\d{1,2})[-/.月](\d{1,2})日?\s*(?:T?\s*(\d{1,2}):(\d{2})(?::(\d{2}))?)?\s*(.*?)',text)
+            m=re.fullmatch(r'(\d{4})[-/.年](\d{1,2})[-/.月](\d{1,2})日?\s*(?:T?\s*(\d{1,2})[:时](\d{2})(?:分|[:分](\d{2})秒?)?)?\s*(.*?)',text)
             dayfirst=re.fullmatch(r'(\d{1,2})\.(\d{1,2})\.(\d{4})\s+(\d{1,2}):(\d{2})\s*(.*)',text)
-            slash=re.fullmatch(r'(\d{1,2})/(\d{1,2})/(\d{4})\s+(\d{1,2}):(\d{2})(?::(\d{2}))?\s+(AM|PM)\s*(.*)',text,re.I)
+            slash=re.fullmatch(r'(\d{1,2})/(\d{1,2})/(\d{4})\s+(\d{1,2}):(\d{2})(?::(\d{2}))?\s*(AM|PM)\s*(.*)',text,re.I)
             meridiem=None
             expected=None
             try:
@@ -91,11 +91,14 @@ def independent_time_metrics(result, default_timezone):
                     elif dayfirst: da,mo,y,h,mi,tail=dayfirst.groups(); se=None
                     ampm=re.fullmatch(r'(AM|PM)\s*(.*)',tail,re.I)
                     if ampm: meridiem,tail=ampm.groups()
-                    if meridiem:
+                    if meridiem and h is not None:
                         if not 1<=int(h)<=12: raise ValueError('非法十二小时制')
                         h=int(h)%12+(12 if meridiem.upper()=='PM' else 0)
                     if h is None:
-                        expected=dict(iso=f'{int(y):04d}-{int(mo):02d}-{int(da):02d}',precision='day',tz_source='unknown',utc_offset=None)
+                        if meridiem:
+                            expected=dict(iso=None,precision=None,utc_offset=None,tz_source='unknown')
+                        elif not re.search(r'\d[:时]\d', tail):
+                            expected=dict(iso=f'{int(y):04d}-{int(mo):02d}-{int(da):02d}',precision='day',tz_source='unknown',utc_offset=None)
                     elif not tail or zone_offset(tail):
                         zone=zone_offset(tail) if tail else None
                         explicit=zone is not None

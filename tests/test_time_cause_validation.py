@@ -125,3 +125,27 @@ def test_independent_audit_does_not_override_field_with_conflicting_anchor():
     assert checker.independent_time_metrics(result,'+08:00')['counts']=={'match':1}
     time.iso='2026-09-23T13:04:00+00:00';time.precision='minute';time.utc_offset='+00:00';time.tz_source='explicit'
     assert checker.independent_time_metrics(result,'+08:00')['counts']=={'mismatch':1}
+
+
+@pytest.mark.parametrize('raw,iso,precision,source,zone', [
+    ('2026-09-23 PM', None, None, 'unknown', None),
+    ('2026-09-23 PM UTC', None, None, 'unknown', None),
+    ('2026年9月23日 1时04分 PM', '2026-09-23T13:04:00+08:00', 'minute', 'assumed', '+08:00'),
+    ('09/23/2026 1:04:05pm UTC', '2026-09-23T13:04:05+00:00', 'second', 'explicit', '+00:00'),
+    ('09/23/2026\n8:13:57 PM UTC', '2026-09-23T20:13:57+00:00', 'second', 'explicit', '+00:00'),
+    ('09/23/2026\t8:13:57 PM UTC', '2026-09-23T20:13:57+00:00', 'second', 'explicit', '+00:00'),
+])
+def test_independent_audit_meridiem_boundaries(raw,iso,precision,source,zone):
+    from types import SimpleNamespace as NS
+    from noc7.schema import EvidenceSpan, FieldLocator
+    field = EvidenceSpan(id='M01/f:recovered_at', material_id='M01', locator=FieldLocator(field_key='recovered_at'),
+                         text=raw, extractor='synthetic')
+    value = NS(raw=raw,iso=iso,precision=precision,tz_source=source,utc_offset=zone)
+    c = NS(id='C1',time=value,evidence_refs=[field.id],relation=None)
+    result = NS(evidence=[field],elements=NS(start_time=NS(candidates=[]),end_time=NS(candidates=[c])))
+    assert checker.independent_time_metrics(result,'+08:00')['counts'] == {'match': 1}
+    if iso is None:
+        value.iso='2026-09-23'; value.precision='day'
+    else:
+        value.iso=iso.replace('T13:', 'T01:').replace('T20:', 'T08:')
+    assert checker.independent_time_metrics(result,'+08:00')['counts'] == {'mismatch': 1}

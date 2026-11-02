@@ -24,8 +24,8 @@ _LOCAL_ZONES = {"北京时间": "+08:00", "香港时间": "+08:00"}
 # 整体匹配，防止正文提取时将 PM 丢掉或只取出其中的时钟。
 TWELVE_TIME_PATTERN = (
     r"(?<![\d/])(?:\d{4}[-/.年]\d{1,2}[-/.月]\d{1,2}日?|"
-    r"\d{1,2}[/\.]\d{1,2}[/\.]\d{4})[ T]+"
-    r"\d{1,2}[:：]\d{2}(?:[:：]\d{2})?\s*(?:AM|PM)\b"
+    r"\d{1,2}[/\.]\d{1,2}[/\.]\d{4})(?:\s+|T)"
+    r"\d{1,2}[:：时]\d{2}(?:分|[:：分]\d{2}秒?)?\s*(?:AM|PM)\b"
 )
 
 _MAIN = re.compile(
@@ -102,6 +102,8 @@ def parse_time(raw: str | None, default_offset: str | None = None) -> TimeValue:
         except ValueError:
             return TimeValue(raw=raw or "")
         if m["H"] is None:
+            if m["ampm"]:
+                return TimeValue(raw=raw or "")
             return TimeValue(
                 raw=raw or "",
                 iso=f"{y:04d}-{mo:02d}-{d:02d}",

@@ -61,3 +61,9 @@ def test_twelve_hour_complete_dates(raw, iso, precision):
 ])
 def test_invalid_or_ambiguous_twelve_hour_time(raw):
     assert parse_time(raw, '+08:00').iso is None
+
+
+@pytest.mark.parametrize('raw', ['2026-09-23 PM', '2026-09-23 PM UTC'])
+def test_meridiem_without_clock_is_not_a_date(raw):
+    value = parse_time(raw, '+08:00')
+    assert value.iso is None and value.precision is None and value.raw == raw

@@ -499,3 +499,36 @@ def test_mixed_field_and_body_compete_by_existing_intervals(sample,zone,expected
     assert result.elements.end_time.status==expected
     assert result.elements.end_time.candidates[0].time.tz_source=='assumed'
     assert result.elements.end_time.candidates[1].time.tz_source=='explicit'
+
+
+@pytest.mark.parametrize('separator', ['\n', '\t'])
+def test_text_times_preserves_twelve_hour_date_across_whitespace(separator):
+    from noc7.extract.baseline import text_times
+    raw = f'09/23/2026{separator}8:13:57 PM UTC'
+    for record in (None, '2030-01-01T00:00:00+08:00'):
+        rows = list(text_times(raw, record, None))
+        assert len(rows) == 1
+        value, _, note = rows[0]
+        assert value.raw == raw
+        assert value.iso == '2026-09-23T20:13:57+00:00'
+        assert value.tz_source == 'explicit' and value.precision == 'second'
+        assert note is None
+
+
+@pytest.mark.parametrize('raw', ['1:04 PM UTC', '1:04pm UTC', '2026-09-23 PM', '2026-09-23 PM UTC'])
+def test_meridiem_never_falls_back_to_partial_date_or_clock(raw):
+    from noc7.extract.baseline import text_times, _zone_for_time
+    record = '2030-01-01T00:00:00+08:00'
+    assert time_phrase(raw, '+08:00', record).iso is None
+    assert list(text_times(raw, record, '+08:00')) == []
+    if raw.startswith('1:04'):
+        assert _zone_for_time(raw, 0, 4) is None
+
+
+def test_zone_never_crosses_an_unmatched_meridiem_clock():
+    from noc7.extract.baseline import text_times
+    raw = '2026-09-23 13:04 checked 1:04pm UTC'
+    rows = list(text_times(raw, '2030-01-01T00:00:00+08:00', None))
+    assert len(rows) == 1
+    assert rows[0][0].iso == '2026-09-23T13:04:00'
+    assert rows[0][0].tz_source == 'unknown'

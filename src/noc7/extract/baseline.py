@@ -198,6 +198,8 @@ def _time_matches(text: str):
         m
         for m in TIME_RE.finditer(text)
         if not any(z.start() <= m.start() < z.end() for z in zones)
+        # 不把缺日期的十二小时制或缺钟点的 AM/PM 当成局部二十四小时制/日期。
+        and not re.match(r"\s*(?:AM|PM)\b", text[m.end():], re.I)
     ]
 
 
@@ -221,11 +223,15 @@ def _time_bounds(text: str, start: int, end: int) -> tuple[int, int]:
 
 def _zone_for_time(text: str, start: int, end: int):
     """时区只在当前时间的分句/相邻时刻边界内绑定，后置时区优先。"""
+    if re.match(r"\s*(?:AM|PM)\b", text[end:], re.I):
+        return None  # 未纳入匹配的 AM/PM 不能跨过后再绑定 UTC。
     left, right = _time_bounds(text, start, end)
     zones = list(ZONE_RE.finditer(text, left, right))
     for zone in zones:
         if zone.start() >= end:
             gap = text[end:zone.start()]
+            if re.search(r"(?<![A-Za-z])(?:AM|PM)\b", gap, re.I):
+                continue
             # 裸数字偏移必须紧邻时间（允许空白和括号），不跨旁边的电话号码。
             if zone.group()[0] not in "+-" or re.fullmatch(r"[\s()（）]*", gap):
                 return zone
@@ -235,6 +241,8 @@ def _zone_for_time(text: str, start: int, end: int):
     for zone in reversed(zones):
         if zone.end() <= start:
             gap = text[zone.end():start]
+            if re.search(r"(?<![A-Za-z])(?:AM|PM)\b", gap, re.I):
+                continue
             if zone.group()[0] not in "+-" or re.fullmatch(r"[\s()（）]*", gap):
                 return zone
     return None
