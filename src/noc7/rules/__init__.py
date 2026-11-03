@@ -29,7 +29,7 @@ from ..schema import (
     ValidationIssue,
 )
 
-VERSION = "1.3"
+VERSION = "1.4"
 
 
 def issue(code: IssueCode, message: str, refs=(), element=None) -> ValidationIssue:

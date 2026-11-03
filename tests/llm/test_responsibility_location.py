@@ -20,7 +20,7 @@ from .test_evidence import empty_extraction
 
 
 def case(sample, name='responsible_party', texts=None):
-    texts = texts or ['分公司反馈：客户侧设备故障，请客户自查。']
+    texts = texts or ['分公司正式责任认定：本次故障由客户承担责任。']
     entries = [ProcessLogEntry(seq=i, recorded_at=None, action='处理意见', content=t) for i, t in enumerate(texts, 1)]
     bundle = replace(sample[0].bundle, process_log=ProcessLog(entries=entries),
                      ticket=sample[0].bundle.ticket.model_copy(update={'status': sample[0].bundle.ticket.status.model_copy(update={'detail_status': '已结单'})}))
@@ -33,10 +33,10 @@ def case(sample, name='responsible_party', texts=None):
                  statement=span.text, context=[q], source_tier='branch_log', source_quote=q,
                  speaker='分公司', contradicts=[])
         if name == 'responsible_party':
-            r.update(category='客户', decision_path='explicit_responsibility', responsibility_quote=q)
-            c = dict(id=f'C{i}', party=span.text, basis='claimed', relation=r)
+            r.update(category='客户', decision_path='explicit_responsibility', responsibility_quote=q, customer_device_fault=False)
+            c = dict(id=f'C{i}', party=span.text, basis='formal_determination', relation=r)
         else:
-            r.update(city='SYN-城市甲', city_quote=q, located=True)
+            r.update(city='SYN-城市甲', city_quote=q, located=True, city_scope='single_city')
             c = dict(id=f'C{i}', description=span.text, role='located_fault_point', granularity='city', relation=r)
         c.update(evidence_refs=[span.id], attribution='internal_staff')
         payload['elements'][name]['candidates'].append(c)
@@ -177,6 +177,7 @@ def test_coarse_locations_and_endpoints_do_not_become_cities(sample, change):
     ctx, payload = case(sample, 'location', ['分公司反馈：SYN-城市甲至 SYN-城市乙光缆段中断。'])
     c = candidate(payload, 'location')
     if change in {'country', 'segment'}: c['granularity'] = change
+    if change == 'segment': c['relation']['city_scope'] = 'cross_city'
     if change == 'endpoint': c['role'] = 'service_endpoint'
     if change == 'alarm': c['role'] = 'alarm_location'
     if change == 'unknown_city': c['relation']['city'] = None
@@ -196,7 +197,7 @@ def test_location_conflict_and_unknown_source(sample):
 
 @pytest.mark.parametrize('change', ['whitespace', 'mismatch', 'missing', 'malformed', 'low_quality', 'summary', 'quoted'])
 def test_business_quote_verification_preserves_pending_but_rejects_missing_sources(sample, change):
-    ctx, payload = case(sample, texts=['分公司反馈：客户\u00a0\u00a0侧设备故障。'])
+    ctx, payload = case(sample, texts=['分公司正式责任认定：本次故障由客户\u00a0\u00a0承担责任。'])
     c = candidate(payload)
     if change == 'whitespace':
         text = ctx.evidence[0].text.replace('\u00a0\u00a0', ' ')
@@ -274,7 +275,7 @@ def test_separate_onsite_candidate_blocks_customer_silence_path(sample):
 
 def test_missing_speaker_is_preserved_without_fabricating_actor(sample):
     ctx, payload = case(sample)
-    candidate(payload)['relation'].update(speaker=None, customer_device_fault=None, procurement=None)
+    candidate(payload)['relation'].update(speaker=None, customer_device_fault=False, procurement=None)
     data = decode(ctx, payload)
     assert data.elements.responsible_party.value == '客户'
     assert data.elements.responsible_party.candidates[0].relation.speaker is None
@@ -342,3 +343,133 @@ def test_explicit_responsibility_requires_its_own_quote_not_just_source_or_role(
     data = decode(ctx, payload)
     assert data.elements.responsible_party.value is None
     assert any('专门责任依据' in c.reason for c in data.semantic_assessment.checks)
+
+
+@pytest.mark.parametrize('text,category,fault,onsite', [
+    ('分公司反馈：客户侧设备故障，请客户自查。', '客户', True, False),
+    ('国际运营商: SYN-运营商甲', '供应商', False, False),
+    ('分公司反馈：客户侧设备故障，仍联络供应商上门。', '客户', None, True),
+])
+def test_review_claimed_or_unknown_equipment_cannot_bypass_context(sample, text, category, fault, onsite):
+    ctx, payload = case(sample, texts=[text])
+    c = candidate(payload); c['basis'] = 'claimed' if not onsite else 'formal_determination'
+    c['relation'].update(category=category, customer_device_fault=fault)
+    if onsite: c['relation']['vendor_contact'] = c['relation']['source_quote']
+    data = decode(ctx, payload)
+    assert data.elements.responsible_party.status == 'unknown'
+    assert data.elements.responsible_party.value is None
+    assert '故障责任方' in render(saved_result(sample, ctx, data), format='md')
+    from noc7.report import _suggestion_rows
+    assert any(r['label'] == '故障责任方' for r in _suggestion_rows(saved_result(sample, ctx, data)))
+
+
+@pytest.mark.parametrize('fault', [None, True])
+def test_review_explicit_requires_known_non_customer_equipment_case(sample, fault):
+    ctx, payload = case(sample)
+    candidate(payload)['relation']['customer_device_fault'] = fault
+    data = decode(ctx, payload)
+    assert data.elements.responsible_party.value is None
+    assert any('customer_device_fault is False' in c.reason for c in data.semantic_assessment.checks)
+
+
+@pytest.mark.parametrize('path,category', [('vendor_onsite_contact', '供应商'), ('unicom_onsite_recovery', '联通')])
+def test_review_competing_onsite_paths_cannot_be_selected_by_label(sample, path, category):
+    ctx, payload = case(sample, texts=['分公司反馈：客户侧设备故障，已联络供应商上门，联通也上门处理后恢复。'])
+    c = candidate(payload); c['basis'] = 'business_context'
+    q = c['relation']['source_quote']
+    c['relation'].update(decision_path=path, category=category, customer_device_fault=True,
+                         vendor_contact=q, unicom_onsite=q, service_recovered=q)
+    data = decode(ctx, payload)
+    assert data.elements.responsible_party.value is None
+    assert any('上门线索同时存在' in check.reason for check in data.semantic_assessment.checks)
+    saved_result(sample, ctx, data)
+
+
+@pytest.mark.parametrize('fault', [None, False, True])
+def test_review_other_candidate_onsite_blocks_customer_regardless_of_equipment_flag(sample, fault):
+    ctx, payload = case(sample, texts=['RFO：客户责任。', '分公司：仍联络供应商上门。'])
+    first, second = payload['elements']['responsible_party']['candidates']
+    first['relation'].update(source_tier='rfo', customer_device_fault=fault)
+    second['basis'] = 'business_context'
+    second['relation'].update(category='供应商', decision_path='vendor_onsite_contact', customer_device_fault=True,
+                              vendor_contact=second['relation']['source_quote'])
+    data = decode(ctx, payload)
+    assert data.elements.responsible_party.value != '客户'
+    if fault is False:
+        assert any('其他候选' in c.reason for c in data.semantic_assessment.checks if c.candidate_id == first['id'])
+
+
+@pytest.mark.parametrize('name', ['responsible_party', 'location'])
+@pytest.mark.parametrize('other_group', [None, 'event_id', 'scope', 'source_tier', 'bad_quote'])
+def test_review_implicit_negation_conflicts_only_when_grounded_and_in_same_group(sample, name, other_group):
+    texts = ['RFO：客户责任。', 'RFO：并非客户责任。'] if name == 'responsible_party' else [
+        'RFO：故障位于 SYN-城市甲。', 'RFO：故障并非位于 SYN-城市甲。']
+    ctx, payload = case(sample, name, texts)
+    first, second = payload['elements'][name]['candidates']
+    for c in [first, second]: c['relation']['source_tier'] = 'rfo'
+    second['relation']['modality'] = 'negated'
+    if name == 'responsible_party': second['basis'] = 'claimed'
+    assert first['relation']['contradicts'] == second['relation']['contradicts'] == []
+    if other_group in {'event_id', 'scope'}: second['relation'][other_group] = '另一事件或范围'
+    if other_group == 'source_tier': second['relation']['source_tier'] = 'branch_log'
+    if other_group == 'bad_quote': second['relation']['source_quote']['quote'] = '不存在的否定引文'
+    data = decode(ctx, payload)
+    el = getattr(data.elements, name)
+    if other_group is None:
+        assert el.status == 'conflicted' and el.value is None and el.selected is None
+        conflicts = [c for c in data.semantic_assessment.checks if c.element == name and c.outcome == 'conflict']
+        assert set(conflicts[0].evidence_refs) == {s.id for s in ctx.evidence}
+    else:
+        assert el.status == 'documented' and el.value is not None
+    saved_result(sample, ctx, data)
+
+
+@pytest.mark.parametrize('scope', ['unknown', 'cross_city'])
+def test_review_city_granularity_cannot_promote_a_cross_city_endpoint(sample, scope):
+    ctx, payload = case(sample, 'location', ['分公司反馈：SYN-城市甲至 SYN-城市乙光缆段中断。'])
+    c = candidate(payload, 'location')
+    c.update(granularity='city')
+    c['relation'].update(city='SYN-城市甲', city_scope=scope)
+    data = decode(ctx, payload)
+    assert data.elements.location.value is None
+    assert data.elements.location.status == 'unknown'
+    saved_result(sample, ctx, data)
+
+
+@pytest.mark.parametrize('name,key', [
+    ('responsible_party', 'vendor'), ('responsible_party', 'handler'), ('responsible_party', 'handling_dept'),
+    ('location', 'a_end'), ('location', 'z_end'), ('location', 'device_location'),
+    ('location', 'device_name'), ('location', 'region'), ('location', 'shelf_slot_port'),
+])
+def test_review_role_and_endpoint_fields_are_pending_without_rejecting_time_and_cause(sample, name, key):
+    text = '分公司正式责任认定：客户责任。' if name == 'responsible_party' else '分公司反馈：故障位于 SYN-城市甲。'
+    ctx, payload = case(sample, name, [text])
+    old = ctx.evidence[0].id; ref = f'M01/f:{key}'
+    def remap(node):
+        if isinstance(node, str): return ref if node == old else node
+        if isinstance(node, list): return [remap(v) for v in node]
+        if isinstance(node, dict): return {k:remap(v) for k,v in node.items()}
+        return node
+    payload = remap(payload)
+    spans = [EvidenceSpan(id=ref, material_id='M01', text=text, locator=FieldLocator(field_key=key), extractor='synthetic')]
+    time_ref, cause_ref = 'M01/f:occurred_at', 'M01/f:cause'
+    raw_time, raw_cause = '2026-09-03 10:00:00', '现场确认本次业务因光缆中断而故障。'
+    spans += [EvidenceSpan(id=r, material_id='M01', text=t, locator=FieldLocator(field_key=k), extractor='synthetic')
+              for r,t,k in [(time_ref,raw_time,'occurred_at'),(cause_ref,raw_cause,'cause')]]
+    def relation(ref, text):
+        return dict(event_id='current', scope='本次业务', current_event=True, modality='asserted',
+                    context=[dict(evidence_id=ref,quote=text)])
+    payload['elements']['start_time'] = dict(status='documented', value=dict(raw=raw_time), selected='C1', evidence_refs=[time_ref],
+        candidates=[dict(id='C1',time=dict(raw=raw_time),time_kind='fault_start_field',attribution='system_field',evidence_refs=[time_ref],
+                         relation=relation(time_ref,raw_time))])
+    payload['elements']['cause'] = dict(status='documented',value=raw_cause,selected='C1',evidence_refs=[cause_ref],
+        candidates=[dict(id='C1',statement=raw_cause,cause_kind='root_cause_claimed',attribution='field_engineer',evidence_refs=[cause_ref],
+                         relation=dict(relation(cause_ref,raw_cause),assertion='fault',affects_service=True,occurred=True,speaker='现场'))])
+    ctx = ExtractionContext(ctx.bundle, spans)
+    data = decode(ctx, payload)
+    assert getattr(data.elements,name).status == 'unknown' and getattr(data.elements,name).value is None
+    assert len(getattr(data.elements,name).candidates) == 1
+    assert data.elements.start_time.value is not None and data.elements.cause.value == raw_cause
+    assert any('依据仅为角色或端点' in c.reason for c in data.semantic_assessment.checks if c.element == name)
+    validate_extraction(ctx,data)
+    saved_result(sample,ctx,data)

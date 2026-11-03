@@ -162,5 +162,55 @@
     "integration_cases": 15,
     "integration_existing_differences": 2
   },
-  "semantic_accuracy": null
+  "semantic_accuracy": null,
+  "review_verification": {
+    "pytest_passed": 716,
+    "regression_cases_added": 31,
+    "external_services": false,
+    "input_and_response_bindings_equal": true,
+    "delivery_and_formal_values_unchanged": true,
+    "replay": {
+      "cases": 22,
+      "delivered": 14,
+      "suggestions": {
+        "responsible_party": 11,
+        "location": 14
+      },
+      "paths": {},
+      "sources": {
+        "responsible_party": {},
+        "location": {}
+      },
+      "rejections": {
+        "EVIDENCE_QUOTE_MISMATCH": 1
+      },
+      "failure_types": {
+        "ModelResponseUnavailable": 6,
+        "TextProviderError": 1,
+        "ExtractionRejected": 1
+      },
+      "roundtrip_equal": 14,
+      "word_valid": 14,
+      "elements": {
+        "responsible_party": {
+          "filled": 0,
+          "unfilled_success": 14,
+          "states": {
+            "unknown": 14
+          },
+          "candidate_cases": 11,
+          "undelivered": 8
+        },
+        "location": {
+          "filled": 0,
+          "unfilled_success": 14,
+          "states": {
+            "unknown": 14
+          },
+          "candidate_cases": 14,
+          "undelivered": 8
+        }
+      }
+    }
+  }
 }

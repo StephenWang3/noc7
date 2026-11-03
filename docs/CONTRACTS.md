@@ -185,3 +185,6 @@ ensure_allowed(minimax, ctx.data_class)   # 真实数据 → 抛 EgressBlocked
 业务约束集中于 `providers/responsibility_location.py`，`ground_extraction()` 在现有时间／原因约束后调用；首次核验及保存结果加载复用它。`semantic_constraints.py` 只扩展通用引文遍历，不更改恢复选择或时间归一算法。与恢复时间线协作时保留彼此的局部接入，不能整体覆盖共享提示词、解码、schema、校验及报告文件。
 
 两栏原答仍使用 `BusinessSuggestion` 容错保存并递归核对来源；正式采用后审核报告不再重复显示该要素的建议区，原答审计与其余候选继续保留。候选原文和关系引文不匹配只阻止该业务项采用；不存在的来源仍拒绝，其他五要素和共享正式引文不降级。来源顺序、上下文路径与城市边界以 [新决策](decisions/responsibility-location-business-rules.md) 为准。
+
+
+评审收紧两栏的正式门槛：明确归属仅可采用 `formal_determination`、已明确非客户设备场景且没有自查或上门锚点的候选，`claimed` 留候选。客户设备上下文路径仍须完整动作及覆盖条件，供应商和联通上门锚点同时存在则待核对；客户责任的上门拦截不依赖设备标志为真。同层同事件同范围可靠否定同一责任类别或城市，即使没有矛盾编号也标冲突；城市必须 `single_city`。仅有角色／端点字段在业务候选阶段降为待核对，避免触发后置整单拒绝；其他五要素及其原有硬校验不变。

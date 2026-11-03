@@ -8,6 +8,10 @@ from ..schema import ElementStatus, IssueCode, SpanRole
 from ..schema.relations import BusinessCoverage, ConstraintCheck
 
 NAMES = ("responsible_party", "location")
+ROLE_FIELDS = {
+    "responsible_party": {"vendor", "handler", "handling_dept"},
+    "location": {"a_end", "z_end", "device_location", "device_name", "region", "shelf_slot_port"},
+}
 PRIORITY = {"rfo": 0, "vendor_feedback": 1, "branch_log": 2}
 SOURCE_LABELS = {"rfo": "RFO", "vendor_feedback": "供应商反馈", "branch_log": "分公司处理日志", "unknown": "来源未明"}
 PATH_LABELS = {"explicit_responsibility": "明确责任归属", "customer_self_check": "客户自查且未再追问",
@@ -87,6 +91,9 @@ def pending_reason(candidate, name, spans, coverage=None):
             return "业务关系引文不匹配或缺少来源，待核对。"
         if not reliable(span):
             return "业务关系依据仅为引用、摘要、签名或低质量材料。"
+    support = [spans[ref] for ref in dict.fromkeys([*candidate.evidence_refs, *(q.evidence_id for q in quotes)]) if ref in spans]
+    if support and all(span.locator.type == "field" and span.locator.field_key in ROLE_FIELDS[name] for span in support):
+        return "依据仅为角色或端点／告警位置字段，保留候选待核对，不影响其他要素。"
     raw = candidate.party if name == "responsible_party" else candidate.description
     if not any(ref in spans and reliable(spans[ref]) and match_quote(raw, spans[ref].text).status != "mismatch"
                for ref in candidate.evidence_refs):
@@ -98,19 +105,27 @@ def pending_reason(candidate, name, spans, coverage=None):
     if name == "location":
         if candidate.role != "located_fault_point" or not r.located:
             return "不是已定位故障点，端点、告警位置和测试节点不能采用。"
-        if candidate.granularity in {None, "country"} or (candidate.granularity == "segment" and r.city_scope != "single_city") or r.city_scope == "cross_city":
+        if r.city_scope != "single_city":
+            return "城市范围未明确为 single_city，跨城或范围未知只能留候选。"
+        if candidate.granularity in {None, "country"}:
             return "地点仅到国家、跨城段落或粒度未明，不能推测城市。"
         if not r.city or not r.city.strip() or not r.city_quote or match_quote(r.city, r.city_quote.quote).status == "mismatch":
             return "没有可核验的明确城市归属。"
     else:
         if r.category not in {"客户", "供应商", "联通"}:
             return "其他主体、共同责任或分类未明，只保留候选。"
+        if candidate.basis == "claimed":
+            return "责任仅为某方主张，保留候选待核对。"
         if candidate.basis == "inferred_from_role":
             return "仅凭供应商、处理部门等角色不能定责。"
         path = r.decision_path
-        if r.customer_device_fault and r.category == "客户" and (r.vendor_contact or r.unicom_onsite):
+        if r.category == "客户" and (r.vendor_contact or r.unicom_onsite):
             return "客户侧设备仍有其他提供方上门处理线索，不能据设备故障直接采用客户责任。"
         if path == "explicit_responsibility":
+            if candidate.basis != "formal_determination" or r.customer_device_fault is not False:
+                return "明确归属须为 formal_determination 且 customer_device_fault is False；客户设备或前提未明须走完整上下文路径。"
+            if r.self_check or r.vendor_contact or r.unicom_onsite:
+                return "明确归属不能绕过自查或上门上下文路径。"
             if not r.responsibility_quote:
                 return "明确归属路径缺少专门责任依据，不能把供应商角色或客户侧现象当成责任。"
             if not any(match_quote(r.responsibility_quote.quote, q.quote).status != "mismatch" for q in r.context):
@@ -126,9 +141,13 @@ def pending_reason(candidate, name, spans, coverage=None):
             if not coverage_complete(coverage, spans):
                 return "输入未覆盖完整已结单处理记录及关联材料，不能判断未再追问。"
         elif path == "vendor_onsite_contact":
+            if r.unicom_onsite:
+                return "供应商与联通上门线索同时存在，责任待核对。"
             if r.category != "供应商" or not r.vendor_contact:
                 return "供应商责任路径缺少联络供应商上门依据。"
         elif path == "unicom_onsite_recovery":
+            if r.vendor_contact:
+                return "供应商与联通上门线索同时存在，责任待核对。"
             if r.category != "联通" or not r.unicom_onsite or not r.service_recovered:
                 return "联通责任路径缺少上门处理与业务恢复依据。"
         else:
@@ -136,6 +155,24 @@ def pending_reason(candidate, name, spans, coverage=None):
         if r.procurement != "unknown" and not r.procurement_quote:
             return "采购归属没有原文依据。"
     return None
+
+
+def grounded_assertion(candidate, name, spans):
+    """反证不必能成为正面结论，但原断言、上下文和出处都必须可靠。"""
+    r = candidate.relation
+    if not r or not r.source_quote:
+        return False
+    quotes = list(relation_quotes(r))
+    if not all(q.evidence_id in spans and reliable(spans[q.evidence_id])
+               and match_quote(q.quote, spans[q.evidence_id].text).status != "mismatch" for q in quotes):
+        return False
+    raw = candidate.party if name == "responsible_party" else candidate.description
+    return (bool(candidate.evidence_refs)
+            and all(ref in spans for ref in candidate.evidence_refs)
+            and any(reliable(spans[ref]) and match_quote(raw, spans[ref].text).status != "mismatch"
+                    for ref in candidate.evidence_refs)
+            and match_quote(raw, r.statement).status != "mismatch"
+            and any(match_quote(r.statement, q.quote).status != "mismatch" for q in r.context))
 
 
 def evaluate(elements, spans, coverage, suggestions=()):
@@ -152,7 +189,7 @@ def evaluate(elements, spans, coverage, suggestions=()):
                                            or match_quote(q["quote"], spans[q["evidence_id"]].text).status == "mismatch")
                                       for s in suggestions if s.element == name for q in s.quotes):
                 reason = "该候选的显式业务引文不匹配，保留待核对。"
-            if (reason is None and name == "responsible_party" and c.relation.customer_device_fault and c.relation.category == "客户"
+            if (reason is None and name == "responsible_party" and c.relation.category == "客户"
                 and any(other.relation and other.id != c.id and other.relation.current_event
                         and (other.relation.event_id, other.relation.scope) == (c.relation.event_id, c.relation.scope)
                         and any(q and q.evidence_id in spans and reliable(spans[q.evidence_id])
@@ -172,16 +209,20 @@ def evaluate(elements, spans, coverage, suggestions=()):
             rank = min(PRIORITY[c.relation.source_tier] for c in eligible)
             top = [c for c in eligible if PRIORITY[c.relation.source_tier] == rank]
             different = len({formal_value(c, name) for c in top}) > 1
-            opposing = any((b.id in a.relation.contradicts or a.id in b.relation.contradicts) for a in top for b in el.candidates
-                           if b.relation and b.id != a.id and b.relation.source_tier == a.relation.source_tier
-                           and b.relation.current_event and b.relation.modality in {"asserted", "negated"}
-                           and all(q.evidence_id in spans and reliable(spans[q.evidence_id])
-                                   and match_quote(q.quote, spans[q.evidence_id].text).status != "mismatch"
-                                   for q in relation_quotes(b.relation)))
+            opponents = [b for b in el.candidates if any(
+                b.id != a.id and b.relation
+                and b.relation.source_tier == a.relation.source_tier
+                and (b.relation.event_id, b.relation.scope) == (a.relation.event_id, a.relation.scope)
+                and b.relation.current_event and b.relation.modality in {"asserted", "negated"}
+                and grounded_assertion(b, name, spans)
+                and (b.id in a.relation.contradicts or a.id in b.relation.contradicts
+                     or (b.relation.modality == "negated" and formal_value(b, name) == formal_value(a, name)))
+                for a in top)]
+            opposing = bool(opponents)
             if different or opposing:
                 update.update(status=ElementStatus.CONFLICTED, note="最高有效来源同层结论无法消解，正式留空。")
                 checks.append(ConstraintCheck(element=name, outcome="conflict", code=IssueCode.SEMANTIC_ASSERTIONS_CONFLICT,
-                    reason=update['note'], evidence_refs=list(dict.fromkeys(r for c in top for r in c.evidence_refs))))
+                    reason=update['note'], evidence_refs=list(dict.fromkeys(r for c in [*top, *opponents] for r in c.evidence_refs))))
             else:
                 chosen = top[0]
                 refs = list(dict.fromkeys([*chosen.evidence_refs, *(q.evidence_id for q in relation_quotes(chosen.relation))]))
