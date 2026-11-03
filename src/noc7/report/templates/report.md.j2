@@ -35,7 +35,13 @@
 {% endif %}{% endfor %}{% endfor %}
 {% for c in semantic_assessment.checks %}- {{ c.element|md }} / {{ (c.candidate_id or '结论')|md }} / {{ c.outcome|constraint_status|md }}：{{ c.reason|md }}（{{ c.evidence_refs|join('、')|md }}）。
 {% endfor %}
-原始三栏（含原状态、值、选中项和未识别格式）：{{ semantic_assessment.original|md }}
+{% if semantic_assessment.recovery_selection %}{% set r = semantic_assessment.recovery_selection %}{% set labels = {"customer":"客户恢复时间", "vendor_rfo":"供应商 RFO", "unicom_monitor":"联通网管恢复时间", "unknown":"来源未知"} %}### 恢复时间业务取值
+
+{{ r.reason|md }} 接近阈值 {{ r.threshold_minutes|md }} 分钟（暂定，待业务方确认）；跨度 {{ r.span_seconds|md }} 秒；选中 {{ (r.selected or '无')|md }}。
+
+参与候选：{{ r.participating|join('、')|md }}；来源：{% for cid, source in r.sources.items() %}{{ cid|md }}：{{ labels.get(source, "来源未知")|md }}；{% endfor %}同来源跨度（秒）：{% for source, seconds in (r.source_spans_seconds|default({})).items() %}{{ labels.get(source, "来源未知")|md }}：{{ seconds|md }}；{% endfor %}内部超阈值来源：{% for source in r.source_conflicts|default([]) %}{{ labels.get(source, "来源未知")|md }}；{% endfor %}；未采用说明：{{ r.excluded|md }}。
+
+{% endif %}原始三栏（含原状态、值、选中项和未识别格式）：{{ semantic_assessment.original|md }}
 
 {% endif %}## AI 建议，待确认
 

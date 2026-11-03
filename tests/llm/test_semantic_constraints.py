@@ -35,6 +35,8 @@ def build(sample, *, raw="2026-01-02 03:04:05+00:00", name="start_time", kind="b
     ctx = ExtractionContext(sample[0].bundle, [span])
     relation = dict(event_id="current", scope="本次业务", current_event=True,
                     modality=modality, context=[dict(evidence_id=ref, quote=text)])
+    if name == "end_time":
+        relation.update(recovery_source="customer", recovery_source_basis=dict(evidence_id=ref, quote=text))
     c = dict(id="C1", evidence_refs=[ref], attribution="vendor", relation=relation)
     if name == "cause":
         relation.update(assertion=assertion, affects_service=True, occurred=True, speaker="供应商")
@@ -116,7 +118,7 @@ def test_frozen_time_conflicts(sample, label):
     for c in el['candidates']: c['relation']['context'][0]['quote'] = span.text
     ctx = ExtractionContext(ctx.bundle, [span])
     result = decode(ctx, data)
-    assert result.elements.end_time.status == EXPECTED[label]
+    assert result.elements.end_time.status == ('documented' if label == 'conflicting_recovery' else EXPECTED[label])
     assert len(result.elements.end_time.candidates) == 2
 
 
@@ -284,6 +286,7 @@ def test_business_duration_uses_confirmation_not_action_time(sample):
     span=ctx.evidence[0].model_copy(update={'text':ctx.evidence[0].text+'; '+c['time']['raw']})
     c['relation']['context'][0]['quote']=span.text
     c['relation']['customer_confirmation']=dict(evidence_id=span.id,quote=span.text)
+    c['relation'].update(recovery_source='customer', recovery_source_basis=dict(evidence_id=span.id,quote=span.text))
     data['elements']['end_time']=end
     extraction=decode(ExtractionContext(ctx.bundle,[span]),data)
     result=result.model_copy(update=dict(elements=extraction.elements,semantic_assessment=extraction.semantic_assessment))
@@ -420,6 +423,7 @@ def test_mixed_refs_require_field_containing_raw(sample, field_matches, whitespa
     c = data['elements']['end_time']['candidates'][0]
     c['evidence_refs'].append(body.id)
     c['relation']['context'] = [dict(evidence_id=body.id, quote=body.text)]
+    c['relation']['recovery_source_basis'] = dict(evidence_id=body.id, quote=body.text)
     ctx = ExtractionContext(ctx.bundle, [field, body])
     result = decode(ctx, data)
     el = result.elements.end_time
@@ -454,13 +458,13 @@ def test_field_does_not_borrow_body_zone(sample, anchor, expected):
     else: assert result.elements.end_time.value.utc_offset == ctx.bundle.manifest.default_timezone
 
 
-def test_mixed_field_unselected_stays_unselected(sample):
+def test_single_eligible_source_selected_even_when_model_unselected(sample):
     ctx,data=build(sample,raw='2026-09-23 13:04:05',name='end_time',kind='business_recovery')
     el=data['elements']['end_time']
     el.update(status='unknown',value=None,selected=None)
     result=decode(ctx,data)
     assert result.elements.end_time.candidates[0].time.tz_source=='assumed'
-    assert result.elements.end_time.value is None and result.elements.end_time.selected is None
+    assert result.elements.end_time.value is not None and result.elements.end_time.selected == 'C1'
 
 
 @pytest.mark.parametrize('raw,expected', [

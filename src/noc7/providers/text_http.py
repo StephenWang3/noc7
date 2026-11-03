@@ -36,6 +36,11 @@ class OpenAICompatibleTextProvider:
 
     def preflight(self, data_class: DataClass) -> str | None:
         """先检查分级，再读取凭据；调用 CLI 与直接使用提供方均受保护。"""
+        from .recovery_policy import initial_selection
+        try:
+            initial_selection()
+        except ValueError as exc:
+            raise TextProviderError(str(exc)) from None
         ensure_allowed(self.config.gate_config(), data_class)
         if self.config.api_key_env is None:
             return None
@@ -130,7 +135,7 @@ class OpenAICompatibleTextProvider:
         return result
 
     @staticmethod
-    def _decode_payload(raw: bytes, ctx: ExtractionContext, audit=None) -> Extraction:
+    def _decode_payload(raw: bytes, ctx: ExtractionContext, audit=None, *, legacy_recovery=False) -> Extraction:
         try:
             response = json.loads(raw)
             choices = response["choices"]
@@ -159,7 +164,8 @@ class OpenAICompatibleTextProvider:
             data.suggestions = suggestions
             from copy import deepcopy
             from ..schema.relations import SemanticAssessment
-            data.semantic_assessment = SemanticAssessment(original={
+            from .recovery_policy import initial_selection
+            data.semantic_assessment = SemanticAssessment(recovery_selection=None if legacy_recovery else initial_selection(), original={
                 key: deepcopy(parsed["elements"].get(key))
                 for key in ("start_time", "end_time", "cause")
             })

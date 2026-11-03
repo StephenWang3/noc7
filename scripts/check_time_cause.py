@@ -37,18 +37,25 @@ def write(path, value):
     path.write_text(json.dumps(value, ensure_ascii=False, indent=2) + '\n')
 
 
-def load_inputs(baseline, responses=None):
+def load_inputs(baseline, responses=None, *, closed_only=False, keep_request_failures=False):
     """所有包和响应先验证，再允许任何网络调用；不按目录猜选版本。"""
     responses = responses or baseline
     output = []
     for entry in read(baseline / 'mapping.json'):
+        if closed_only and not entry.get('closed', False):
+            continue
         bundle = load_bundle(entry['source'])
         if bundle.manifest_sha256 != entry['bundle_sha256']:
             raise ValueError('原输入包哈希发生变化')
         records = [read(p) for p in (responses / entry['alias']).glob('audit*/*.json')]
-        records = [r for r in records if 'raw_response' in r]
-        if len(records) != 1:
-            raise ValueError('原输入不是唯一已响应审计')
+        if keep_request_failures:
+            if len(records) != 1 or ('raw_response' not in records[0]
+                                    and records[0].get('outcome') not in {'http_error', 'transport_error'}):
+                raise ValueError('原输入不是唯一完成请求审计，不能把缺失响应当作请求失败')
+        else:
+            records = [r for r in records if 'raw_response' in r]
+            if len(records) != 1:
+                raise ValueError('原输入不是唯一已响应审计')
         record = records[0]
         if record['bundle_sha256'] != bundle.manifest_sha256:
             raise ValueError('审计包哈希不一致')
@@ -131,14 +138,21 @@ def independent_time_metrics(result, default_timezone):
     return dict(counts=dict(Counter(r['state'] for r in rows)),items=rows)
 
 
-def load_comparison(path, inputs):
+def response_digest(record):
+    raw = record.get('raw_response')
+    return hashlib.sha256(raw.encode()).hexdigest() if raw is not None else None
+
+
+def load_comparison(path, inputs, *, allow_subset=False, new_responses=False):
     """比较前验证完整集合、唯一绑定及成功结果身份；不把失败伪造成空七栏。"""
     bindings = read(path / 'source-binding.json')
     runs = read(path / 'run.json')
     aliases = {entry['alias'] for entry, _, _, _ in inputs}
-    if (len(aliases) != len(inputs) or len(bindings) != len(aliases)
-        or len(runs) != len(aliases) or {r['alias'] for r in bindings} != aliases
-        or {r['alias'] for r in runs} != aliases):
+    binding_aliases = {r['alias'] for r in bindings}
+    run_aliases = {r['alias'] for r in runs}
+    valid_sets = (aliases <= binding_aliases and binding_aliases == run_aliases) if allow_subset else binding_aliases == run_aliases == aliases
+    if (len(aliases) != len(inputs) or len(bindings) != len(binding_aliases)
+        or len(runs) != len(run_aliases) or not valid_sets):
         raise ValueError('旧结果集合不唯一或不完整')
     bindings = {r['alias']: r for r in bindings}
     runs = {r['alias']: r for r in runs}
@@ -147,8 +161,9 @@ def load_comparison(path, inputs):
         alias = entry['alias']
         expected = dict(alias=alias, bundle_sha256=bundle.manifest_sha256,
                         evidence_sha256=record['evidence_sha256'],
-                        response_sha256=hashlib.sha256(record['raw_response'].encode()).hexdigest())
-        if bindings[alias] != expected:
+                        response_sha256=response_digest(record))
+        keys = ('alias', 'bundle_sha256', 'evidence_sha256') if new_responses else tuple(expected)
+        if any(bindings[alias].get(k) != expected[k] for k in keys):
             raise ValueError('旧结果输入或响应绑定不一致')
         result = None
         if runs[alias]['status'] == 'ok':
@@ -157,7 +172,8 @@ def load_comparison(path, inputs):
                 or result.ticket_ref != bundle.ticket.ticket_ref
                 or result.run.bundle_sha256 != bundle.manifest_sha256):
                 raise ValueError('旧结果身份或包哈希不一致')
-        output[alias] = dict(status=runs[alias]['status'], result=result)
+        output[alias] = dict(status=runs[alias]['status'], result=result,
+                             response_sha256=bindings[alias]['response_sha256'])
     return output
 
 
@@ -182,11 +198,21 @@ def compare_result(previous, result, status):
             after = result.model_dump(mode='json')[name]
             if before != after:
                 changes.append(dict(element=name, before=before, after=after))
+        for name in ('phenomenon', 'responsible_party', 'location'):
+            before = getattr(old.elements, name).model_dump(mode='json')
+            after = getattr(result.elements, name).model_dump(mode='json')
+            if before != after:
+                changes.append(dict(element=name, before=before, after=after))
         before_steps = old.elements.handling_process.model_dump(mode='json')
         after_steps = result.elements.handling_process.model_dump(mode='json')
         if before_steps != after_steps:
             changes.append(dict(element='handling_process', before=before_steps, after=after_steps))
-    return dict(before_status=previous['status'], after_status=status, changes=changes)
+    old_original = old.semantic_assessment.original if old and old.semantic_assessment else None
+    new_original = result.semantic_assessment.original if result and result.semantic_assessment else None
+    record = result.semantic_assessment.recovery_selection if result and result.semantic_assessment else None
+    return dict(before_status=previous['status'], after_status=status, changes=changes,
+                model_answer_changed=old_original != new_original if old_original is not None and new_original is not None else None,
+                recovery_selection=record.model_dump(mode='json') if record else None)
 
 
 def comparison_summary(inputs, previous, rows):
@@ -233,10 +259,15 @@ def main():
     ap.add_argument('mode', choices=['replay','trial'])
     ap.add_argument('--baseline', type=Path, required=True)
     ap.add_argument('--responses', type=Path, help='离线复核新试跑保存的响应；仍与原基线输入绑定')
+    ap.add_argument('--compare-local-results', type=Path, help='同一响应按旧策略重算的结果；严格校验响应绑定，分开统计本地规则效果')
     ap.add_argument('--compare-results', type=Path, help='离线模式比较已绑定的旧完整结果')
     ap.add_argument('--expectations', type=Path, required=True)
     ap.add_argument('--out', type=Path, required=True)
     ap.add_argument('--model-config', type=Path, default=Path('config/models/deepseek.json'))
+    ap.add_argument('--keep-request-failures', action='store_true', help='离线保留唯一审计证实的 HTTP／连接失败，分母不变且不再请求')
+    ap.add_argument('--closed-only', action='store_true', help='仅使用映射中详情已结单工单')
+    ap.add_argument('--compare-new-responses', action='store_true', help='显式允许新旧模型响应不同，仍校验原包与实际证据绑定')
+    ap.add_argument('--legacy-recovery', action='store_true', help='仅离线诊断：同一回答按原冲突规则处理恢复时间')
     ap.add_argument('--workers', type=int, choices=range(1,5), default=3)
     args=ap.parse_args()
     os.umask(0o077)
@@ -245,22 +276,36 @@ def main():
     if not out.is_relative_to(private) or out.exists() or out.is_relative_to(baseline):
         raise ValueError('输出必须为 ~/.noc7/ 下新的独立目录')
     ensure_output_allowed(DataClass.REAL,out)
-    if args.mode == "trial" and args.responses:
-        raise ValueError("在线试跑不能指定替代响应")
-    inputs=load_inputs(baseline, args.responses.expanduser().resolve() if args.responses else None)
-    if args.compare_results and args.mode != 'replay':
+    # trial 中 responses 只冻结旧请求证据；输出始终来自一次新的在线请求。
+    if args.compare_local_results and args.mode != 'replay':
+        raise ValueError('同一回答的本地规则对照只允许离线模式')
+    if args.keep_request_failures and (args.mode != 'replay' or not args.responses):
+        raise ValueError('保留请求失败仅用于指定响应目录的离线模式')
+    if args.legacy_recovery and args.mode != 'replay':
+        raise ValueError('旧恢复策略只允许禁网诊断')
+    if args.compare_new_responses and not args.compare_results:
+        raise ValueError('新回答对照必须指定旧结果目录')
+    inputs=load_inputs(baseline, args.responses.expanduser().resolve() if args.responses else None,
+                       closed_only=args.closed_only, keep_request_failures=args.keep_request_failures)
+    if args.compare_results and args.mode != 'replay' and not args.compare_new_responses:
         raise ValueError('只允许离线比较')
-    previous=load_comparison(args.compare_results.expanduser().resolve(),inputs) if args.compare_results else None
+    previous=load_comparison(args.compare_results.expanduser().resolve(),inputs,
+                             allow_subset=args.closed_only, new_responses=args.compare_new_responses) if args.compare_results else None
+    local_previous=load_comparison(args.compare_local_results.expanduser().resolve(), inputs) if args.compare_local_results else None
     targets=read(args.expectations.expanduser())
     out.mkdir(mode=0o700)
     write(out/'frozen-expectations.json',targets)
-    write(out/'source-binding.json',[dict(alias=e['alias'], bundle_sha256=b.manifest_sha256,
+    write(out/('input-binding.json' if args.mode=='trial' else 'source-binding.json'),[dict(alias=e['alias'], bundle_sha256=b.manifest_sha256,
                                          evidence_sha256=r['evidence_sha256'],
-                                         response_sha256=hashlib.sha256(r['raw_response'].encode()).hexdigest())
+                                         response_sha256=response_digest(r))
                                     for e,b,r,c in inputs])
     config=load_model_config(args.model_config)
     config=config.model_copy(update={'max_request_bytes':4194304,'max_retries':0})
     write(out/'config.json',config.model_dump(mode='json'))
+    from noc7.providers.recovery_policy import initial_selection
+    threshold=initial_selection().threshold_minutes
+    write(out/'recovery-policy.json', dict(threshold_minutes=threshold, provisional=True,
+          legacy_recovery=args.legacy_recovery, comparison='new_responses' if args.compare_new_responses else 'same_response'))
     if args.mode=='replay':
         # 禁止网络，旧原响应在新规则下重算不伪造缺失的模型关系。
         socket.socket=lambda *a,**kw: (_ for _ in ()).throw(RuntimeError('离线重算禁止网络'))
@@ -276,10 +321,14 @@ def main():
                     name="replay:model-audit"
                     prompt_version=record.get('prompt_version')
                     def extract(self, ctx):
+                        if 'raw_response' not in record:
+                            from noc7.providers.text_config import TextProviderError
+                            raise TextProviderError('原请求失败，没有模型响应；离线保留失败，不追加请求。')
                         clean,request=prepare_evidence(ctx)
                         if (evidence_digest(clean)!=record['evidence_sha256'] or request!=record['request_evidence']):
                             raise ValueError('本次解析证据与保存响应的实际请求不同，停止重算')
-                        return OpenAICompatibleTextProvider._decode(record['raw_response'].encode(),clean)
+                        return OpenAICompatibleTextProvider._decode_payload(record['raw_response'].encode(),clean,
+                                                                           legacy_recovery=args.legacy_recovery)
                 provider=BoundProvider()
             else:
                 online=OpenAICompatibleTextProvider(config,audit_dir=folder/'audit')
@@ -306,6 +355,8 @@ def main():
                                    status=getattr(data.elements,n).status.value)
                              for n in ('start_time','end_time','cause')}
             row['checks']=dict(Counter(c.outcome for c in data.semantic_assessment.checks))
+            selection=data.semantic_assessment.recovery_selection
+            row['recovery_selection']=selection.model_dump(mode='json') if selection else None
             if result:
                 row['normalization']=independent_time_metrics(result,bundle.manifest.default_timezone)
                 row['targets']=evaluate(result,[t for t in targets if t['alias']==alias])
@@ -317,6 +368,8 @@ def main():
             write(folder/'failure.json',dict(type=type(exc).__name__,traceback=traceback.format_exc()))
         if previous is not None:
             write(folder/'comparison.json',compare_result(previous[alias],result,row['status']))
+        if local_previous is not None:
+            write(folder/'local-comparison.json',compare_result(local_previous[alias],result,row['status']))
         write(folder/'metrics.json',row)
         return row
 
@@ -326,15 +379,32 @@ def main():
             row=f.result(); rows.append(row)
             print(row['alias'],row['status'],f'{len(rows)}/{len(inputs)}',flush=True)
             write(out/'run.json',sorted(rows,key=lambda r:r['alias']))
+    if args.mode == 'trial':
+        bindings=[]
+        for e,b,original,_ in inputs:
+            audits=[read(p) for p in (out/e['alias']/'audit').glob('*.json')]
+            if len(audits)>1:
+                raise ValueError('单次试跑产生多份审计，不能猜选响应')
+            actual=audits[0] if audits else {}
+            if actual and (actual['bundle_sha256']!=b.manifest_sha256
+                           or actual['evidence_sha256']!=original['evidence_sha256']):
+                raise ValueError('新请求审计的包或证据发生变化')
+            bindings.append(dict(alias=e['alias'], bundle_sha256=b.manifest_sha256,
+                                 evidence_sha256=original['evidence_sha256'], response_sha256=response_digest(actual)))
+        write(out/'source-binding.json',bindings)
     summary=dict(cases=len(rows),outcomes=dict(Counter(r['status'] for r in rows)),
                  elements={n:dict(filled=sum(r.get('elements',{}).get(n,{}).get('filled',False) for r in rows),
                                   candidates=sum(r.get('elements',{}).get(n,{}).get('candidates',0) for r in rows))
                            for n in ('start_time','end_time','cause')},
                  normalization=dict(sum((Counter(r.get('normalization',{}).get('counts',{})) for r in rows),Counter())),
+                 recovery_outcomes=dict(Counter((r.get('recovery_selection') or {}).get('outcome','unavailable') for r in rows)),
+                 threshold_minutes=threshold, threshold_provisional=True,
                  external_services=args.mode=='trial',semantic_accuracy=None,
                  limitation='冻结目标的语义与推测范围必须逐项复核；旧响应缺新关系不算新语义能力。')
     if previous is not None:
         summary['comparison']=comparison_summary(inputs,previous,rows)
+    if local_previous is not None:
+        summary['local_comparison']=comparison_summary(inputs,local_previous,rows)
     write(out/'summary.json',summary)
     print(json.dumps(summary,ensure_ascii=False),flush=True)
 

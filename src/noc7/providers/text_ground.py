@@ -307,6 +307,16 @@ def _repair_time_element(node, spans):
             candidate["note"] = note
         candidates.append(candidate)
     mapping = _number_ids(candidates, _CANDIDATE_RE, "C")
+    ids = {item["id"] for item in candidates}
+    for item in candidates:
+        relation = item.get("relation")
+        if relation and relation["supersedes"]:
+            mapped = [mapping.get(ref) for ref in relation["supersedes"]]
+            if any(ref is None or ref not in ids or ref == item["id"] for ref in mapped):
+                # 保留更正意图，不能删除后误将旧时间作为唯一有效值采用。
+                relation["supersedes"] = ["unresolved correction"]
+            else:
+                relation["supersedes"] = list(dict.fromkeys(mapped))
     value = _time_node(node.get("value"))
     comparable = [
         {**item, "raw": item["time"]["raw"]} for item in candidates
@@ -675,7 +685,7 @@ def separate_suggestions(payload):
     def reject_review(node):
         if isinstance(node, dict):
             if any(k in node and (k != "review" or node[k] is not None)
-                   for k in ("review", "suggestions", "quote_checks", "checks", "semantic_assessment")):
+                   for k in ("review", "suggestions", "quote_checks", "checks", "semantic_assessment", "recovery_selection")):
                 from .text_config import TextProviderError
                 raise TextProviderError("模型不能提交人工审核或本地核验记录，已拒绝。")
             for value in node.values():

@@ -176,3 +176,9 @@ ensure_allowed(minimax, ctx.data_class)   # 真实数据 → 抛 EgressBlocked
 | `SEMANTIC_STATUS_DOWNGRADED` | info | 自动原因确认等级降为有记录，未经人工审核 |
 
 原始三栏中的来源编号和关系引文也纳入硬校验，不能通过结构补全丢字段逃过检查。空白等价范围在最终完整证据上重算。新链路起障可带标签采用告警时刻，恢复只用业务恢复时刻；日期或时区不足、同组冲突不填正式栏。自动原因最高 documented。模型事件分组、范围及断言类型仍不是独立人工真值。完整策略见时间与原因 ADR。
+
+### 恢复时间来源裁决
+
+`TimeRelation` 兼容追加默认空／未知的 `recovery_source`、`recovery_source_basis`、`recovery_round`、`supersedes`、`correction_basis`；只用于恢复来源与明确更正关系，不改变原有时间用途。新来源和更正引文纳入原始及最终证据硬校验，候选重编号同步映射更正编号，缺失或歧义不得碰巧命中新编号。
+
+`SemanticAssessment.recovery_selection` 默认空，仅由本地构建，冻结阈值、目标组、参与候选、来源、排除原因和最终选择，模型不能提交。当前业务恢复按“全部接近取最早，否则客户→供应商 RFO→联通网管”裁决；最高来源内部超阈值冲突，三类皆无留空。阈值默认三十分钟，待业务方确认。旧保存结果不自动升级；重新解码旧响应不猜补缺失来源。此处明确替换此前恢复同组不重叠一律清空及不替模型改选的处理，起障／原因沿用既有策略。详见 [恢复来源决策](decisions/recovery-time-selection.md)。

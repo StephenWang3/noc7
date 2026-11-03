@@ -24,7 +24,7 @@ TIME_LABELS = {
 def relation_quotes(relation):
     if relation:
         yield from relation.context
-        for key in ("date_anchor", "timezone_anchor", "customer_confirmation"):
+        for key in ("date_anchor", "timezone_anchor", "customer_confirmation", "recovery_source_basis", "correction_basis"):
             quote = getattr(relation, key, None)
             if quote:
                 yield quote
@@ -167,6 +167,7 @@ def apply_constraints(ctx, data):
         return data  # 已保存的旧回放和规则提供方不自动升级
     spans = {s.id: s for s in ctx.evidence}
     checks, updates = [], {}
+    recovery_selection = data.semantic_assessment.recovery_selection
     for name in NAMES:
         el = getattr(data.elements, name)
         original = data.semantic_assessment.original.get(name)
@@ -180,6 +181,7 @@ def apply_constraints(ctx, data):
                       for c in el.candidates]
         el = el.model_copy(update={"candidates": candidates})
         eligible = []
+        excluded = {}
         for c in candidates:
             reason = pending_reason(c, name, spans)
             checks.append(ConstraintCheck(element=name, candidate_id=c.id,
@@ -187,6 +189,29 @@ def apply_constraints(ctx, data):
                 evidence_refs=c.evidence_refs))
             if reason is None:
                 eligible.append(c)
+            else:
+                excluded[c.id] = reason
+        if name == "end_time" and recovery_selection is not None:
+            from .recovery_policy import select_recovery
+            recovery_selection = select_recovery(candidates, eligible, original, spans,
+                                                 recovery_selection.threshold_minutes, excluded)
+            chosen = next((c for c in eligible if c.id == recovery_selection.selected), None)
+            el = _clear(el, conflict=recovery_selection.outcome == "conflict")
+            if chosen:
+                confirmation = chosen.relation.customer_confirmation
+                confirmation_span = spans.get(confirmation.evidence_id) if confirmation else None
+                status = ElementStatus.DOCUMENTED
+                if (confirmation_span and not confirmation_span.needs_review
+                    and confirmation_span.role not in {SpanRole.QUOTED, SpanRole.SIGNATURE, SpanRole.DERIVED_SUMMARY}):
+                    status = ElementStatus.CONFIRMED
+                el = el.model_copy(update=dict(status=status, selected=chosen.id, value=chosen.time,
+                                              evidence_refs=chosen.evidence_refs))
+            checks.append(ConstraintCheck(element=name, candidate_id=recovery_selection.selected,
+                outcome="eligible" if chosen else "conflict" if recovery_selection.outcome == "conflict" else "pending",
+                code=IssueCode.TIME_CANDIDATES_DIFFER if recovery_selection.outcome == "conflict" else IssueCode.SEMANTIC_RELATION_INCOMPLETE,
+                reason=recovery_selection.reason, evidence_refs=el.evidence_refs))
+            updates[name] = el
+            continue
         conflicts = []
         if name != "cause":
             for a, b in combinations(eligible, 2):
@@ -235,7 +260,10 @@ def apply_constraints(ctx, data):
             (a.relation.event_id, a.relation.scope) == (b.relation.event_id, b.relation.scope) and
             _interval(b)[1] <= _interval(a)[0]):
             updates['end_time'] = _clear(end)
+            if recovery_selection is not None:
+                recovery_selection = recovery_selection.model_copy(update=dict(selected=None, outcome="pending",
+                    reason="按来源规则选出的业务恢复早于业务起点，撤回正式值，不改选低优先来源。"))
             checks.append(ConstraintCheck(element="end_time", outcome="pending", code=IssueCode.TIME_ORDER_INVERTED, reason="业务恢复早于业务起点，禁止历时。",
                                           evidence_refs=a.evidence_refs+b.evidence_refs))
-    assessment = data.semantic_assessment.model_copy(update={"checks": checks})
+    assessment = data.semantic_assessment.model_copy(update={"checks": checks, "recovery_selection": recovery_selection})
     return data.model_copy(update={"elements": data.elements.model_copy(update=updates), "semantic_assessment": assessment})
