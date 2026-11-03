@@ -102,9 +102,8 @@ def select_recovery(candidates, eligible, original, spans, threshold_minutes, ex
         if (not usable_quote(r.correction_basis, spans)
             or any(ref not in by_id or ref == c.id
                    or by_id[ref].relation.recovery_source != r.recovery_source for ref in r.supersedes)):
-            record.reason = "更正关系缺少可靠依据或跨来源／分组，保留候选待核实。"
-            record.excluded[c.id] = record.reason
-            return record
+            record.excluded[c.id] = "更正链接缺少可靠依据或编号／来源／分组不符，忽略该链接；时间候选仍参与跨度与来源优先裁决。"
+            continue
         edges[c.id] = r.supersedes
     def cyclic(node, path):
         return node in path or any(cyclic(other, path | {node}) for other in edges.get(node, []))
@@ -144,7 +143,9 @@ def select_recovery(candidates, eligible, original, spans, threshold_minutes, ex
     record.outcome = "selected"
     for c in pool:
         if c.id != chosen.id:
-            record.excluded[c.id] = "已参与比较，按接近取早／来源优先规则未采用。"
+            prior = record.excluded.get(c.id)
+            reason = "已参与比较，按接近取早／来源优先规则未采用。"
+            record.excluded[c.id] = f"{prior} {reason}" if prior else reason
     return record
 
 

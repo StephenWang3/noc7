@@ -146,19 +146,23 @@ def test_single_group_can_select_without_model_selection(sample):
 
 @pytest.mark.parametrize('fault', [None, 'missing_basis', 'cycle', 'other_source', 'missing_id'])
 def test_explicit_correction_only_with_basis_same_source_and_acyclic(sample, fault):
-    ctx, data = recovery(sample, [('customer', at('10:00:00')), ('customer', at('12:00:00'))])
+    second_source = 'vendor_rfo' if fault == 'other_source' else 'customer'
+    ctx, data = recovery(sample, [('customer', at('10:00:00')), (second_source, at('12:00:00'))])
     a, b = data['elements']['end_time']['candidates']
     b['relation'].update(supersedes=['C1'], correction_basis=deepcopy(b['relation']['context'][0]))
     if fault == 'missing_basis': b['relation']['correction_basis'] = None
     if fault == 'cycle': a['relation'].update(supersedes=['C2'], correction_basis=deepcopy(a['relation']['context'][0]))
-    if fault == 'other_source': b['relation']['recovery_source'] = 'vendor_rfo'
     if fault == 'missing_id': b['relation']['supersedes'] = ['C99']
     result = decode(ctx, data)
     if fault is None:
         assert result.elements.end_time.selected == 'C2'
         assert 'C1' in result.semantic_assessment.recovery_selection.excluded
+    elif fault == 'other_source':
+        assert result.elements.end_time.selected == 'C1'
+        assert result.elements.end_time.value.iso == '2026-01-02T10:00:00+00:00'
+        assert '忽略该链接' in result.semantic_assessment.recovery_selection.excluded['C2']
     else:
-        assert result.elements.end_time.value is None
+        assert result.elements.end_time.status == 'conflicted'
 
 
 def test_no_source_cannot_be_inferred_from_attribution_or_title(sample):
@@ -283,3 +287,50 @@ def test_ineligible_correction_cannot_revive_superseded_old_time(sample):
     result = decode(ctx, data)
     assert result.elements.end_time.value is None
     assert '更正候选' in result.semantic_assessment.recovery_selection.reason
+
+
+@pytest.mark.parametrize('fault', ['missing_basis', 'missing_id', 'other_source', 'self'])
+@pytest.mark.parametrize('minutes', [10, 30])
+def test_invalid_correction_within_threshold_keeps_both_times(sample, fault, minutes):
+    second_source = 'vendor_rfo' if fault == 'other_source' else 'customer'
+    ctx, data = recovery(sample, [('customer', at('10:00:00')), (second_source, at(f'10:{minutes:02d}:00'))])
+    a, b = data['elements']['end_time']['candidates']
+    # 无效链接挂在较早候选上，也不能剥夺它被选中的资格。
+    a['relation'].update(supersedes=['C2'], correction_basis=deepcopy(a['relation']['context'][0]))
+    if fault == 'missing_basis': a['relation']['correction_basis'] = None
+    if fault == 'missing_id': a['relation']['supersedes'] = ['C99']
+    if fault == 'self': a['relation']['supersedes'] = ['C1']
+    result = decode(ctx, data)
+    record = result.semantic_assessment.recovery_selection
+    assert result.elements.end_time.selected == 'C1'
+    assert record.participating == ['C1', 'C2']
+    assert record.span_seconds == minutes * 60
+    assert '忽略该链接' in record.excluded['C1']
+    validate_extraction(ctx, result)
+
+
+@pytest.mark.parametrize('source,text', [
+    ('customer', '客户报告本次业务于 2026-09-03 10:00 UTC 恢复。'),
+    ('vendor_rfo', '供应商 RFO 正文：本次业务恢复时间为 2026-09-03 10:00 UTC。'),
+    ('unicom_monitor', '联通追加记录：本次线路恢复时间为 2026-09-03 10:00 UTC。'),
+])
+def test_prompt_example_cross_evidence_source_is_usable(sample, source, text):
+    from noc7.providers.text_prompt import EXAMPLE
+    from noc7.schema import EvidenceSpan, FieldLocator, TextRangeLocator
+    ctx, data = build(sample)
+    end = deepcopy(EXAMPLE['elements']['end_time'])
+    candidate = end['candidates'][0]
+    relation = candidate['relation']
+    relation.update(recovery_source=source, recovery_source_basis=dict(evidence_id='M02/log:3', quote=text))
+    data['elements']['start_time'] = dict(status='unknown', value=None, selected=None, evidence_refs=[], candidates=[])
+    data['elements']['end_time'] = end
+    spans = [EvidenceSpan(id='M01/f:recovered_at', material_id='M01', locator=FieldLocator(field_key='recovered_at'),
+                          text=candidate['time']['raw'], extractor='synthetic'),
+             EvidenceSpan(id='M02/log:3', material_id='M02', locator=TextRangeLocator(line=1), text=text, extractor='synthetic')]
+    ctx = ExtractionContext(ctx.bundle, spans)
+    result = decode(ctx, data)
+    assert result.elements.end_time.selected == 'C1'
+    assert result.elements.end_time.value.iso == '2026-09-03T10:00:00+00:00'
+    assert result.elements.end_time.candidates[0].relation.recovery_source == source
+    assert result.elements.end_time.evidence_refs == ['M01/f:recovered_at', 'M02/log:3']
+    validate_extraction(ctx, result)

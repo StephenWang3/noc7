@@ -2955,6 +2955,7 @@
         },
         "recovery_source": {
           "default": "unknown",
+          "description": "缺省仅用于兼容旧数据；新模型须通读证据归类，存在对应来源陈述时填写明确来源。",
           "enum": [
             "customer",
             "vendor_rfo",

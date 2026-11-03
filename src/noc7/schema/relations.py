@@ -25,7 +25,9 @@ class TimeRelation(SemanticRelation):
     date_anchor: RelationQuote | None = None
     timezone_anchor: RelationQuote | None = None
     customer_confirmation: RelationQuote | None = None
-    recovery_source: Literal["customer", "vendor_rfo", "unicom_monitor", "unknown"] = "unknown"
+    recovery_source: Literal["customer", "vendor_rfo", "unicom_monitor", "unknown"] = Field(
+        default="unknown", description="缺省仅用于兼容旧数据；新模型须通读证据归类，存在对应来源陈述时填写明确来源。"
+    )
     recovery_source_basis: RelationQuote | None = None
     recovery_round: str = Field(default="current", min_length=1)
     supersedes: list[str] = Field(default_factory=list)

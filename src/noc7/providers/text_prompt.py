@@ -31,7 +31,10 @@ CONSTRAINTS = """本地校验实际执行的约束：
 - 时间和原因每条候选须有 relation：event_id（本次故障通常统一为 current）、scope（本次业务范围，同范围用完全相同的文字）、current_event（布尔）、modality（asserted/suspected/negated/unknown）、context（包含该候选原文及含义的引文列表，每项 {"evidence_id":"证据编号","quote":"原文"}）。不允许将不同时间用途或不同范围硬合并。
 - 时间 relation 另有 date_anchor、timezone_anchor、customer_confirmation，缺失写 null；非空时均为 {"evidence_id":"证据编号","quote":"原文"}。锚点必须属于该时间，不得借用记录/邮件发送日期补正文日期，不得根据城市猜时区。context 可跨相邻行分别给引文；至少一项包含候选 raw。
 - time_kind 必须按实际含义选择：business_start 业务起点、customer_reported_start 客户报告起点、alarm_raised 告警、business_recovery 业务实际恢复、confirmation_action 客户确认动作、protocol_down/protocol_up 协议状态；repair_completed 修复完成以及其他流程、计划、观察沿用对应枚举。工单字段 occurred_at/recovered_at 只有语义确为业务起止才可用 fault_start_field/recovery_field；event_time、fault_end_time 必须结合字段标签和上下文判断，不能仅凭键名。客户报告恢复时刻用 business_recovery，并在确有客户确认原文时填写 customer_confirmation。客户稍后确认恢复的动作时刻必须单列 confirmation_action，不能替代先前恢复时间。起障可选择告警替代值，程序会标注口径；协议状态、修复完成、确认动作、流程时间不能正式采用。
-- 每条恢复候选的 relation 另须填写 recovery_source（customer 客户实际报告的业务恢复、vendor_rfo 供应商 RFO 记载的本次业务恢复、unicom_monitor 联通日志追加的网管业务恢复、unknown 无法确定）、recovery_source_basis（证明原始来源与该恢复时间关联的 {"evidence_id":"证据编号","quote":"原文"}，未知写 null）。转述按原始陈述方，不按邮件发送人猜来源；RFO 标题本身不能证明正文时间是业务恢复。系统恢复字段没有来源依据时必须为 unknown，供应商一般进展不自动算 RFO，协议 Up、修复完成及客户稍后确认动作仍不能替代业务恢复。来源依据可与 context 分开，context 至少一项包含该候选 raw。
+- 每条恢复候选须通读整份证据后填写 relation.recovery_source 和 recovery_source_basis（来源依据，格式 {"evidence_id":"证据编号","quote":"原文"}）。以下是必须执行的归类规则，不以 unknown 为默认答案：客户明确报告本次业务于某时恢复，必须标 customer；供应商 RFO 正文明确记载本次业务于某时恢复，必须标 vendor_rfo；联通在处理日志追加本次线路／业务的实际恢复时间，必须标 unicom_monitor，原文无需出现“网管”两个字。
+- 来源依据可以来自另一段证据：系统字段只含时间戳时，必须继续查找正文、RFO 和日志。另一段原文明示该字段时刻是客户报告、供应商 RFO 记载或联通日志追加的实际业务恢复时刻，就给字段候选填写对应非 unknown 来源，把该句放入 recovery_source_basis，并在 evidence_refs 中同时保留时间字段和来源依据。context 至少一项包含该候选 raw；来源句与字段须能对应同一时刻、本次事件、业务范围，日期／时区不一致时保留分歧，不拼接无关陈述。
+- 只有通读整份证据后，仍找不到能与该时刻、本次事件及业务范围对应的三类来源陈述时，才填 unknown、recovery_source_basis=null。字段名、发件人或 RFO 标题单独不能证明来源；转述按原始陈述方。供应商 RFO 中的实际业务恢复陈述应标 vendor_rfo，不能因它同时出现在系统字段就丢掉来源；一般进展中的维修完成则保留其实际用途。
+- 联通日志中的“线路恢复时间：某时”这类实际恢复陈述应标 unicom_monitor；“查看线路已有双向流量”这类仅有流量的观测不能标成网管业务恢复时间，也不能升级为 business_recovery。协议 Up、修复完成和稍后确认动作仍分别保留用途，不替代实际业务恢复。
 - 时间 relation 的 recovery_round 用于区分本次业务的恢复轮次，只有一次用 current；不同轮次不得混合比较。只有原文明示更正旧时间时，supersedes 才列被更正候选编号，并给 correction_basis 原文引文，否则 supersedes=[]、correction_basis=null。不因邮件较新推断它更正旧值。保留所有候选，来源优先和相差接近的取值由本地业务规则裁决。
 - 原因 relation 另有 assertion（fault 明确故障/mechanism 机制/planned_work 作业/phenomenon 现象/finding 排查/recovery 恢复/unknown）、affects_service（是否明确影响本次业务）、occurred（是否已经发生）、speaker（陈述方）。明确故障与推测机制必须分别摘录成不同候选，推测项 modality=suspected、cause_kind=suspected_mechanism。明确故障主张用 root_cause_claimed；现场诊断可用 root_cause_confirmed，但自动正式原因状态最高 documented，不能代表人工审核。现象、自恢、排查、否定与可能原因清单只能作候选；RFO 标题不证明查明根因；计划作业只有已经发生且影响业务才可作原因。不能从设备归属推出责任。
 - 原因关系的 contradicts 是与该断言相矛盾的本要素候选编号列表（缺省 []），必须保留双方；只是原因粒度或推测层次不同不算矛盾。明确否定也要单独保留，不要只选一方。
@@ -56,7 +59,24 @@ EXAMPLE = {
                 "time_kind": "other",
             }],
         },
-        "end_time": {"status": "unknown", "value": None, "selected": None, "evidence_refs": [], "candidates": []},
+        "end_time": {
+            "status": "documented", "value": {"raw": "2026-09-03 10:00 UTC"},
+            "selected": "C1", "evidence_refs": ["M01/f:recovered_at", "M02/log:3"],
+            "candidates": [{
+                "id": "C1", "attribution": "system_field",
+                "time": {"raw": "2026-09-03 10:00 UTC"}, "time_kind": "recovery_field",
+                "evidence_refs": ["M01/f:recovered_at", "M02/log:3"],
+                "relation": {
+                    "event_id": "current", "scope": "本次业务", "current_event": True,
+                    "modality": "asserted",
+                    "context": [{"evidence_id": "M01/f:recovered_at", "quote": "2026-09-03 10:00 UTC"}],
+                    "date_anchor": None, "timezone_anchor": None, "customer_confirmation": None,
+                    "recovery_source": "customer",
+                    "recovery_source_basis": {"evidence_id": "M02/log:3", "quote": "客户报告本次业务于 2026-09-03 10:00 UTC 恢复。"},
+                    "recovery_round": "current", "supersedes": [], "correction_basis": None,
+                },
+            }],
+        },
         "phenomenon": {
             "status": "unknown",
             "value": None,
