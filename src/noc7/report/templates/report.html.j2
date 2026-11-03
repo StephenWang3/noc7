@@ -12,10 +12,10 @@
 <p class="refs">依据：{% for ref in row.el.evidence_refs %}<a href="#e-{{ ref }}">{{ ref }}</a> {% else %}未提供{% endfor %}</p>
 {% if row.candidates %}<details><summary>查看 {{ row.candidates|length }} 个候选/观测</summary><ul>{% for c in row.candidates %}<li><b>{{ c.id }} · {{ c.source }}</b> <code>{{ c.kind }}</code><p>{{ c.text }}</p>{% if c.note %}<p>{{ c.note }}</p>{% endif %}{% for ref in c.refs %}<a href="#e-{{ ref }}">{{ ref }}</a> {% endfor %}</li>{% endfor %}</ul></details>{% endif %}
 </article>{% endfor %}</section>
-{% if semantic_assessment %}<section><h2>时间与原因：模型关系和本地核验</h2><p>模型判断含义，程序仅核对出处与约束；引用可定位不证明模型语义正确，也不表示人工审核。</p>
+{% if semantic_assessment %}<section><h2>模型关系和本地核验</h2><p>模型判断含义，程序仅核对出处与约束；引用可定位不证明模型语义正确，也不表示人工审核。</p>
 {% for row in rows %}{% for c in row.candidates %}{% if c.relation %}<details><summary>{{ row.label }} / {{ c.id }} 的模型关系</summary><pre>{{ c.relation }}</pre></details>{% endif %}{% endfor %}{% endfor %}
 <ul>{% for c in semantic_assessment.checks %}<li>{{ c.element }} / {{ c.candidate_id or '结论' }} / {{ c.outcome|constraint_status }}：{{ c.reason }}（{{ c.evidence_refs|join('、') }}）</li>{% endfor %}</ul>
-<details><summary>原始三栏（含原状态、值、选中项和未识别格式）</summary><pre>{{ semantic_assessment.original }}</pre></details></section>{% endif %}
+<details><summary>原始模型字段（含原状态、值、选中项和未识别格式）</summary><pre>{{ semantic_assessment.original }}</pre></details></section>{% endif %}
 <section><h2>AI 建议，待确认</h2><p>以下为模型原始判断，不代表人工认定。“某方声称”及模型自报的 confirmed 均不表示已审核。引用匹配只证明文字存在，不证明业务语义正确。建议不进入正式结论或公司报告。</p>
 {% for row in suggestions %}<article><h3>{{ row.label }}建议</h3>{% if row.unprovided %}<p>模型未给出有效建议；原始返回：{{ row.raw }}。</p>{% endif %}{% if row.missing_value_source %}<p>缺少来源，待核对。</p>{% endif %}<p>模型原始状态：{{ row.original.get('status', '未提供') }}；原始值：{{ row.original.get('value') }}；选中项：{{ row.original.get('selected') }}。</p>
 {% if row.original.get('note') %}<p>模型备注：{{ row.original.get('note') }}</p>{% endif %}{% if row.original.get('value') and not row.candidates %}<p>待核对：模型填写了值，但缺少候选依据。</p>{% endif %}

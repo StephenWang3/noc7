@@ -28,7 +28,7 @@ class BusinessSuggestion(Model):
         def check(node):
             if isinstance(node, dict):
                 if any(k in node and (k != "review" or node[k] is not None)
-                       for k in ("review", "checks", "quote_checks", "suggestions")):
+                       for k in ("review", "checks", "quote_checks", "suggestions", "business_coverage")):
                     raise ValueError("建议原始答案不能包含审核或本地核验记录")
                 for v in node.values():
                     check(v)
@@ -50,10 +50,8 @@ class BusinessSuggestion(Model):
         return candidates if isinstance(candidates, list) else []
 
     def iter_evidence_refs(self):
-        yield from source_refs(self.original)
-        for candidate in self.candidates:
-            if isinstance(candidate, dict):
-                yield from source_refs(candidate)
+        from ..providers.semantic_constraints import original_refs
+        yield from original_refs(self.original)
         for quote in self.quotes:
             yield quote["evidence_id"]
 
@@ -68,5 +66,8 @@ class BusinessSuggestion(Model):
         if isinstance(value, str) and value:
             for ref in source_refs(self.original):
                 yield "value", ref, value
+        from ..providers.semantic_constraints import original_quotes
+        for i, (ref, text) in enumerate(original_quotes(self.original)):
+            yield f"relation/{i}", ref, text
         for i, quote in enumerate(self.quotes):
             yield f"quotes/{i}", quote["evidence_id"], quote["quote"]

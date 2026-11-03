@@ -1,0 +1,166 @@
+{
+  "cases": 22,
+  "historical_saved_baseline": {
+    "delivered": 21,
+    "responsible_party": 0,
+    "location": 0
+  },
+  "current_prompt_response_cases": 0,
+  "previous_prompt_response_cases": 16,
+  "missing_model_response_cases": 6,
+  "phases": {
+    "before-final": {
+      "cases": 22,
+      "delivered": 13,
+      "elements": {
+        "responsible_party": {
+          "filled": 0,
+          "unfilled_success": 13,
+          "states": {
+            "unknown": 13
+          },
+          "candidate_cases": 0,
+          "undelivered": 9
+        },
+        "location": {
+          "filled": 0,
+          "unfilled_success": 13,
+          "states": {
+            "unknown": 13
+          },
+          "candidate_cases": 0,
+          "undelivered": 9
+        }
+      },
+      "suggestions": {
+        "responsible_party": 3,
+        "location": 13
+      },
+      "paths": {},
+      "sources": {
+        "responsible_party": {},
+        "location": {}
+      },
+      "rejections": {},
+      "failure_types": {
+        "TextProviderError": 9
+      },
+      "http_failures": {
+        "402": 8
+      },
+      "roundtrip_equal": 13,
+      "word_valid": 13
+    },
+    "final": {
+      "cases": 22,
+      "delivered": 14,
+      "elements": {
+        "responsible_party": {
+          "filled": 5,
+          "unfilled_success": 9,
+          "states": {
+            "unknown": 9,
+            "documented": 5
+          },
+          "candidate_cases": 11,
+          "undelivered": 8
+        },
+        "location": {
+          "filled": 0,
+          "unfilled_success": 14,
+          "states": {
+            "unknown": 14
+          },
+          "candidate_cases": 14,
+          "undelivered": 8
+        }
+      },
+      "suggestions": {
+        "responsible_party": 11,
+        "location": 14
+      },
+      "paths": {
+        "explicit_responsibility": 5
+      },
+      "sources": {
+        "responsible_party": {
+          "vendor_feedback": 3,
+          "branch_log": 2
+        },
+        "location": {}
+      },
+      "rejections": {
+        "EVIDENCE_QUOTE_MISMATCH": 1
+      },
+      "failure_types": {
+        "TextProviderError": 7,
+        "ExtractionRejected": 1
+      },
+      "http_failures": {
+        "402": 6
+      },
+      "roundtrip_equal": 14,
+      "word_valid": 14
+    },
+    "verified": {
+      "cases": 22,
+      "delivered": 14,
+      "elements": {
+        "responsible_party": {
+          "filled": 0,
+          "unfilled_success": 14,
+          "states": {
+            "unknown": 14
+          },
+          "candidate_cases": 11,
+          "undelivered": 8
+        },
+        "location": {
+          "filled": 0,
+          "unfilled_success": 14,
+          "states": {
+            "unknown": 14
+          },
+          "candidate_cases": 14,
+          "undelivered": 8
+        }
+      },
+      "suggestions": {
+        "responsible_party": 11,
+        "location": 14
+      },
+      "paths": {},
+      "sources": {
+        "responsible_party": {},
+        "location": {}
+      },
+      "rejections": {
+        "EVIDENCE_QUOTE_MISMATCH": 1
+      },
+      "failure_types": {
+        "ModelResponseUnavailable": 6,
+        "TextProviderError": 1,
+        "ExtractionRejected": 1
+      },
+      "http_failures": {},
+      "roundtrip_equal": 14,
+      "word_valid": 14
+    }
+  },
+  "diagnostic_review": {
+    "reviewed_candidates": 6,
+    "known_insufficient_responsibility_cases": 4,
+    "clear_semantic_misuse_cases": 3,
+    "ambiguous_role_attribution_cases": 1,
+    "fault_attribution_supported_cases": 2,
+    "known_source_tier_error_cases": 1,
+    "known_onsite_anchor_error_cases": 2
+  },
+  "verification": {
+    "pytest_passed": 685,
+    "schema_current": true,
+    "integration_cases": 15,
+    "integration_existing_differences": 2
+  },
+  "semantic_accuracy": null
+}

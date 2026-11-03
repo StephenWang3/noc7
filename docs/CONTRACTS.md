@@ -76,7 +76,7 @@ ensure_allowed(minimax, ctx.data_class)   # 真实数据 → 抛 EgressBlocked
 
 - 外部服务默认只放行 `synthetic`。要放行 `real`，配置里必须写 `approval_ref`（批准依据，例如一份决策记录），否则配置本身就无法创建。
 - 没有“临时绕过”开关。测试里也不要 mock 掉这一步。
-- 本项目后续批准的例外：开发期允许向**官方 DeepSeek** 发送真实工单正文及本地 OCR 文字。统一文本配置必须声明 `allowed_data` 包含 `real`，并以 `docs/decisions/llm-text-providers.md` 为 `approval_ref`；仍在请求前调用 `ensure_allowed()`，不修改闸门默认策略。该批准不扩展到其他外部服务或原始图片；附件层 `ensure_attachment_allowed()` 的原图禁发规则保留。文本模型只提交有来源的摘录；责任方和地点在结构补全前独立保存为“AI 建议，待确认”，正式两栏置空，不再用规则重判模型的业务语义。时间和原因改为模型提交结构化关系、程序核对证据与约束，不再用词表重判；自动原因最高为 documented。现象概述及处理过程沿用本地处理。详见 [时间与原因决策](decisions/time-cause-validation.md)。详见 [AI 建议决策](decisions/ai-suggestions.md)。
+- 本项目后续批准的例外：开发期允许向**官方 DeepSeek** 发送真实工单正文及本地 OCR 文字。统一文本配置必须声明 `allowed_data` 包含 `real`，并以 `docs/decisions/llm-text-providers.md` 为 `approval_ref`；仍在请求前调用 `ensure_allowed()`，不修改闸门默认策略。该批准不扩展到其他外部服务或原始图片；附件层 `ensure_attachment_allowed()` 的原图禁发规则保留。文本模型只提交有来源的摘录；责任方和地点在结构补全前独立保存原答；新增业务关系通过来源、引用、覆盖和冲突约束后可自动填入正式栏，最高 documented，未经人工审核。缺关系或不合格项仍保留待确认建议，不用句式规则重判模型的业务语义。详见 [责任方与地点业务口径](decisions/responsibility-location-business-rules.md)。时间和原因改为模型提交结构化关系、程序核对证据与约束，不再用词表重判；自动原因最高为 documented。现象概述及处理过程沿用本地处理。详见 [时间与原因决策](decisions/time-cause-validation.md)。详见 [AI 建议决策](decisions/ai-suggestions.md)。
 - 内网 Qwen 通过同一文本接口接入，由部署者核实地址及网络边界并声明为内网服务；不能因模型名为 Qwen 就把外部地址视作内网。接口资料到位前仅做兼容协议模拟验收。
 - 调用 MiniMax 时按用户的限流要求：每批 10 个请求，批与批之间隔 30 秒；被限流后等 5 分钟再试。
 
@@ -176,3 +176,12 @@ ensure_allowed(minimax, ctx.data_class)   # 真实数据 → 抛 EgressBlocked
 | `SEMANTIC_STATUS_DOWNGRADED` | info | 自动原因确认等级降为有记录，未经人工审核 |
 
 原始三栏中的来源编号和关系引文也纳入硬校验，不能通过结构补全丢字段逃过检查。空白等价范围在最终完整证据上重算。新链路起障可带标签采用告警时刻，恢复只用业务恢复时刻；日期或时区不足、同组冲突不填正式栏。自动原因最高 documented。模型事件分组、范围及断言类型仍不是独立人工真值。完整策略见时间与原因 ADR。
+
+
+### 责任方与地点业务关系的共享接入
+
+本任务的用户确认取代前述 AI 建议永久隔离的历史边界：`PartyCandidate.relation`、`LocationCandidate.relation` 默认空以兼容旧结果；新增 `business_context` 责任依据，不改变已有枚举含义。关系内原文与正式责任类别／城市分开，明确归属另须 `responsibility_quote`，不能拿来源引文代替责任证据；旧响应缺失时不自动补造。自动正式值最高 `documented`。`ConstraintCheck` 接受两栏，`SemanticAssessment` 增加本地 `business_coverage`；JSON Schema 同步导出。不改 `EvidenceSpan` 或解析器契约。
+
+业务约束集中于 `providers/responsibility_location.py`，`ground_extraction()` 在现有时间／原因约束后调用；首次核验及保存结果加载复用它。`semantic_constraints.py` 只扩展通用引文遍历，不更改恢复选择或时间归一算法。与恢复时间线协作时保留彼此的局部接入，不能整体覆盖共享提示词、解码、schema、校验及报告文件。
+
+两栏原答仍使用 `BusinessSuggestion` 容错保存并递归核对来源；正式采用后审核报告不再重复显示该要素的建议区，原答审计与其余候选继续保留。候选原文和关系引文不匹配只阻止该业务项采用；不存在的来源仍拒绝，其他五要素和共享正式引文不降级。来源顺序、上下文路径与城市边界以 [新决策](decisions/responsibility-location-business-rules.md) 为准。

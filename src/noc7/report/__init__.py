@@ -87,11 +87,25 @@ def _relation_text(r):
         return None
     certainty = {"asserted": "明确陈述", "suspected": "推测", "negated": "否定", "unknown": "未明"}[r.modality]
     text = f"事件：{r.event_id}；范围：{r.scope}；{certainty}；{'本次事件' if r.current_event else '非本次事件'}。"
-    if hasattr(r, "speaker"):
+    if hasattr(r, "assertion"):
         assertion = {"fault": "故障", "mechanism": "机制", "planned_work": "作业", "phenomenon": "现象", "finding": "排查", "recovery": "恢复方式", "unknown": "未明"}[r.assertion]
         text += f"{r.speaker}陈述的{assertion}；{'影响本次业务' if r.affects_service else '未说明业务影响'}；{'已发生' if r.occurred else '未证明已发生'}。"
         if r.contradicts:
             text += "相矛盾候选：" + "、".join(r.contradicts) + "。"
+    if hasattr(r, "source_tier"):
+        from ..providers.responsibility_location import SOURCE_LABELS, PATH_LABELS
+        text += f"来源：{SOURCE_LABELS[r.source_tier]}；陈述方：{r.speaker or '未署名'}；原文断言：{r.statement}。"
+        if hasattr(r, "category"):
+            text += f"责任分类：{r.category}；路径：{PATH_LABELS[r.decision_path]}；采购归属：{r.procurement}。"
+        else:
+            text += f"城市：{r.city or '未明确'}；{'已定位' if r.located else '未定位'}。"
+        if r.contradicts:
+            text += "相矛盾候选：" + "、".join(r.contradicts) + "。"
+        from ..providers.responsibility_location import ANCHORS
+        for key in ANCHORS:
+            q = getattr(r, key, None)
+            if q:
+                text += f"{key} {q.evidence_id}：{q.quote}；"
     for q in r.context:
         text += f"依据 {q.evidence_id}：{q.quote}；"
     for key, label in (("date_anchor", "日期锚点"), ("timezone_anchor", "时区锚点"), ("customer_confirmation", "客户确认依据")):
@@ -205,6 +219,8 @@ def _suggestion_rows(result):
 
     rows = []
     for suggestion in result.suggestions:
+        if getattr(result.elements, suggestion.element).value is not None:
+            continue  # 原答保留在审计与关系区，不重复标成待确认建议
         original = suggestion.node
         candidates = []
         key = "party" if suggestion.element == "responsible_party" else "description"

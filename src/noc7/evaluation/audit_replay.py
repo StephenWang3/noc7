@@ -86,6 +86,8 @@ class AuditResponseProvider:
     def extract(self, ctx):
         clean, request = prepare_evidence(ctx)
         record = self.record
+        if "business_coverage" not in record["request_evidence"]:
+            request.pop("business_coverage", None)
         if (record["bundle_sha256"] != ctx.bundle.manifest_sha256
             or record["evidence_sha256"] != evidence_digest(clean)
             or record["request_evidence"] != request):

@@ -22,7 +22,7 @@ from pydantic import Field, model_validator
 from .common import Attribution, CandidateId, ElementName, ElementStatus, EvidenceId, Model
 from .issues import IssueCode
 from .timeval import TimeKind, TimeValue
-from .relations import TimeRelation, CauseRelation
+from .relations import TimeRelation, CauseRelation, PartyRelation, LocationRelation
 
 
 # ---------------------------------------------------------------------------
@@ -56,12 +56,14 @@ class Observation(CandidateBase):
 class ResponsibilityBasis(StrEnum):
     FORMAL_DETERMINATION = "formal_determination"  # 有明确的定责结论（责任认定、定责意见）
     CLAIMED = "claimed"  # 某方自称/指称，未经认定
+    BUSINESS_CONTEXT = "business_context"  # 按已确认业务路径判定，未经人工审核
     INFERRED_FROM_ROLE = "inferred_from_role"  # 只是供应商、处理部门、经办人等角色——不能作为结论
 
 
 class PartyCandidate(CandidateBase):
     party: str
     basis: ResponsibilityBasis
+    relation: PartyRelation | None = None
 
 
 class CauseKind(StrEnum):
@@ -133,6 +135,7 @@ class LocationCandidate(CandidateBase):
     description: str
     role: LocationRole
     granularity: LocationGranularity | None = None
+    relation: LocationRelation | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -295,7 +298,9 @@ class SevenElements(Model):
                 if relation:
                     for quote in relation.context:
                         yield quote.evidence_id
-                    for key in ("date_anchor", "timezone_anchor", "customer_confirmation"):
+                    for key in ("date_anchor", "timezone_anchor", "customer_confirmation",
+                                "responsibility_quote", "source_quote", "procurement_quote", "self_check", "vendor_contact",
+                                "unicom_onsite", "service_recovered", "city_quote"):
                         quote = getattr(relation, key, None)
                         if quote:
                             yield quote.evidence_id

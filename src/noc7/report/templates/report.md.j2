@@ -27,7 +27,7 @@
 {% else %}- 没有可用候选。
 {% endfor %}
 {% endfor %}
-{% if semantic_assessment %}## 时间与原因：模型关系和本地核验
+{% if semantic_assessment %}## 模型关系和本地核验
 
 模型判断含义，程序仅核对出处与约束；引用可定位不证明模型语义正确，也不表示人工审核。
 
@@ -35,7 +35,7 @@
 {% endif %}{% endfor %}{% endfor %}
 {% for c in semantic_assessment.checks %}- {{ c.element|md }} / {{ (c.candidate_id or '结论')|md }} / {{ c.outcome|constraint_status|md }}：{{ c.reason|md }}（{{ c.evidence_refs|join('、')|md }}）。
 {% endfor %}
-原始三栏（含原状态、值、选中项和未识别格式）：{{ semantic_assessment.original|md }}
+原始模型字段（含原状态、值、选中项和未识别格式）：{{ semantic_assessment.original|md }}
 
 {% endif %}## AI 建议，待确认
 

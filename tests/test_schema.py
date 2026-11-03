@@ -97,3 +97,14 @@ def test_fabricated_evidence_reference_is_rejected(root):
     data["elements"]["cause"]["evidence_refs"].append("M02/log:99")
     with pytest.raises(ValidationError, match="不存在的证据编号"):
         AnalysisResult.model_validate(data)
+
+
+def test_legacy_party_and_location_candidates_do_not_gain_business_relations():
+    from noc7.schema import PartyCandidate, LocationCandidate
+    party = PartyCandidate.model_validate(dict(id='C1', party='SYN-甲', basis='claimed',
+        attribution='vendor', evidence_refs=['M01/f:cause']))
+    location = LocationCandidate.model_validate(dict(id='C1', description='SYN-站点', role='located_fault_point',
+        attribution='vendor', evidence_refs=['M01/f:cause']))
+    assert party.relation is None and location.relation is None
+    from noc7.schema.relations import SemanticAssessment
+    assert SemanticAssessment(original={'cause': {}}).business_coverage is None

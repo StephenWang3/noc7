@@ -243,3 +243,24 @@ def test_company_outputs_exclude_ai_suggestions(results, tmp_path):
     doc = Document(path)
     text = " ".join(p.text for p in doc.paragraphs) + " ".join(c.text for t in doc.tables for r in t.rows for c in r.cells)
     assert "SYN-AI-ONLY-LOCATION" not in text and "AI 建议" not in text
+
+
+def test_automatic_business_values_are_marked_in_html_and_word(results, tmp_path):
+    from noc7.schema import PartyCandidate, ResponsiblePartyElement
+    from noc7.schema.relations import PartyRelation
+    r = results['SYN-P04'].model_copy(deep=True)
+    quote = dict(evidence_id=r.evidence[0].id, quote=r.evidence[0].text)
+    relation = PartyRelation.model_validate(dict(event_id='current', scope='本次业务', current_event=True,
+        modality='asserted', context=[quote], statement=quote['quote'], source_tier='rfo',
+        source_quote=quote, responsibility_quote=quote, speaker='供应商', category='供应商', decision_path='explicit_responsibility'))
+    c = PartyCandidate(id='C1', party=quote['quote'], basis='claimed', attribution='vendor',
+                       evidence_refs=[quote['evidence_id']], relation=relation)
+    r.elements.responsible_party = ResponsiblePartyElement(status='documented', value='供应商', selected='C1',
+        candidates=[c], evidence_refs=c.evidence_refs, note='RFO；有记录，未经人工审核。')
+    html = render_company_html(r)
+    assert '供应商' in html and 'RFO；有记录，未经人工审核。' in html
+    path = tmp_path / 'business.docx'
+    write_company_docx(r, path)
+    doc = Document(path)
+    content = '\n'.join(cell.text for row in doc.tables[0].rows for cell in row.cells)
+    assert '供应商' in content and 'RFO；有记录，未经人工审核。' in content

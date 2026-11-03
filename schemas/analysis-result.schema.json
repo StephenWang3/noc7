@@ -17,6 +17,46 @@
       "title": "Attribution",
       "type": "string"
     },
+    "BusinessCoverage": {
+      "additionalProperties": false,
+      "description": "本地记录输入覆盖范围，不能由模型提交；哈希绑定完整处理记录。",
+      "properties": {
+        "covered_logs": {
+          "additionalProperties": {
+            "pattern": "^M\\d{2,}/[A-Za-z0-9:_.\\-]+$",
+            "type": "string"
+          },
+          "title": "Covered Logs",
+          "type": "object"
+        },
+        "detail_status": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Detail Status"
+        },
+        "log_hashes": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "title": "Log Hashes",
+          "type": "object"
+        },
+        "related_materials_complete": {
+          "default": false,
+          "title": "Related Materials Complete",
+          "type": "boolean"
+        }
+      },
+      "title": "BusinessCoverage",
+      "type": "object"
+    },
     "BusinessSuggestion": {
       "additionalProperties": false,
       "properties": {
@@ -466,7 +506,9 @@
           "enum": [
             "start_time",
             "end_time",
-            "cause"
+            "cause",
+            "responsible_party",
+            "location"
           ],
           "title": "Element",
           "type": "string"
@@ -1187,6 +1229,17 @@
           "default": null,
           "title": "Note"
         },
+        "relation": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LocationRelation"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
         "role": {
           "$ref": "#/$defs/LocationRole"
         }
@@ -1297,6 +1350,148 @@
       ],
       "title": "LocationGranularity",
       "type": "string"
+    },
+    "LocationRelation": {
+      "additionalProperties": false,
+      "properties": {
+        "city": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "City"
+        },
+        "city_quote": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RelationQuote"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "city_scope": {
+          "default": "unknown",
+          "enum": [
+            "single_city",
+            "cross_city",
+            "unknown"
+          ],
+          "title": "City Scope",
+          "type": "string"
+        },
+        "context": {
+          "items": {
+            "$ref": "#/$defs/RelationQuote"
+          },
+          "minItems": 1,
+          "title": "Context",
+          "type": "array"
+        },
+        "contradicts": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Contradicts",
+          "type": "array"
+        },
+        "current_event": {
+          "title": "Current Event",
+          "type": "boolean"
+        },
+        "event_id": {
+          "description": "模型分组的事件标识，不是已核实的身份",
+          "minLength": 1,
+          "title": "Event Id",
+          "type": "string"
+        },
+        "located": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Located"
+        },
+        "modality": {
+          "enum": [
+            "asserted",
+            "suspected",
+            "negated",
+            "unknown"
+          ],
+          "title": "Modality",
+          "type": "string"
+        },
+        "scope": {
+          "description": "业务／设备范围",
+          "minLength": 1,
+          "title": "Scope",
+          "type": "string"
+        },
+        "source_quote": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RelationQuote"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "source_tier": {
+          "enum": [
+            "rfo",
+            "vendor_feedback",
+            "branch_log",
+            "unknown"
+          ],
+          "title": "Source Tier",
+          "type": "string"
+        },
+        "speaker": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Speaker"
+        },
+        "statement": {
+          "description": "原文断言，与标准化结论分开",
+          "minLength": 1,
+          "title": "Statement",
+          "type": "string"
+        }
+      },
+      "required": [
+        "event_id",
+        "scope",
+        "context",
+        "current_event",
+        "modality",
+        "statement",
+        "source_tier"
+      ],
+      "title": "LocationRelation",
+      "type": "object"
     },
     "LocationRole": {
       "enum": [
@@ -1748,6 +1943,17 @@
         "party": {
           "title": "Party",
           "type": "string"
+        },
+        "relation": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PartyRelation"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
         }
       },
       "required": [
@@ -1758,6 +1964,231 @@
         "basis"
       ],
       "title": "PartyCandidate",
+      "type": "object"
+    },
+    "PartyRelation": {
+      "additionalProperties": false,
+      "properties": {
+        "category": {
+          "enum": [
+            "客户",
+            "供应商",
+            "联通",
+            "other",
+            "joint",
+            "unknown"
+          ],
+          "title": "Category",
+          "type": "string"
+        },
+        "context": {
+          "items": {
+            "$ref": "#/$defs/RelationQuote"
+          },
+          "minItems": 1,
+          "title": "Context",
+          "type": "array"
+        },
+        "contradicts": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Contradicts",
+          "type": "array"
+        },
+        "current_event": {
+          "title": "Current Event",
+          "type": "boolean"
+        },
+        "customer_device_fault": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Customer Device Fault"
+        },
+        "decision_path": {
+          "enum": [
+            "explicit_responsibility",
+            "customer_self_check",
+            "vendor_onsite_contact",
+            "unicom_onsite_recovery",
+            "equipment_ownership",
+            "role_only",
+            "unknown"
+          ],
+          "title": "Decision Path",
+          "type": "string"
+        },
+        "event_id": {
+          "description": "模型分组的事件标识，不是已核实的身份",
+          "minLength": 1,
+          "title": "Event Id",
+          "type": "string"
+        },
+        "modality": {
+          "enum": [
+            "asserted",
+            "suspected",
+            "negated",
+            "unknown"
+          ],
+          "title": "Modality",
+          "type": "string"
+        },
+        "no_followup": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "No Followup"
+        },
+        "procurement": {
+          "default": "unknown",
+          "enum": [
+            "客户",
+            "供应商",
+            "联通",
+            "unknown"
+          ],
+          "title": "Procurement",
+          "type": "string"
+        },
+        "procurement_quote": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RelationQuote"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "responsibility_quote": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RelationQuote"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "scope": {
+          "description": "业务／设备范围",
+          "minLength": 1,
+          "title": "Scope",
+          "type": "string"
+        },
+        "self_check": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RelationQuote"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "service_recovered": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RelationQuote"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "source_quote": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RelationQuote"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "source_tier": {
+          "enum": [
+            "rfo",
+            "vendor_feedback",
+            "branch_log",
+            "unknown"
+          ],
+          "title": "Source Tier",
+          "type": "string"
+        },
+        "speaker": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Speaker"
+        },
+        "statement": {
+          "description": "原文断言，与标准化结论分开",
+          "minLength": 1,
+          "title": "Statement",
+          "type": "string"
+        },
+        "unicom_onsite": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RelationQuote"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "vendor_contact": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RelationQuote"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "event_id",
+        "scope",
+        "context",
+        "current_event",
+        "modality",
+        "statement",
+        "source_tier",
+        "category",
+        "decision_path"
+      ],
+      "title": "PartyRelation",
       "type": "object"
     },
     "PhenomenonElement": {
@@ -2097,6 +2528,7 @@
       "enum": [
         "formal_determination",
         "claimed",
+        "business_context",
         "inferred_from_role"
       ],
       "title": "ResponsibilityBasis",
@@ -2315,6 +2747,17 @@
       "additionalProperties": false,
       "description": "只由本地解码器构建；original 的来源与引文须核验，但不用于补造正式结论。",
       "properties": {
+        "business_coverage": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/BusinessCoverage"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
         "checks": {
           "items": {
             "$ref": "#/$defs/ConstraintCheck"

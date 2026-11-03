@@ -159,10 +159,11 @@ class OpenAICompatibleTextProvider:
             data.suggestions = suggestions
             from copy import deepcopy
             from ..schema.relations import SemanticAssessment
+            from .responsibility_location import build_coverage
             data.semantic_assessment = SemanticAssessment(original={
                 key: deepcopy(parsed["elements"].get(key))
-                for key in ("start_time", "end_time", "cause")
-            })
+                for key in ("start_time", "end_time", "cause", "responsible_party", "location")
+            }, business_coverage=build_coverage(ctx))
         except TextProviderError:
             raise
         except (ValueError, TypeError, RecursionError):

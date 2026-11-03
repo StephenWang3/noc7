@@ -1,6 +1,6 @@
 """两栏建议独立保存；时间和原因保留模型关系并核对约束。
 
-模型责任方和地点在结构补全前保存为建议，正式字段置空。
+模型责任方和地点原答保留，新结构化业务关系通过约束后可进入正式字段。
 时间和原因不再调用 baseline 语义分类器，模型关系交给独立约束检查。
 现象的 value 与 evidence_refs 在本地写入。旁白和身份文本必须是引用原文的子串。
 """
@@ -174,24 +174,6 @@ def _step_label(value, action, refs, spans):
     return parsed or StepKind.COMMUNICATION.value
 
 
-def _basis_label(value, selected):
-    parsed = _one_of(value, ResponsibilityBasis)
-    if selected:
-        allowed = {
-            ResponsibilityBasis.FORMAL_DETERMINATION.value,
-            ResponsibilityBasis.CLAIMED.value,
-        }
-        return parsed if parsed in allowed else ResponsibilityBasis.CLAIMED.value
-    return parsed or ResponsibilityBasis.INFERRED_FROM_ROLE.value
-
-
-def _role_label(value, selected):
-    parsed = _one_of(value, LocationRole)
-    if selected:
-        return LocationRole.LOCATED_FAULT_POINT.value
-    return parsed or LocationRole.ALARM_LOCATION.value
-
-
 def _finish_conclusion(node, candidates, value, quote_key):
     status = _one_of(node.get("status"), ElementStatus)
     selected = node.get("selected") if isinstance(node.get("selected"), str) else None
@@ -232,11 +214,30 @@ def _relation(value, *, cause=False):
         return None
 
 
+def _business_relation(value, quote_key):
+    from ..schema.relations import PartyRelation, LocationRelation
+    try:
+        cls = PartyRelation if quote_key == "party" else LocationRelation
+        if isinstance(value, dict):
+            value = dict(value)
+            for key in ("source_tier", "modality", "category", "decision_path", "procurement", "city_scope"):
+                if key in value and value[key] is None:
+                    value[key] = "unknown"
+            if value.get("contradicts") is None:
+                value["contradicts"] = []
+            if value.get("speaker") == "":
+                value["speaker"] = None
+        return cls.model_validate(value).model_dump(mode="json")
+    except (ValueError, TypeError):
+        return None
+
+
 def _repair_quote_element(node, spans, quote_key):
     if not isinstance(node, dict):
         node = {}
     candidates = []
-    for item in node.get("candidates") or []:
+    raw_candidates = node.get("candidates")
+    for item in raw_candidates if isinstance(raw_candidates, list) else []:
         shell = _shell(item, spans, quote_key)
         if shell is None:
             continue
@@ -245,14 +246,16 @@ def _repair_quote_element(node, spans, quote_key):
             shell["relation"] = _relation(item.get("relation"), cause=True)
             shell["attribution"] = _one_of(item.get("attribution"), Attribution) or Attribution.UNKNOWN.value
         elif quote_key == "party":
-            shell["basis"] = item.get("basis")
+            shell["basis"] = _one_of(item.get("basis"), ResponsibilityBasis) or "inferred_from_role"
+            shell["relation"] = _business_relation(item.get("relation"), quote_key)
         else:
-            shell["role"] = item.get("role")
+            shell["role"] = _one_of(item.get("role"), LocationRole) or "alarm_location"
+            shell["relation"] = _business_relation(item.get("relation"), quote_key)
             if item.get("granularity") in _GRANULARITY:
                 shell["granularity"] = item["granularity"]
         candidates.append(shell)
     mapping = _number_ids(candidates, _CANDIDATE_RE, "C")
-    if quote_key == "statement":
+    if quote_key in {"statement", "party", "description"}:
         ids = {item["id"] for item in candidates}
         for item in candidates:
             relation = item.get("relation")
@@ -269,15 +272,18 @@ def _repair_quote_element(node, spans, quote_key):
     patched["_selection_invalid"] = node.get("selected") is not None and patched["selected"] is None
     value = node.get("value") if isinstance(node.get("value"), str) and node.get("value") else None
     status, value, selected, refs = _finish_conclusion(patched, candidates, value, quote_key)
+    if quote_key in {"party", "description"}:
+        # 正式选择由业务约束统一产生，不能借模型选中项改写 basis 或 role。
+        status, value, selected, refs = "unknown", None, None, []
     for item in candidates:
         chosen = item["id"] == selected
         if quote_key == "statement":
             if chosen and item["cause_kind"] not in {k.value for k in CAUSE_KINDS_ALLOWED_AS_VALUE}:
                 status, value, selected, refs = "unknown", None, None, []
         elif quote_key == "party":
-            item["basis"] = _basis_label(item.get("basis"), chosen)
+            item["basis"] = _one_of(item.get("basis"), ResponsibilityBasis) or "inferred_from_role"
         else:
-            item["role"] = _role_label(item.get("role"), chosen)
+            item["role"] = _one_of(item.get("role"), LocationRole) or "alarm_location"
     repaired = dict(status=status, value=value, selected=selected, evidence_refs=refs, candidates=candidates)
     repaired.update(_meta(node))
     return repaired
@@ -552,11 +558,12 @@ def ground_extraction(ctx: ExtractionContext, data: Extraction) -> Extraction:
         "handling_process": _ground_steps(elements.handling_process, spans),
     })
     from .semantic_constraints import apply_constraints
-    return apply_constraints(ctx, data.model_copy(update={
+    from .responsibility_location import apply_constraints as apply_business
+    return apply_business(ctx, apply_constraints(ctx, data.model_copy(update={
         "elements": elements,
         "events": [_ground_event(event, spans) for event in data.events],
         "service_identity": _ground_identity(data.service_identity, spans),
-    }))
+    })))
 
 
 def _is_time(node: dict) -> bool:
@@ -675,7 +682,7 @@ def separate_suggestions(payload):
     def reject_review(node):
         if isinstance(node, dict):
             if any(k in node and (k != "review" or node[k] is not None)
-                   for k in ("review", "suggestions", "quote_checks", "checks", "semantic_assessment")):
+                   for k in ("review", "suggestions", "quote_checks", "checks", "semantic_assessment", "business_coverage")):
                 from .text_config import TextProviderError
                 raise TextProviderError("模型不能提交人工审核或本地核验记录，已拒绝。")
             for value in node.values():
@@ -695,22 +702,17 @@ def separate_suggestions(payload):
     for name in ("responsible_party", "location"):
         node = elements.get(name, {})
         suggestions.append(BusinessSuggestion(element=name, original=deepcopy(node)))
+        # 没有新关系的旧回答仍仅保留建议；异常原格式也保留，不强行补造关系。
+        raw_candidates = node.get("candidates") if isinstance(node, dict) else None
+        candidates = [c for c in raw_candidates if isinstance(c, dict) and isinstance(c.get("relation"), dict)] if isinstance(raw_candidates, list) else []
         elements[name] = dict(status="unknown", value=None, selected=None,
-                              candidates=[], evidence_refs=[])
+                              candidates=candidates, evidence_refs=[])
     # 顶层 quotes 没有要素归属；只有建议独占的来源可以移入建议核验。
-    other_refs = set()
-    def collect(node):
-        if isinstance(node, dict):
-            if "evidence_refs" in node:
-                other_refs.update(source_refs(node))
-            for v in node.values():
-                collect(v)
-        elif isinstance(node, list):
-            for v in node:
-                collect(v)
-    collect(elements)
-    collect(result.get("events", []))
-    collect(result.get("service_identity"))
+    from .semantic_constraints import original_refs
+    other_refs = set(original_refs({k: v for k, v in elements.items()
+                                    if k not in {"responsible_party", "location"}}))
+    other_refs.update(original_refs(result.get("events", [])))
+    other_refs.update(original_refs(result.get("service_identity")))
     kept = []
     for quote in result.get("quotes") or []:
         if not isinstance(quote, dict) or not isinstance(quote.get("quote"), str) or not isinstance(quote.get("evidence_id"), str):

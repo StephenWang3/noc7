@@ -29,7 +29,7 @@ from ..schema import (
     ValidationIssue,
 )
 
-VERSION = "1.2"
+VERSION = "1.3"
 
 
 def issue(code: IssueCode, message: str, refs=(), element=None) -> ValidationIssue:
@@ -49,6 +49,13 @@ class ExtractionRejected(ValueError):
         super().__init__("；".join(i.message for i in issues))
 
 
+def _candidate_value(candidate, name):
+    if name in {ElementName.RESPONSIBLE_PARTY, ElementName.LOCATION}:
+        from ..providers.responsibility_location import formal_value
+        return formal_value(candidate, name)
+    return next((getattr(candidate, key) for key in ("time", "statement") if hasattr(candidate, key)), None)
+
+
 def validate_extraction(ctx: ExtractionContext, data: Extraction) -> None:
     """不可信提供方先过证据校验；失败整份拒绝，不渲染带错引用的报告。"""
     spans = {s.id: s for s in ctx.evidence}
@@ -62,6 +69,8 @@ def validate_extraction(ctx: ExtractionContext, data: Extraction) -> None:
     if data.semantic_assessment:
         from ..providers.semantic_constraints import original_refs
         refs.extend(original_refs(data.semantic_assessment.original))
+        if data.semantic_assessment.business_coverage:
+            refs.extend(data.semantic_assessment.business_coverage.covered_logs.values())
     errors = []
     missing = sorted(set(refs) - spans.keys())
     if missing:
@@ -79,7 +88,8 @@ def validate_extraction(ctx: ExtractionContext, data: Extraction) -> None:
 
     if data.semantic_assessment:
         from ..providers.semantic_constraints import original_quotes
-        for ref, text in original_quotes(data.semantic_assessment.original):
+        for ref, text in original_quotes({k: v for k, v in data.semantic_assessment.original.items()
+                                               if k not in {"responsible_party", "location"}}):
             if ref in spans and not matches(text, spans[ref], "semantic_assessment/original"):
                 errors.append(issue(IssueCode.EVIDENCE_QUOTE_MISMATCH, "原始关系引文与证据不符。", [ref]))
     for suggestion in data.suggestions:
@@ -138,7 +148,8 @@ def validate_extraction(ctx: ExtractionContext, data: Extraction) -> None:
                     )
                 return False
 
-            if text and supporting and not any(supported(s) for s in supporting):
+            business = name in {ElementName.RESPONSIBLE_PARTY, ElementName.LOCATION} and data.semantic_assessment is not None
+            if text and supporting and not any(supported(s) for s in supporting) and not business:
                 errors.append(
                     issue(
                         IssueCode.EVIDENCE_QUOTE_MISMATCH,
@@ -151,7 +162,7 @@ def validate_extraction(ctx: ExtractionContext, data: Extraction) -> None:
             if relation:
                 from ..providers.semantic_constraints import relation_quotes
                 for q in relation_quotes(relation):
-                    if q.evidence_id in spans and not matches(q.quote, spans[q.evidence_id], f"{name.value}/candidates/{candidate.id}/relation"):
+                    if q.evidence_id in spans and not matches(q.quote, spans[q.evidence_id], f"{name.value}/candidates/{candidate.id}/relation") and not business:
                         errors.append(issue(IssueCode.EVIDENCE_QUOTE_MISMATCH,
                                             "关系引文与原文不一致。", [q.evidence_id], name))
             if hasattr(candidate, "time_kind"):
@@ -240,14 +251,7 @@ def validate_extraction(ctx: ExtractionContext, data: Extraction) -> None:
                         name,
                     )
                 )
-            elif getattr(el, "value") != next(
-                (
-                    getattr(chosen, k)
-                    for k in ("time", "statement", "party", "description")
-                    if hasattr(chosen, k)
-                ),
-                None,
-            ):
+            elif getattr(el, "value") != _candidate_value(chosen, name):
                 errors.append(
                     issue(
                         IssueCode.EVIDENCE_QUOTE_MISMATCH,
@@ -357,6 +361,11 @@ def validate_extraction(ctx: ExtractionContext, data: Extraction) -> None:
         expected = apply_constraints(ctx, data)
         if any(getattr(expected.elements, n) != getattr(data.elements, n) for n in NAMES):
             errors.append(issue(IssueCode.SEMANTIC_RELATION_INCOMPLETE, "正式结论未遵守关系约束。"))
+    from ..providers.responsibility_location import validate_saved
+    try:
+        validate_saved(data.elements, spans, data.semantic_assessment, data.suggestions)
+    except ValueError:
+        errors.append(issue(IssueCode.SEMANTIC_RELATION_INCOMPLETE, "正式责任方或地点未遵守业务约束。"))
     data.quote_checks = checks
     if errors:
         raise ExtractionRejected(errors)

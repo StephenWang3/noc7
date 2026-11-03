@@ -35,8 +35,47 @@ class CauseRelation(SemanticRelation):
     speaker: str = Field(min_length=1)
 
 
+class BusinessRelation(SemanticRelation):
+    statement: str = Field(min_length=1, description="原文断言，与标准化结论分开")
+    source_tier: Literal["rfo", "vendor_feedback", "branch_log", "unknown"]
+    source_quote: RelationQuote | None = None
+    speaker: str | None = Field(default=None, min_length=1)
+    contradicts: list[str] = Field(default_factory=list)
+
+
+class PartyRelation(BusinessRelation):
+    responsibility_quote: RelationQuote | None = None
+    category: Literal["客户", "供应商", "联通", "other", "joint", "unknown"]
+    decision_path: Literal["explicit_responsibility", "customer_self_check", "vendor_onsite_contact",
+                           "unicom_onsite_recovery", "equipment_ownership", "role_only", "unknown"]
+    customer_device_fault: bool | None = None
+    procurement: Literal["客户", "供应商", "联通", "unknown"] = "unknown"
+    procurement_quote: RelationQuote | None = None
+    self_check: RelationQuote | None = None
+    no_followup: bool | None = None
+    vendor_contact: RelationQuote | None = None
+    unicom_onsite: RelationQuote | None = None
+    service_recovered: RelationQuote | None = None
+
+
+class LocationRelation(BusinessRelation):
+    city: str | None = None
+    city_quote: RelationQuote | None = None
+    located: bool | None = None
+    city_scope: Literal["single_city", "cross_city", "unknown"] = "unknown"
+
+
+class BusinessCoverage(Model):
+    """本地记录输入覆盖范围，不能由模型提交；哈希绑定完整处理记录。"""
+    detail_status: str | None = None
+    log_hashes: dict[str, str] = Field(default_factory=dict)
+    covered_logs: dict[str, EvidenceId] = Field(default_factory=dict)
+    related_materials_complete: bool = False
+
+
+
 class ConstraintCheck(Model):
-    element: Literal["start_time", "end_time", "cause"]
+    element: Literal["start_time", "end_time", "cause", "responsible_party", "location"]
     candidate_id: str | None = None
     code: IssueCode = IssueCode.SEMANTIC_RELATION_INCOMPLETE
     outcome: Literal["eligible", "pending", "conflict", "downgraded"]
@@ -48,3 +87,4 @@ class SemanticAssessment(Model):
     """只由本地解码器构建；original 的来源与引文须核验，但不用于补造正式结论。"""
     original: dict[str, Any] = Field(default_factory=dict)
     checks: list[ConstraintCheck] = Field(default_factory=list)
+    business_coverage: BusinessCoverage | None = None

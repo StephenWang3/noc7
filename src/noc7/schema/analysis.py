@@ -95,6 +95,8 @@ class AnalysisResult(Model):
             yield from original_refs(self.semantic_assessment.original)
             for check in self.semantic_assessment.checks:
                 yield from check.evidence_refs
+            if self.semantic_assessment.business_coverage:
+                yield from self.semantic_assessment.business_coverage.covered_logs.values()
         for suggestion in self.suggestions:
             yield from suggestion.iter_evidence_refs()
         for check in self.quote_checks:
@@ -128,7 +130,8 @@ class AnalysisResult(Model):
         spans = {s.id: s for s in self.evidence}
         if self.semantic_assessment:
             from ..providers.semantic_constraints import original_quotes, relation_quotes, pending_reason
-            for ref, text in original_quotes(self.semantic_assessment.original):
+            for ref, text in original_quotes({k: v for k, v in self.semantic_assessment.original.items()
+                                               if k not in {"responsible_party", "location"}}):
                 if match_quote(text, spans[ref].text).status == "mismatch":
                     raise ValueError("原始关系引文与证据不符")
             for name in ("start_time", "end_time", "cause"):
@@ -145,6 +148,8 @@ class AnalysisResult(Model):
                         raise ValueError("正式结论与选中候选不一致")
                     if name == "cause" and el.status == "confirmed":
                         raise ValueError("自动原因状态最高为 documented")
+        from ..providers.responsibility_location import validate_saved
+        validate_saved(self.elements, spans, self.semantic_assessment, self.suggestions)
         for suggestion in self.suggestions:
             expected = [match_quote(text, spans[ref].text, path=path, evidence_id=ref)
                         for path, ref, text in suggestion.quote_requests()]

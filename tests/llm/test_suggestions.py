@@ -185,3 +185,13 @@ def test_nbsp_cause_and_time_keep_strict_semantics(sample):
         assert result.elements.start_time.status == "documented"
         assert result.elements.start_time.candidates[0].time_kind == "customer_reported_start"
     assert results[0].elements.start_time.value.iso == results[1].elements.start_time.value.iso
+
+
+def test_malformed_new_business_relation_remains_a_pending_suggestion(sample):
+    ctx, payload = suggestion_case(sample, '<script>不是正式故障地点</script>')
+    payload['elements']['location']['candidates'][0]['relation'] = dict(city='虚构城市', source_tier='rfo',
+        source_quote=dict(evidence_id=ctx.evidence[0].id, quote='不匹配的关系引文'))
+    result = decode(ctx, payload)
+    assert result.elements.location.value is None
+    assert result.suggestions[1].original == payload['elements']['location']
+    assert any(c.status == 'mismatch' and c.path.startswith('relation/') for c in result.suggestions[1].checks)

@@ -24,7 +24,8 @@ TIME_LABELS = {
 def relation_quotes(relation):
     if relation:
         yield from relation.context
-        for key in ("date_anchor", "timezone_anchor", "customer_confirmation"):
+        for key in ("date_anchor", "timezone_anchor", "customer_confirmation", "responsibility_quote", "source_quote",
+                    "procurement_quote", "self_check", "vendor_contact", "unicom_onsite", "service_recovered", "city_quote"):
             quote = getattr(relation, key, None)
             if quote:
                 yield quote

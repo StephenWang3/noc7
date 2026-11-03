@@ -275,10 +275,17 @@ def build_company_report(result: AnalysisResult) -> CompanyReport:
         c = next(c for c in e.cause.candidates if c.id == e.cause.selected)
         cause_lines = ((Part(f"{c.relation.speaker}记载："), *cause_lines[0],
                         Part("【有记录，未经人工审核】", True)), *cause_lines[1:])
+    def business_parts(el):
+        parts = _value_parts(el)
+        chosen = next((c for c in el.candidates if c.id == el.selected), None)
+        if el.value and chosen and chosen.relation and not el.review:
+            parts = (*parts, Part("【" + (el.note or "有记录，未经人工审核") + "】", True))
+        return parts
+
     analysis = (
         *cause_lines,
-        (Part("责任方："), *_value_parts(e.responsible_party),
-         Part("；故障位置："), *_value_parts(e.location)),
+        (Part("责任方："), *business_parts(e.responsible_party),
+         Part("；故障位置："), *business_parts(e.location)),
     )
     cells = {
         "customer": _text_lines(fields.get("customer")),
