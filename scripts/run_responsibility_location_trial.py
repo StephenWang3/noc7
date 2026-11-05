@@ -65,17 +65,43 @@ def summarize(rows):
     return base
 
 
+def invalid_response(status, audits):
+    return status != 'ok' and any('raw_response' in r or r.get('outcome') == 'response_too_large' for r in audits)
+
+
+def run_serial(items, run, checkpoint):
+    """不预提交下一单；每单结束后先检查停止条件。"""
+    rows, streak, stop_reason = [], 0, None
+    for item in items:
+        row = run(item)
+        rows.append(row)
+        if row.get('http_status') == 402:
+            stop_reason = 'http_402'
+        else:
+            bad = row.get('http_status') == 503 or row.get('invalid_response', False)
+            streak = streak + 1 if bad else 0
+            if streak >= 3:
+                stop_reason = 'three_consecutive_503_or_invalid_responses'
+            elif row.get('request_count', 0) == 0:
+                stop_reason = 'local_failure_before_request'
+        checkpoint(rows, stop_reason)
+        if stop_reason:
+            break
+    return rows, stop_reason
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument('--baseline', type=Path, required=True)
     ap.add_argument('--responses', type=Path, required=True)
     ap.add_argument('--out', type=Path, required=True)
     ap.add_argument('--model-config', type=Path, default=Path('config/models/deepseek.json'))
-    ap.add_argument('--workers', type=int, choices=range(1, 5), default=3)
-    source = ap.add_mutually_exclusive_group()
-    source.add_argument('--replay-from', type=Path)
-    source.add_argument('--retry-from', type=Path, help='复用已收到的唯一响应，仅重试没有模型响应的服务失败；仍写新目录')
+    ap.add_argument('--workers', type=int, choices=range(1, 5), default=1)
+    ap.add_argument('--replay-from', type=Path)
+
     args = ap.parse_args()
+    if not args.replay_from and args.workers != 1:
+        ap.error("在线试跑仅允许 workers=1，每张一次且不自动重试")
     os.umask(0o077)
     baseline, responses, out = map(private_path, (args.baseline, args.responses, args.out))
     ensure_output_allowed(DataClass.REAL, out)
@@ -88,13 +114,19 @@ def main():
         private_path(Path(entry['source']))
     if len(inputs) != 22:
         raise ValueError('固定已结单集合应恰好为 22 张')
+    planned_cases = len(inputs)
     replay = private_path(args.replay_from) if args.replay_from else None
-    reuse = replay or (private_path(args.retry_from) if args.retry_from else None)
+    reuse = replay
     if reuse and (out.is_relative_to(reuse) or reuse.is_relative_to(out)):
         raise ValueError('输出与复用响应目录不能互相包含')
     if replay:
+        source_rows = read(replay / 'private-details.json')
+        aliases = [r['alias'] for r in source_rows]
+        if len(set(aliases)) != len(aliases) or not set(aliases) <= {e['alias'] for e, *_ in inputs}:
+            raise ValueError('回放记录与固定输入集合不符')
+        inputs = [item for item in inputs if item[0]['alias'] in set(aliases)]
         socket.socket = lambda *a, **kw: (_ for _ in ()).throw(RuntimeError('回放禁止网络'))
-    config = load_model_config(args.model_config).model_copy(update={'max_request_bytes': 4194304, 'max_retries': 2})
+    config = load_model_config(args.model_config).model_copy(update={'max_request_bytes': 4194304, 'max_retries': 0})
     out.mkdir(mode=0o700)
     write(out / 'mapping.json', [entry for entry, *_ in inputs])
     write(out / 'config.json', config.model_dump(mode='json'))
@@ -156,22 +188,34 @@ def main():
             if http:
                 row['http_status'] = int(http[1])
             write(folder / 'failure.json', dict(type=type(exc).__name__, traceback=traceback.format_exc()))
-        records = [read(p) for p in (folder / 'audit').glob('*.json')]
-        records = [r for r in records if 'raw_response' in r]
+        audits = [read(p) for p in (folder / 'audit').glob('*.json')]
+        row['request_count'] = 0 if replay else sum(r.get('request_attempts', 0) for r in audits)
+        records = [r for r in audits if 'raw_response' in r]
+        row['invalid_response'] = invalid_response(row['status'], audits)
         if records:
             row['binding'] = {k: records[0][k] for k in ('bundle_sha256', 'evidence_sha256', 'prompt_version')}
             row['binding']['response_sha256'] = hashlib.sha256(records[0]['raw_response'].encode()).hexdigest()
         write(folder / 'metrics.json', row)
         return row
 
-    rows = []
-    with ThreadPoolExecutor(max_workers=args.workers) as pool:
-        for future in as_completed([pool.submit(run, item) for item in inputs]):
-            rows.append(future.result())
-            write(out / 'private-details.json', sorted(rows, key=lambda r: r['alias']))
-            write(out / 'summary.json', summarize(rows))
-            print(f"完成 {len(rows)}/{len(inputs)}；本单 {rows[-1]['status']}", flush=True)
-    write(out / 'summary.json', dict(summarize(rows), external_services=not bool(replay)))
+    def checkpoint(rows, stop_reason=None):
+        write(out / 'private-details.json', sorted(rows, key=lambda r: r['alias']))
+        counts = dict(summarize(rows), planned_cases=planned_cases, completed_cases=len(rows),
+                      not_attempted_cases=planned_cases-len(rows),
+                      request_count=sum(r.get('request_count', 0) for r in rows),
+                      stop_reason=stop_reason, external_services=not bool(replay),
+                      workers=args.workers, max_retries=0)
+        write(out / 'summary.json', counts)
+        print(f"完成 {len(rows)}/{len(inputs)}；本单 {rows[-1]['status']}；模型请求累计 {counts['request_count']}", flush=True)
+
+    if replay:
+        rows = []
+        with ThreadPoolExecutor(max_workers=args.workers) as pool:
+            for future in as_completed([pool.submit(run, item) for item in inputs]):
+                rows.append(future.result())
+                checkpoint(rows)
+    else:
+        run_serial(inputs, run, checkpoint)
 
 
 if __name__ == '__main__':

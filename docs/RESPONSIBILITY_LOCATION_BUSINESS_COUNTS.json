@@ -212,5 +212,216 @@
         }
       }
     }
+  },
+  "budget_online_trial": {
+    "planned_cases": 22,
+    "processed_cases": 21,
+    "model_requests": 21,
+    "responses_received": 20,
+    "not_requested_cases": 1,
+    "workers": 1,
+    "max_retries": 0,
+    "stop_reason": "http_402",
+    "max_consecutive_503_or_invalid": 2,
+    "returned_invalid_json_cases": 2,
+    "missing_reference_rejections": 1,
+    "http_402_cases": 1,
+    "http_503_cases": 0,
+    "baseline_model_requests_this_turn": 0,
+    "offline_model_requests": 0,
+    "current_prompt_response_cases": 20,
+    "current_prompt_version": "text-extraction:3a708c1274833d6f",
+    "phases": {
+      "online": {
+        "cases": 21,
+        "delivered": 17,
+        "suggestions": {
+          "responsible_party": 17,
+          "location": 17
+        },
+        "paths": {
+          "explicit_responsibility": 3,
+          "vendor_onsite_contact": 2,
+          "customer_self_check": 1
+        },
+        "sources": {
+          "responsible_party": {
+            "vendor_feedback": 4,
+            "rfo": 1,
+            "branch_log": 1
+          },
+          "location": {
+            "rfo": 1
+          }
+        },
+        "rejections": {
+          "EVIDENCE_REF_MISSING": 1
+        },
+        "failure_types": {
+          "ExtractionRejected": 1,
+          "TextProviderError": 3
+        },
+        "roundtrip_equal": 17,
+        "word_valid": 17,
+        "request_count": 21,
+        "elements": {
+          "responsible_party": {
+            "filled": 6,
+            "unfilled_success": 11,
+            "states": {
+              "unknown": 11,
+              "documented": 6
+            },
+            "candidate_cases": 17,
+            "undelivered_processed": 4
+          },
+          "location": {
+            "filled": 1,
+            "unfilled_success": 16,
+            "states": {
+              "unknown": 16,
+              "documented": 1
+            },
+            "candidate_cases": 17,
+            "undelivered_processed": 4
+          }
+        }
+      },
+      "same_answer_current": {
+        "cases": 21,
+        "delivered": 17,
+        "suggestions": {
+          "responsible_party": 17,
+          "location": 17
+        },
+        "paths": {
+          "explicit_responsibility": 3,
+          "vendor_onsite_contact": 2,
+          "customer_self_check": 1
+        },
+        "sources": {
+          "responsible_party": {
+            "vendor_feedback": 4,
+            "rfo": 1,
+            "branch_log": 1
+          },
+          "location": {
+            "rfo": 1
+          }
+        },
+        "rejections": {
+          "EVIDENCE_REF_MISSING": 1
+        },
+        "failure_types": {
+          "ExtractionRejected": 1,
+          "TextProviderError": 2,
+          "ModelResponseUnavailable": 1
+        },
+        "roundtrip_equal": 17,
+        "word_valid": 17,
+        "request_count": 0,
+        "elements": {
+          "responsible_party": {
+            "filled": 6,
+            "unfilled_success": 11,
+            "states": {
+              "unknown": 11,
+              "documented": 6
+            },
+            "candidate_cases": 17,
+            "undelivered_processed": 4
+          },
+          "location": {
+            "filled": 1,
+            "unfilled_success": 16,
+            "states": {
+              "unknown": 16,
+              "documented": 1
+            },
+            "candidate_cases": 17,
+            "undelivered_processed": 4
+          }
+        }
+      },
+      "same_answer_old": {
+        "cases": 21,
+        "delivered": 17,
+        "suggestions": {
+          "responsible_party": 17,
+          "location": 17
+        },
+        "paths": {},
+        "sources": {
+          "responsible_party": {},
+          "location": {}
+        },
+        "rejections": {
+          "EVIDENCE_REF_MISSING": 1
+        },
+        "failure_types": {
+          "ExtractionRejected": 1,
+          "TextProviderError": 2,
+          "ModelResponseUnavailable": 1
+        },
+        "roundtrip_equal": 17,
+        "word_valid": 17,
+        "request_count": 0,
+        "elements": {
+          "responsible_party": {
+            "filled": 0,
+            "unfilled_success": 17,
+            "states": {
+              "unknown": 17
+            },
+            "candidate_cases": 0,
+            "undelivered_processed": 4
+          },
+          "location": {
+            "filled": 0,
+            "unfilled_success": 17,
+            "states": {
+              "unknown": 17
+            },
+            "candidate_cases": 0,
+            "undelivered_processed": 4
+          }
+        }
+      }
+    },
+    "source_review": {
+      "responsible_party": {
+        "formal_values": 6,
+        "assessments": {
+          "supported_documented": 4,
+          "needs_relation_review": 1,
+          "semantic_error": 1
+        }
+      },
+      "location": {
+        "formal_values": 1,
+        "assessments": {
+          "supported_documented": 1
+        }
+      },
+      "total_formal_values_reviewed": 7,
+      "human_confirmed": 0,
+      "auxiliary_procurement_mislabels": 2,
+      "candidate_attribution_mismatches": 5,
+      "unsupported_lower_candidate_actor_cases": 1
+    },
+    "reported_usage": {
+      "prompt_tokens": 1035636,
+      "completion_tokens": 432749,
+      "total_tokens": 1468385,
+      "prompt_cache_hit_tokens": 68864,
+      "prompt_cache_miss_tokens": 966772,
+      "reasoning_tokens": 371340
+    },
+    "usage_available_responses": 20,
+    "replay_semantic_fields_equal": true,
+    "same_answer_other_element_difference_cases": 0,
+    "budget_tests_passed": 12,
+    "offline_regression_tests_passed": 130,
+    "semantic_accuracy": null
   }
 }
