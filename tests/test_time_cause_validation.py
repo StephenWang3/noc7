@@ -179,7 +179,7 @@ def test_closed_filter_does_not_load_other_responses(tmp_path):
         checker.load_inputs(tmp_path)
 
 
-@pytest.mark.parametrize('outcome,allowed', [('http_error', True), ('transport_error', True), ('request_prepared', False)])
+@pytest.mark.parametrize('outcome,allowed', [('http_error', True), ('transport_error', True), ('response_too_large', True), ('request_prepared', False)])
 def test_offline_failure_requires_unique_terminal_audit(tmp_path, outcome, allowed):
     record, audit = baseline(tmp_path)
     record.pop('raw_response')
@@ -202,3 +202,38 @@ def test_empty_http_body_is_a_saved_response_not_missing_request(tmp_path):
     checker.write(audit/'one.json', record)
     inputs = checker.load_inputs(tmp_path, keep_request_failures=True)
     assert checker.response_digest(inputs[0][2]) is not None
+
+
+@pytest.mark.parametrize('events,expected_count,reason', [
+    ([402, 'ok'], 1, 'http_402'),
+    ([503, 'invalid', 503, 'ok'], 3, 'three_consecutive_503_or_invalid'),
+    (['invalid', 'invalid', 'invalid', 'ok'], 3, 'three_consecutive_503_or_invalid'),
+    ([503, 'ok', 'invalid', 503, 'invalid', 'ok'], 5, 'three_consecutive_503_or_invalid'),
+    ([503, 'transport', 'invalid', 'ok'], 4, None),
+])
+def test_conservative_run_stops_before_starting_next_case(events, expected_count, reason):
+    inputs = [(dict(alias=f'F{i:02d}'), None, None, None) for i in range(len(events))]
+    called, checkpoints = [], []
+    def run(item):
+        index = len(called); called.append(item[0]['alias'])
+        event = events[index]
+        return dict(alias=item[0]['alias'], request_count=1, response_invalid=event=='invalid',
+                    http_status=event if isinstance(event, int) else None)
+    rows, control = checker.run_conservative(inputs, run, lambda rows, state: checkpoints.append(dict(state)))
+    assert len(called) == len(rows) == control['model_requests'] == expected_count
+    assert control['stop_reason'] == reason
+    assert control['not_started'] == [item[0]['alias'] for item in inputs[expected_count:]]
+    assert len(checkpoints) == expected_count
+    assert checkpoints[-1] == control
+
+
+def test_attempted_subset_does_not_load_unstarted_audits(tmp_path):
+    record, _ = baseline(tmp_path)
+    entries = checker.read(tmp_path/'mapping.json')
+    entries[0]['closed'] = True
+    checker.write(tmp_path/'mapping.json', [*entries, dict(alias='not-started', closed=True, source='absent')])
+    checker.write(tmp_path/'run.json', [dict(alias='F01', request_count=1)])
+    aliases = checker.attempted_aliases(tmp_path)
+    assert aliases == {'F01'}
+    assert len(checker.load_inputs(tmp_path, aliases=aliases)) == 1
+    with pytest.raises(ValueError): checker.load_inputs(tmp_path, aliases={'not-in-map'})

@@ -84,6 +84,8 @@ class OpenAICompatibleTextProvider:
             ensure_allowed(self.config.gate_config(), ctx.bundle.manifest.data_class)
             request = urllib.request.Request(self.url, data=body, headers=headers)
             delay = min(2 ** attempt, 30)
+            if audit:
+                audit.record(outcome="request_started", request_attempts=attempt + 1)
             try:
                 with opener.open(request, timeout=self.config.timeout_seconds) as response:
                     raw = response.read(self.config.max_response_bytes + 1)

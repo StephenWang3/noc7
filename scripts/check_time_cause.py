@@ -37,11 +37,13 @@ def write(path, value):
     path.write_text(json.dumps(value, ensure_ascii=False, indent=2) + '\n')
 
 
-def load_inputs(baseline, responses=None, *, closed_only=False, keep_request_failures=False):
+def load_inputs(baseline, responses=None, *, closed_only=False, keep_request_failures=False, aliases=None):
     """所有包和响应先验证，再允许任何网络调用；不按目录猜选版本。"""
     responses = responses or baseline
     output = []
     for entry in read(baseline / 'mapping.json'):
+        if aliases is not None and entry['alias'] not in aliases:
+            continue
         if closed_only and not entry.get('closed', False):
             continue
         bundle = load_bundle(entry['source'])
@@ -50,7 +52,7 @@ def load_inputs(baseline, responses=None, *, closed_only=False, keep_request_fai
         records = [read(p) for p in (responses / entry['alias']).glob('audit*/*.json')]
         if keep_request_failures:
             if len(records) != 1 or ('raw_response' not in records[0]
-                                    and records[0].get('outcome') not in {'http_error', 'transport_error'}):
+                                    and records[0].get('outcome') not in {'http_error', 'transport_error', 'response_too_large'}):
                 raise ValueError('原输入不是唯一完成请求审计，不能把缺失响应当作请求失败')
         else:
             records = [r for r in records if 'raw_response' in r]
@@ -66,6 +68,8 @@ def load_inputs(baseline, responses=None, *, closed_only=False, keep_request_fai
         if evidence_digest(ctx) != record['evidence_sha256']:
             raise ValueError('实际请求证据摘要不一致')
         output.append((entry, bundle, record, ctx))
+    if aliases is not None and {e['alias'] for e, *_ in output} != aliases:
+        raise ValueError('已请求集合与输入映射不一致')
     return output
 
 
@@ -219,7 +223,7 @@ def comparison_summary(inputs, previous, rows):
     runs = {r['alias']: r for r in rows}
     output = {}
     for label, closed in (('closed', True), ('other', False)):
-        entries = [e for e, _, _, _ in inputs if e['closed'] == closed]
+        entries = [e for e, _, _, _ in inputs if e['closed'] == closed and e['alias'] in runs]
         group = dict(total=len(entries), before_ok=0, after_ok=0, elements={})
         for e in entries:
             group['before_ok'] += previous[e['alias']]['status'] == 'ok'
@@ -254,6 +258,40 @@ def evaluate(result, targets):
     return rows
 
 
+def attempted_aliases(responses):
+    rows = read(responses / 'run.json')
+    if len({r['alias'] for r in rows}) != len(rows):
+        raise ValueError('试跑结果身份不唯一')
+    return {r['alias'] for r in rows if r.get('request_count', 0) > 0}
+
+
+def run_conservative(inputs, run, progress):
+    """逐张执行，停发判断发生在下一张开始前；不预提交任何任务。"""
+    rows, streak, stop_reason = [], 0, None
+    for item in inputs:
+        row = run(item)
+        rows.append(row)
+        if row.get('request_count', 0) > 1:
+            stop_reason = 'unexpected_multiple_requests'
+        elif row.get('http_status') == 402:
+            stop_reason = 'http_402'
+        else:
+            bad = row.get('http_status') == 503 or row.get('response_invalid', False)
+            streak = streak + 1 if bad else 0
+            if streak >= 3:
+                stop_reason = 'three_consecutive_503_or_invalid'
+        control = dict(planned_cases=len(inputs), processed_cases=len(rows),
+                       requested_cases=sum(r.get('request_count', 0) > 0 for r in rows),
+                       model_requests=sum(r.get('request_count', 0) for r in rows),
+                       consecutive_bad=streak, stop_reason=stop_reason,
+                       not_started=[e['alias'] for e, *_ in inputs[len(rows):]],
+                       workers=1, max_retries=0)
+        progress(rows, control)
+        if stop_reason:
+            break
+    return rows, control
+
+
 def main():
     ap=argparse.ArgumentParser(description=__doc__)
     ap.add_argument('mode', choices=['replay','trial'])
@@ -268,8 +306,14 @@ def main():
     ap.add_argument('--closed-only', action='store_true', help='仅使用映射中详情已结单工单')
     ap.add_argument('--compare-new-responses', action='store_true', help='显式允许新旧模型响应不同，仍校验原包与实际证据绑定')
     ap.add_argument('--legacy-recovery', action='store_true', help='仅离线诊断：同一回答按原冲突规则处理恢复时间')
+    ap.add_argument('--conservative-trial', action='store_true', help='串行限额试跑：402或连续三张503/不合格内容即停，不预提交、不补发')
+    ap.add_argument('--attempted-only', action='store_true', help='只离线重放本次真正发起过请求的工单，未开始工单不伪装成失败')
     ap.add_argument('--workers', type=int, choices=range(1,5), default=3)
     args=ap.parse_args()
+    if args.conservative_trial and (args.mode != 'trial' or args.workers != 1):
+        raise ValueError('限额在线试跑要求 trial 且 workers=1')
+    if args.attempted_only and (args.mode != 'replay' or not args.responses):
+        raise ValueError('已请求子集仅用于指定响应目录的离线回放')
     os.umask(0o077)
     baseline=args.baseline.expanduser().resolve(); out=args.out.expanduser().resolve()
     private=(Path.home()/'.noc7').resolve()
@@ -285,8 +329,12 @@ def main():
         raise ValueError('旧恢复策略只允许禁网诊断')
     if args.compare_new_responses and not args.compare_results:
         raise ValueError('新回答对照必须指定旧结果目录')
-    inputs=load_inputs(baseline, args.responses.expanduser().resolve() if args.responses else None,
-                       closed_only=args.closed_only, keep_request_failures=args.keep_request_failures)
+    response_root=args.responses.expanduser().resolve() if args.responses else None
+    aliases=attempted_aliases(response_root) if args.attempted_only else None
+    inputs=load_inputs(baseline, response_root, closed_only=args.closed_only,
+                       keep_request_failures=args.keep_request_failures, aliases=aliases)
+    if not inputs:
+        raise ValueError('没有可执行工单，不发起请求')
     if args.compare_results and args.mode != 'replay' and not args.compare_new_responses:
         raise ValueError('只允许离线比较')
     previous=load_comparison(args.compare_results.expanduser().resolve(),inputs,
@@ -370,15 +418,37 @@ def main():
             write(folder/'comparison.json',compare_result(previous[alias],result,row['status']))
         if local_previous is not None:
             write(folder/'local-comparison.json',compare_result(local_previous[alias],result,row['status']))
+        if args.mode == 'trial':
+            audits=[read(p) for p in (folder/'audit').glob('*.json')]
+            if len(audits)>1:
+                raise ValueError('单张出现多份请求审计，立即停止')
+            actual=audits[0] if audits else {}
+            row['request_count']=actual.get('request_attempts', 0)
+            row['http_status']=actual.get('http_status')
+            row['audit_outcome']=actual.get('outcome')
+            row['response_invalid']=(actual.get('outcome') in {'rejected','response_too_large'}
+                                     or ('raw_response' in actual and (actual.get('outcome')!='accepted' or row['status']=='rejected')))
         write(folder/'metrics.json',row)
         return row
 
     rows=[]
-    with ThreadPoolExecutor(max_workers=args.workers) as pool:
-        for f in as_completed([pool.submit(run,item) for item in inputs]):
-            row=f.result(); rows.append(row)
-            print(row['alias'],row['status'],f'{len(rows)}/{len(inputs)}',flush=True)
-            write(out/'run.json',sorted(rows,key=lambda r:r['alias']))
+    control=None
+    def progress(completed, execution):
+        row=completed[-1]
+        print(row['alias'],row['status'],f'{len(completed)}/{len(inputs)}',flush=True)
+        write(out/'run.json',sorted(completed,key=lambda r:r['alias']))
+        write(out/'run-control.json',execution)
+    if args.conservative_trial:
+        write(out/'execution-policy.json',dict(planned_cases=len(inputs),workers=1,max_retries=0,
+              stop_http=[402],stop_consecutive=3,consecutive_http=[503],stop_invalid=True,
+              prompt_version=OpenAICompatibleTextProvider.prompt_version))
+        rows,control=run_conservative(inputs,run,progress)
+    else:
+        with ThreadPoolExecutor(max_workers=args.workers) as pool:
+            for f in as_completed([pool.submit(run,item) for item in inputs]):
+                row=f.result(); rows.append(row)
+                print(row['alias'],row['status'],f'{len(rows)}/{len(inputs)}',flush=True)
+                write(out/'run.json',sorted(rows,key=lambda r:r['alias']))
     if args.mode == 'trial':
         bindings=[]
         for e,b,original,_ in inputs:
@@ -401,6 +471,8 @@ def main():
                  threshold_minutes=threshold, threshold_provisional=True,
                  external_services=args.mode=='trial',semantic_accuracy=None,
                  limitation='冻结目标的语义与推测范围必须逐项复核；旧响应缺新关系不算新语义能力。')
+    if control is not None:
+        summary['execution']=control
     if previous is not None:
         summary['comparison']=comparison_summary(inputs,previous,rows)
     if local_previous is not None:
