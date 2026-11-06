@@ -60,6 +60,10 @@ def validate_extraction(ctx: ExtractionContext, data: Extraction) -> None:
     """不可信提供方先过证据校验；失败整份拒绝，不渲染带错引用的报告。"""
     spans = {s.id: s for s in ctx.evidence}
     refs = list(data.elements.iter_evidence_refs())
+    from ..providers.semantic_constraints import relation_quotes
+    refs.extend(q.evidence_id for _, element in data.elements.items()
+                for candidate in element.iter_candidates()
+                for q in relation_quotes(getattr(candidate, "relation", None)))
     refs += [r for ev in data.events for r in ev.evidence_refs]
     if data.service_identity:
         refs += [r for i in data.service_identity.identifiers for r in i.evidence_refs]
@@ -359,7 +363,8 @@ def validate_extraction(ctx: ExtractionContext, data: Extraction) -> None:
     if data.semantic_assessment:
         from ..providers.semantic_constraints import apply_constraints, NAMES
         expected = apply_constraints(ctx, data)
-        if any(getattr(expected.elements, n) != getattr(data.elements, n) for n in NAMES):
+        if (any(getattr(expected.elements, n) != getattr(data.elements, n) for n in NAMES)
+            or expected.semantic_assessment.recovery_selection != data.semantic_assessment.recovery_selection):
             errors.append(issue(IssueCode.SEMANTIC_RELATION_INCOMPLETE, "正式结论未遵守关系约束。"))
     from ..providers.responsibility_location import validate_saved
     try:

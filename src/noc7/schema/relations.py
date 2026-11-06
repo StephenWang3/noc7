@@ -25,6 +25,13 @@ class TimeRelation(SemanticRelation):
     date_anchor: RelationQuote | None = None
     timezone_anchor: RelationQuote | None = None
     customer_confirmation: RelationQuote | None = None
+    recovery_source: Literal["customer", "vendor_rfo", "unicom_monitor", "unknown"] = Field(
+        default="unknown", description="缺省仅用于兼容旧数据；新模型须通读证据归类，存在对应来源陈述时填写明确来源。"
+    )
+    recovery_source_basis: RelationQuote | None = None
+    recovery_round: str = Field(default="current", min_length=1)
+    supersedes: list[str] = Field(default_factory=list)
+    correction_basis: RelationQuote | None = None
 
 
 class CauseRelation(SemanticRelation):
@@ -83,8 +90,25 @@ class ConstraintCheck(Model):
     evidence_refs: list[EvidenceId] = Field(default_factory=list)
 
 
+class RecoverySelection(Model):
+    """本地策略记录；阈值随结果冻结，不是模型置信度或人工审核。"""
+    threshold_minutes: float = Field(default=30, ge=0, allow_inf_nan=False)
+    provisional: Literal[True] = True
+    target_group: tuple[str, str, str] | None = None
+    participating: list[str] = Field(default_factory=list)
+    sources: dict[str, str] = Field(default_factory=dict)
+    excluded: dict[str, str] = Field(default_factory=dict)
+    span_seconds: float | None = None
+    source_spans_seconds: dict[str, float] = Field(default_factory=dict)
+    source_conflicts: list[str] = Field(default_factory=list)
+    selected: str | None = None
+    outcome: Literal["selected", "pending", "conflict"] = "pending"
+    reason: str = "尚未裁决。"
+
+
 class SemanticAssessment(Model):
     """只由本地解码器构建；original 的来源与引文须核验，但不用于补造正式结论。"""
+    recovery_selection: RecoverySelection | None = None
     original: dict[str, Any] = Field(default_factory=dict)
     checks: list[ConstraintCheck] = Field(default_factory=list)
     business_coverage: BusinessCoverage | None = None

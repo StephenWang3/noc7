@@ -473,3 +473,32 @@ def test_review_role_and_endpoint_fields_are_pending_without_rejecting_time_and_
     assert any('依据仅为角色或端点' in c.reason for c in data.semantic_assessment.checks if c.element == name)
     validate_extraction(ctx,data)
     saved_result(sample,ctx,data)
+
+
+@pytest.mark.parametrize('legacy_recovery', [False, True])
+def test_base_merge_preserves_both_recovery_and_business_assessments(sample, monkeypatch, legacy_recovery):
+    from tests.llm.test_recovery_policy import recovery, at
+    monkeypatch.setenv('NOC7_RECOVERY_CLOSE_MINUTES', '30')
+    time_ctx, payload = recovery(sample, [('customer', at('10:40:00')), ('vendor_rfo', at('10:00:00'))], selected='C2')
+    party_ctx, party_payload = case(sample)
+    payload['elements']['responsible_party'] = party_payload['elements']['responsible_party']
+    source = time_ctx.evidence[0].model_copy(update={'id':'M01/t:source', 'text':'客户确认本次业务已恢复。'})
+    payload['elements']['end_time']['candidates'][0]['relation']['recovery_source_basis'] = dict(evidence_id=source.id, quote=source.text)
+    ctx = ExtractionContext(party_ctx.bundle, [*time_ctx.evidence, source, *party_ctx.evidence])
+    data = OpenAICompatibleTextProvider._decode_payload(envelope(payload), ctx, legacy_recovery=legacy_recovery)
+    assert data.semantic_assessment.business_coverage is not None
+    assert data.elements.responsible_party.value == '客户'
+    assert source.id in set(data.elements.iter_evidence_refs())
+    if legacy_recovery:
+        assert data.semantic_assessment.recovery_selection is None
+        assert data.elements.end_time.status == 'conflicted'
+    else:
+        assert data.semantic_assessment.recovery_selection.selected == 'C1'
+        assert data.elements.end_time.selected == 'C1'
+    validate_extraction(ctx, data)
+    result = saved_result(sample, ctx, data)
+    for fmt in ['md', 'html']:
+        report = render(result, format=fmt)
+        assert ('恢复时间业务取值' in report) is not legacy_recovery
+        assert '明确责任归属' in report
+    assert '有记录，未经人工审核' in render_company_html(result)

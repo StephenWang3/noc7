@@ -298,7 +298,7 @@ class SevenElements(Model):
                 if relation:
                     for quote in relation.context:
                         yield quote.evidence_id
-                    for key in ("date_anchor", "timezone_anchor", "customer_confirmation",
+                    for key in ("date_anchor", "timezone_anchor", "customer_confirmation", "recovery_source_basis", "correction_basis",
                                 "responsibility_quote", "source_quote", "procurement_quote", "self_check", "vendor_contact",
                                 "unicom_onsite", "service_recovered", "city_quote"):
                         quote = getattr(relation, key, None)

@@ -214,6 +214,15 @@ def _time_lines(el, *, semantic=False) -> tuple[Line, ...]:
     return (line,)
 
 
+def _recovery_lines(result: AnalysisResult) -> tuple[Line, ...]:
+    lines = _time_lines(result.elements.end_time, semantic=result.semantic_assessment is not None)
+    record = result.semantic_assessment.recovery_selection if result.semantic_assessment else None
+    if record is not None:
+        from ..providers.recovery_policy import selection_text
+        lines = (*lines, (Part(selection_text(record)),))
+    return lines
+
+
 def _duration_lines(result: AnalysisResult) -> tuple[Line, ...]:
     from . import final_duration, duration_basis
 
@@ -293,7 +302,7 @@ def build_company_report(result: AnalysisResult) -> CompanyReport:
         "ticket_no": ((Part(fields.get("ticket_no") or result.ticket_ref),),),
         "service": _text_lines(service),
         "declared": _time_lines(e.start_time, semantic=result.semantic_assessment is not None),
-        "resumed": _time_lines(e.end_time, semantic=result.semantic_assessment is not None),
+        "resumed": _recovery_lines(result),
         "duration": _duration_lines(result),
         "phenomenon": _element_lines(e.phenomenon),
         "process": _process_lines(result),

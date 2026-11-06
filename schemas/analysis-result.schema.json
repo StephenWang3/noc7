@@ -2449,6 +2449,125 @@
       "title": "QuoteCheck",
       "type": "object"
     },
+    "RecoverySelection": {
+      "additionalProperties": false,
+      "description": "本地策略记录；阈值随结果冻结，不是模型置信度或人工审核。",
+      "properties": {
+        "excluded": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "title": "Excluded",
+          "type": "object"
+        },
+        "outcome": {
+          "default": "pending",
+          "enum": [
+            "selected",
+            "pending",
+            "conflict"
+          ],
+          "title": "Outcome",
+          "type": "string"
+        },
+        "participating": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Participating",
+          "type": "array"
+        },
+        "provisional": {
+          "const": true,
+          "default": true,
+          "title": "Provisional",
+          "type": "boolean"
+        },
+        "reason": {
+          "default": "尚未裁决。",
+          "title": "Reason",
+          "type": "string"
+        },
+        "selected": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Selected"
+        },
+        "source_conflicts": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Source Conflicts",
+          "type": "array"
+        },
+        "source_spans_seconds": {
+          "additionalProperties": {
+            "type": "number"
+          },
+          "title": "Source Spans Seconds",
+          "type": "object"
+        },
+        "sources": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "title": "Sources",
+          "type": "object"
+        },
+        "span_seconds": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Span Seconds"
+        },
+        "target_group": {
+          "anyOf": [
+            {
+              "maxItems": 3,
+              "minItems": 3,
+              "prefixItems": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "string"
+                }
+              ],
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Target Group"
+        },
+        "threshold_minutes": {
+          "default": 30,
+          "minimum": 0,
+          "title": "Threshold Minutes",
+          "type": "number"
+        }
+      },
+      "title": "RecoverySelection",
+      "type": "object"
+    },
     "RelatedTicket": {
       "additionalProperties": false,
       "properties": {
@@ -2769,6 +2888,17 @@
           "additionalProperties": true,
           "title": "Original",
           "type": "object"
+        },
+        "recovery_selection": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RecoverySelection"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
         }
       },
       "title": "SemanticAssessment",
@@ -3207,6 +3337,17 @@
           "title": "Context",
           "type": "array"
         },
+        "correction_basis": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RelationQuote"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
         "current_event": {
           "title": "Current Event",
           "type": "boolean"
@@ -3249,11 +3390,47 @@
           "title": "Modality",
           "type": "string"
         },
+        "recovery_round": {
+          "default": "current",
+          "minLength": 1,
+          "title": "Recovery Round",
+          "type": "string"
+        },
+        "recovery_source": {
+          "default": "unknown",
+          "description": "缺省仅用于兼容旧数据；新模型须通读证据归类，存在对应来源陈述时填写明确来源。",
+          "enum": [
+            "customer",
+            "vendor_rfo",
+            "unicom_monitor",
+            "unknown"
+          ],
+          "title": "Recovery Source",
+          "type": "string"
+        },
+        "recovery_source_basis": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RelationQuote"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
         "scope": {
           "description": "业务／设备范围",
           "minLength": 1,
           "title": "Scope",
           "type": "string"
+        },
+        "supersedes": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Supersedes",
+          "type": "array"
         },
         "timezone_anchor": {
           "anyOf": [
