@@ -43,6 +43,42 @@ _MAIN = re.compile(
     \s*\)?$""",
     re.VERBOSE | re.IGNORECASE,
 )
+_MONTHS = {
+    name: i + 1
+    for i, names in enumerate(
+        ["jan january", "feb february", "mar march", "apr april", "may", "jun june", "jul july",
+         "aug august", "sep sept september", "oct october", "nov november", "dec december"]
+    )
+    for name in names.split()
+}
+_MONTH = "(?P<mon>" + "|".join(sorted(_MONTHS, key=len, reverse=True)) + r")\.?"
+_ORD = r"(?:st|nd|rd|th)?"
+# RFO 里的英文日期：November 6, 2026 / 05 Nov 2026 / 5-Nov-2026。
+_MONTH_DATES = (
+    re.compile(rf"(?<![A-Za-z]){_MONTH}\s+(?P<d>\d{{1,2}}){_ORD}\s*,?\s*(?P<y>\d{{4}})(?!\d)", re.I),
+    re.compile(rf"(?<!\d)(?P<d>\d{{1,2}}){_ORD}[\s-]+{_MONTH}[\s,-]+(?P<y>\d{{4}})(?!\d)", re.I),
+)
+_NUMERIC_DATE = re.compile(
+    r"(?<![\d/.-])(?:\d{4}[-/.年]\d{1,2}[-/.月]\d{1,2}日?|\d{1,2}([/.])\d{1,2}\1\d{4})(?![\d/.-])"
+)
+_ZONE_ANY = re.compile(
+    r"(?:GMT|UTC)\s*[+-]\s*\d{1,2}(?::?\d{2})?|GMT|UTC|(?<![A-Za-z])Z(?![A-Za-z])"
+    r"|(?<![\d:])[+-]\d{2}:?\d{2}(?!\d)|北京时间|香港时间",
+    re.I,
+)
+_CLOCK_ANY = re.compile(r"(?<![\d:])(\d{1,2}):(\d{2})(?::(\d{2}))?(?![\d:])\s*(AM|PM)?(?![A-Za-z])", re.I)
+# 时间短语里不带信息的词：13:34 hrs、13:05 LT、22:17 on November 5。
+_NOISE = re.compile(
+    r"\b(?:hrs?|hours?|h|lt|local\s+time|on|at|mon|tue|tues|wed|thu|thur|thurs|fri|sat|sun"
+    r"|monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b\.?|[,()\[\]，（）\s]",
+    re.I,
+)
+# 邮件头格式只认完整形状；其余文本不交给宽松的邮件解析，免得把 PM、GMT-6 悄悄丢掉。
+_EMAIL_DATE = re.compile(
+    r"(?:[A-Za-z]{3},\s*)?\d{1,2}\s+[A-Za-z]{3}\s+\d{4}\s+\d{1,2}:\d{2}(?::\d{2})?"
+    r"(?:\s*(?:[+-]\d{4}|GMT|UTC|UT|Z|[ECMP][SD]T))?(?:\s*\([A-Za-z ]+\))?",
+    re.I,
+)
 _GMT_OFFSET = re.compile(r"(?:GMT|UTC)?\s*([+-])\s*(\d{1,2})(?::?(\d{2}))?", re.IGNORECASE)
 
 
@@ -70,6 +106,41 @@ def _tzinfo(offset: str) -> timezone:
     sign = 1 if offset[0] == "+" else -1
     hh, mm = int(offset[1:3]), int(offset[4:6])
     return timezone(sign * timedelta(hours=hh, minutes=mm))
+
+
+def _reorder(text: str) -> str | None:
+    """把“先时刻后日期”“英文月份名”等写法改排成 日期 时刻 [AM/PM] [时区]。
+
+    只在整段文字除日期、时刻、时区和无信息词之外没有别的内容时才改排；有剩余就不猜。
+    只有时刻、没有日期的写法不在这里处理。
+    """
+    rest, date = text, None
+    for pattern in _MONTH_DATES:
+        m = pattern.search(rest)
+        if m:
+            date = f"{int(m['y']):04d}-{_MONTHS[m['mon'].lower()]:02d}-{int(m['d']):02d}"
+            rest = rest[: m.start()] + " " + rest[m.end():]
+            break
+    if date is None:
+        m = _NUMERIC_DATE.search(rest)
+        if not m:
+            return None
+        date = m.group()  # 斜杠日期的日月歧义留给 parse_time 原有规则判断
+        rest = rest[: m.start()] + " " + rest[m.end():]
+    zone = _ZONE_ANY.search(rest)
+    if zone:
+        rest = rest[: zone.start()] + " " + rest[zone.end():]
+    clock = _CLOCK_ANY.search(rest)
+    if clock:
+        rest = rest[: clock.start()] + " " + rest[clock.end():]
+    if _NOISE.sub("", rest):
+        return None
+    parts = [date]
+    if clock:
+        parts.append(clock.group().strip())
+    if zone:
+        parts.append(re.sub(r"\s+", "", zone.group()))
+    return " ".join(parts)
 
 
 def parse_time(raw: str | None, default_offset: str | None = None) -> TimeValue:
@@ -131,6 +202,11 @@ def parse_time(raw: str | None, default_offset: str | None = None) -> TimeValue:
         return _build(raw or "", dt, offset, source, precision)
 
     # 邮件头格式：Tue, 06 Oct 2026 17:30:00 +0000
+    if not _EMAIL_DATE.fullmatch(text):
+        reordered = _reorder(text)
+        if reordered and reordered != text:
+            return parse_time(reordered, default_offset).model_copy(update={"raw": raw or ""})
+        return TimeValue(raw=raw or "")
     try:
         dt = parsedate_to_datetime(text)
     except (TypeError, ValueError, IndexError):

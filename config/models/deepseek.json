@@ -12,5 +12,7 @@
   "max_tokens": 32768,
   "max_response_bytes": 4194304,
   "timeout_seconds": 90,
-  "max_retries": 2
+  "max_retries": 2,
+  "pipeline": "two_stage",
+  "fact_passes": 2
 }

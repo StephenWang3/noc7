@@ -60,6 +60,75 @@ def original_refs(node):
             yield from original_refs(value)
 
 
+# 只有时刻：可带 hrs、LT 这类无信息词和时区，如“13:05 LT, (GMT+7)”。
+TIME_ONLY = re.compile(
+    r"\s*\d{1,2}[:：]\d{2}(?:[:：]\d{2})?\s*(?:(?:hrs?|hours?|LT|local\s+time)\b[\s,，]*)?[(（]?\s*"
+    r"(?:(?:UTC|GMT|Z).*|[+-]\d{2}:?\d{2})?\s*[)）]?\s*", re.I)
+
+
+def system_record(span, ctx):
+    """该证据所属的处理日志条目：日志条目本身，或“追单记录表单原文”这类与某条日志精确对应的文本材料。"""
+    if span.locator.type == "log_entry":
+        return ctx.bundle.process_log.entry(span.locator.seq)
+    if span.locator.type == "text_range":
+        material = next((m for m in ctx.bundle.manifest.materials if m.id == span.material_id), None)
+        if material and material.origin and material.origin.log_seq:
+            return ctx.bundle.process_log.entry(material.origin.log_seq)
+    return None
+
+
+# 日志里的口语写法：“7日早上8：30”“昨晚22点23分”“今天下午3点半”。
+COLLOQUIAL = re.compile(
+    r"\s*(?:(?P<rel>今天|今日|今早|今晨|今晚|昨天|昨日|昨晚|昨夜|前天)|(?:(?P<mo>\d{1,2})月)?(?P<day>\d{1,2})[日号])\s*"
+    r"(?P<part>凌晨|早上|早晨|上午|中午|下午|傍晚|晚上|夜里|晚)?\s*"
+    r"(?P<h>\d{1,2})(?:[:：点时](?P<m>\d{1,2})分?|(?P<half>点半)|[点时])\s*")
+_REL_DAYS = {"今": 0, "昨": 1, "前": 2}
+
+
+def colloquial_time(raw, recorded):
+    """按日志记录时间把口语时间换成完整时间；算不出或晚于记录时间就返回 None。"""
+    m = COLLOQUIAL.fullmatch(raw)
+    if not m:
+        return None
+    hour, minute = int(m["h"]), 30 if m["half"] else int(m["m"] or 0)
+    evening = (m["part"] in {"下午", "傍晚", "晚上", "夜里", "晚"}) or (m["rel"] or "").endswith(("晚", "夜"))
+    if hour < 12 and (evening or (m["part"] == "中午" and hour < 11)):
+        hour += 12
+    if hour > 23 or minute > 59:
+        return None
+    if m["rel"]:
+        day = recorded.date() - timedelta(days=_REL_DAYS[m["rel"][0]])
+    else:
+        # 只写了“几日”：取记录时间当天或之前最近的那一天，最多回看一个月。
+        day = next((d for d in (recorded.date() - timedelta(days=n) for n in range(0, 32))
+                    if d.day == int(m["day"]) and (not m["mo"] or d.month == int(m["mo"]))), None)
+        if day is None:
+            return None
+    moment = recorded.replace(year=day.year, month=day.month, day=day.day, hour=hour, minute=minute,
+                              second=0, microsecond=0)
+    return moment if moment <= recorded else None
+
+
+def date_inferred(candidate):
+    """只有时刻、又没有原文日期锚点而取得完整时间的，日期是推定的；返回推定依据的说法，否则为空串。"""
+    raw = candidate.time.raw
+    if not (candidate.time.iso and candidate.relation
+            and (COLLOQUIAL.fullmatch(raw) or (not candidate.relation.date_anchor and TIME_ONLY.fullmatch(raw)))):
+        return ""
+    return "日志记录时间" if any("/log:" in ref for ref in candidate.evidence_refs) else "工单恢复时间"
+
+
+def _ticket_recovery(ctx):
+    """工单系统的恢复时间字段，只用来给缺日期的时刻定日期。"""
+    from ..extract.baseline import time_phrase
+    for span in ctx.evidence:
+        if span.locator.type == "field" and span.id.endswith("/f:recovered_at"):
+            value = time_phrase(span.text, ctx.bundle.manifest.default_timezone)
+            if value.as_datetime() and value.as_datetime().tzinfo:
+                return value.as_datetime()
+    return None
+
+
 def normalized_time(candidate, ctx):
     try:
         return _normalized_time(candidate, ctx)
@@ -76,11 +145,48 @@ def _normalized_time(candidate, ctx):
     raw = candidate.time.raw
     field_backed = any(s.locator.type == "field" and match_quote(raw, s.text).status != "mismatch"
                        for s in source)
-    offset = ctx.bundle.manifest.default_timezone if field_backed else None
+    # 处理日志由工单系统记录，正文里没写时区的时刻按系统时区假设并在报告中标注；邮件、RFO 正文不假设。
+    records = [entry for s in source if match_quote(raw, s.text).status != "mismatch"
+               for entry in [system_record(s, ctx)] if entry]
+    log_backed = bool(records)
+    offset = ctx.bundle.manifest.default_timezone if field_backed or log_backed else None
     value = time_phrase(raw, offset)
     if not relation:
         return value
-    # 引文的真实性由 validate_extraction 独立核验，不能取记录发送时间。
+    if value.iso is None and not relation.date_anchor and TIME_ONLY.fullmatch(raw):
+        # 日志里只写了时刻：取该条日志记录时间之前最近的那个时刻，报告注明日期为推定。
+        for entry in records:
+            recorded = time_phrase(entry.recorded_at, offset) if entry.recorded_at else None
+            if recorded and recorded.as_datetime():
+                guess = time_phrase(recorded.iso[:10] + " " + raw, offset)
+                if guess.as_datetime() and guess.as_datetime() > recorded.as_datetime():
+                    guess = time_phrase((recorded.as_datetime() - timedelta(days=1)).date().isoformat() + " " + raw, offset)
+                if guess.as_datetime():
+                    value = guess
+                    break
+    # 口语写法即使模型另给了日期锚点也先按记录时间推；与锚点日期不符时由下面的锚点核对撤回。
+    if value.iso is None and COLLOQUIAL.fullmatch(raw):
+        for entry in records:
+            recorded = time_phrase(entry.recorded_at, offset) if entry.recorded_at else None
+            moment = colloquial_time(raw, recorded.as_datetime()) if recorded and recorded.as_datetime() else None
+            if moment:
+                value = time_phrase(moment.strftime("%Y-%m-%d %H:%M"), offset)
+                break
+    if (value.iso is None and not relation.date_anchor and not records and TIME_ONLY.fullmatch(raw)
+            and candidate.time_kind == "business_recovery"):
+        # 邮件、RFO 里写了时区但没写日期的恢复时刻：取工单恢复时间之前最近的那个时刻，报告注明日期为推定。
+        # 没写时区的不推定。
+        limit = _ticket_recovery(ctx)
+        if limit:
+            for back in (0, 1):
+                guess = time_phrase((limit.date() - timedelta(days=back)).isoformat() + " " + raw, None)
+                moment = guess.as_datetime()
+                if not moment or guess.tz_source != TimeZoneSource.EXPLICIT:
+                    break
+                if moment <= limit:
+                    value = guess
+                    break
+    # 邮件、RFO 正文里的时刻不取发送时间；须有原文日期锚点。
     if relation.date_anchor:
         from ..extract.baseline import DATE
         anchor_dates = set(re.findall(DATE, relation.date_anchor.quote))
@@ -90,9 +196,7 @@ def _normalized_time(candidate, ctx):
         date = anchor.iso[:10] if anchor.iso else None
         if date and value.iso and value.iso[:10] != date:
             return TimeValue(raw=raw)
-        if date and value.iso is None and re.fullmatch(
-            r"\s*\d{1,2}[:：]\d{2}(?:[:：]\d{2})?\s*(?:(?:UTC|GMT|Z).*|[+-]\d{2}:?\d{2})?\s*", raw, re.I
-        ):
+        if date and value.iso is None and TIME_ONLY.fullmatch(raw):
             value = time_phrase(date + " " + raw, offset)
     if relation.timezone_anchor:
         zone = ZONE_RE.search(relation.timezone_anchor.quote)
@@ -212,6 +316,23 @@ def apply_constraints(ctx, data):
                 outcome="eligible" if chosen else "conflict" if recovery_selection.outcome == "conflict" else "pending",
                 code=IssueCode.TIME_CANDIDATES_DIFFER if recovery_selection.outcome == "conflict" else IssueCode.SEMANTIC_RELATION_INCOMPLETE,
                 reason=recovery_selection.reason, evidence_refs=el.evidence_refs))
+            updates[name] = el
+            continue
+        if data.semantic_assessment.adjudication == "local_priority":
+            # 候选顺序即本地优先级（系统字段／来源层级在前）；不同口径的起障时间不算冲突。
+            chosen = eligible[0] if eligible else None
+            if name == "start_time" and chosen and chosen.time_kind == TimeKind.FAULT_START_FIELD:
+                # 系统发生时间常是建单时刻；客户明确给出更早的起始时刻时采用客户的，系统字段留作参照。
+                earlier = [c for c in eligible if c.time_kind == TimeKind.CUSTOMER_REPORTED_START
+                           and _interval(c)[0] < _interval(chosen)[0]]
+                if earlier:
+                    chosen = min(earlier, key=lambda c: _interval(c)[0])
+                    checks.append(ConstraintCheck(element=name, candidate_id=chosen.id, outcome="eligible",
+                        reason="客户报告的起始时刻早于工单系统发生时间，采用客户报告时刻。", evidence_refs=chosen.evidence_refs))
+            el = _clear(el)
+            if chosen:
+                el = el.model_copy(update=dict(status=ElementStatus.DOCUMENTED, selected=chosen.id,
+                    value=chosen.statement if name == "cause" else chosen.time, evidence_refs=chosen.evidence_refs))
             updates[name] = el
             continue
         conflicts = []

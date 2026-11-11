@@ -12,6 +12,9 @@ SOURCE_LABELS = {
     "unicom_monitor": "联通网管恢复时间",
 }
 PRIORITY = tuple(SOURCE_LABELS)
+# 系统恢复字段不在业务优先级内；只在三类业务来源都没有合格记载时兜底，并在报告中标注。
+FALLBACK = "system_field"
+FALLBACK_LABEL = "系统恢复字段（兜底，待核实）"
 
 
 def initial_selection():
@@ -35,6 +38,11 @@ def usable_quote(quote, spans):
 
 def source_reason(candidate, spans):
     r = candidate.relation
+    if r.recovery_source == FALLBACK:
+        if candidate.time_kind != "recovery_field" or not any(
+                ref in spans and spans[ref].locator.type == "field" for ref in candidate.evidence_refs):
+            return "系统字段兜底只接受工单恢复时间字段。"
+        return None
     if r.recovery_source not in PRIORITY:
         return "恢复来源未知，不使用系统字段兜底。"
     if not usable_quote(r.recovery_source_basis, spans):
@@ -72,6 +80,20 @@ def select_recovery(candidates, eligible, original, spans, threshold_minutes, ex
         if reason:
             record.excluded[c.id] = reason
     pool = [c for c in eligible if c.id not in record.excluded]
+    fallback = [c for c in pool if c.relation.recovery_source == FALLBACK]
+    pool = [c for c in pool if c.relation.recovery_source != FALLBACK]
+    if pool:
+        for c in fallback:
+            record.excluded[c.id] = "已有客户／供应商 RFO／联通日志的恢复记载，系统字段只作参照。"
+    elif fallback:
+        chosen = min(fallback, key=lambda c: (c.time.as_datetime(), c.id))
+        record.sources = {c.id: c.relation.recovery_source for c in candidates if c.relation}
+        record.target_group = group(chosen)
+        record.participating = sorted(c.id for c in fallback)
+        record.span_seconds = 0.0
+        record.selected, record.outcome = chosen.id, "selected"
+        record.reason = "客户、供应商 RFO、联通日志均无合格恢复记载，取工单系统恢复时间字段兜底。"
+        return record
     record.sources = {c.id: c.relation.recovery_source for c in candidates if c.relation}
     target = _model_group(original, candidates)
     groups = {group(c) for c in pool}
@@ -150,6 +172,8 @@ def select_recovery(candidates, eligible, original, spans, threshold_minutes, ex
 
 
 def selection_text(record):
+    if record.sources.get(record.selected) == FALLBACK:
+        return f"恢复取值来源：{FALLBACK_LABEL}；{record.reason}"
     source = SOURCE_LABELS.get(record.sources.get(record.selected), "待核实")
     return (f"恢复取值来源：{source}；{record.reason}"
             f" 接近阈值 {record.threshold_minutes:g} 分钟（暂定，待业务方确认）。")

@@ -1456,6 +1456,7 @@
             "rfo",
             "vendor_feedback",
             "branch_log",
+            "system_field",
             "unknown"
           ],
           "title": "Source Tier",
@@ -1719,6 +1720,38 @@
         }
       },
       "title": "MaterialOrigin",
+      "type": "object"
+    },
+    "NarrativeLine": {
+      "additionalProperties": false,
+      "properties": {
+        "rewritten": {
+          "default": true,
+          "description": "False 表示改写未通过核对，退回步骤原文",
+          "title": "Rewritten",
+          "type": "boolean"
+        },
+        "step_refs": {
+          "description": "这一行概括了哪些处理步骤",
+          "items": {
+            "pattern": "^[A-Za-z][A-Za-z0-9_.\\-]*$",
+            "type": "string"
+          },
+          "minItems": 1,
+          "title": "Step Refs",
+          "type": "array"
+        },
+        "text": {
+          "minLength": 1,
+          "title": "Text",
+          "type": "string"
+        }
+      },
+      "required": [
+        "step_refs",
+        "text"
+      ],
+      "title": "NarrativeLine",
       "type": "object"
     },
     "Observation": {
@@ -2020,6 +2053,7 @@
             "unicom_onsite_recovery",
             "equipment_ownership",
             "role_only",
+            "system_field",
             "unknown"
           ],
           "title": "Decision Path",
@@ -2130,6 +2164,7 @@
             "rfo",
             "vendor_feedback",
             "branch_log",
+            "system_field",
             "unknown"
           ],
           "title": "Source Tier",
@@ -2153,6 +2188,12 @@
           "minLength": 1,
           "title": "Statement",
           "type": "string"
+        },
+        "third_party": {
+          "default": false,
+          "description": "原文写明故障由第三方（施工、人为破坏、自然灾害等）造成；责任仍记线路所属方，报告注明。",
+          "title": "Third Party",
+          "type": "boolean"
         },
         "unicom_onsite": {
           "anyOf": [
@@ -2643,12 +2684,66 @@
       "title": "RelationQuote",
       "type": "object"
     },
+    "ReportNarrative": {
+      "additionalProperties": false,
+      "description": "现象、处理过程、原因的成文表述；时间不由模型写，报告层取所引步骤的时间。",
+      "properties": {
+        "cause": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Cause"
+        },
+        "phenomenon": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Phenomenon"
+        },
+        "process": {
+          "items": {
+            "$ref": "#/$defs/NarrativeLine"
+          },
+          "title": "Process",
+          "type": "array"
+        },
+        "prompt_version": {
+          "title": "Prompt Version",
+          "type": "string"
+        },
+        "replaced": {
+          "default": 0,
+          "description": "未通过本地核对而退回原文或丢弃的条数",
+          "minimum": 0,
+          "title": "Replaced",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "prompt_version"
+      ],
+      "title": "ReportNarrative",
+      "type": "object"
+    },
     "ResponsibilityBasis": {
       "enum": [
         "formal_determination",
         "claimed",
         "business_context",
-        "inferred_from_role"
+        "inferred_from_role",
+        "system_field"
       ],
       "title": "ResponsibilityBasis",
       "type": "string"
@@ -2866,6 +2961,16 @@
       "additionalProperties": false,
       "description": "只由本地解码器构建；original 的来源与引文须核验，但不用于补造正式结论。",
       "properties": {
+        "adjudication": {
+          "default": "model_selected",
+          "description": "local_priority：起障时间和原因由本地按候选顺序取第一条合格项，不采用模型选中项。",
+          "enum": [
+            "model_selected",
+            "local_priority"
+          ],
+          "title": "Adjudication",
+          "type": "string"
+        },
         "business_coverage": {
           "anyOf": [
             {
@@ -3403,6 +3508,7 @@
             "customer",
             "vendor_rfo",
             "unicom_monitor",
+            "system_field",
             "unknown"
           ],
           "title": "Recovery Source",
@@ -3650,6 +3756,17 @@
       },
       "title": "Materials",
       "type": "array"
+    },
+    "narrative": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/ReportNarrative"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
     },
     "quote_checks": {
       "items": {

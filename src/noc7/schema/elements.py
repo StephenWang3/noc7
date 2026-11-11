@@ -58,6 +58,7 @@ class ResponsibilityBasis(StrEnum):
     CLAIMED = "claimed"  # 某方自称/指称，未经认定
     BUSINESS_CONTEXT = "business_context"  # 按已确认业务路径判定，未经人工审核
     INFERRED_FROM_ROLE = "inferred_from_role"  # 只是供应商、处理部门、经办人等角色——不能作为结论
+    SYSTEM_FIELD = "system_field"  # 工单系统分类字段（结单人填写），只在原文没有依据时兜底并标注待核实
 
 
 class PartyCandidate(CandidateBase):

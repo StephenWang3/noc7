@@ -13,10 +13,31 @@ ROLE_FIELDS = {
     "location": {"a_end", "z_end", "device_location", "device_name", "region", "shelf_slot_port"},
 }
 PRIORITY = {"rfo": 0, "vendor_feedback": 1, "branch_log": 2}
-SOURCE_LABELS = {"rfo": "RFO", "vendor_feedback": "供应商反馈", "branch_log": "分公司处理日志", "unknown": "来源未明"}
+SOURCE_LABELS = {"rfo": "RFO", "vendor_feedback": "供应商反馈", "branch_log": "分公司处理日志", "system_field": "工单系统字段（兜底）", "unknown": "来源未明"}
 PATH_LABELS = {"explicit_responsibility": "明确责任归属", "customer_self_check": "客户自查且未再追问",
                "vendor_onsite_contact": "联络供应商上门", "unicom_onsite_recovery": "联通上门处理后恢复",
-               "equipment_ownership": "设备采购归属线索", "role_only": "仅角色", "unknown": "依据未明"}
+               "equipment_ownership": "设备采购归属线索", "role_only": "仅角色", "system_field": "工单系统字段兜底", "unknown": "依据未明"}
+# 工单系统“故障区域”字段到责任方的映射；映射不出的（如“局方检测正常自恢”）不兜底。
+AREA_FIELD = "fault_area"
+AREA_PARTIES = (("运营商", "供应商"), ("用户", "客户"))
+FALLBACK_TIER = "system_field"
+
+
+def area_party(text):
+    return next((party for word, party in AREA_PARTIES if word in (text or "")), None)
+
+
+def _area_fallback(el, spans):
+    for c in el.candidates:
+        r = c.relation
+        span = spans.get(c.evidence_refs[0]) if len(c.evidence_refs) == 1 else None
+        if (r and r.source_tier == FALLBACK_TIER and r.decision_path == FALLBACK_TIER and span is not None
+                and span.locator.type == "field" and span.locator.field_key == AREA_FIELD
+                and area_party(span.text) == r.category):
+            return c, span
+    return None, None
+
+
 ANCHORS = ("responsibility_quote", "source_quote", "procurement_quote", "self_check", "vendor_contact", "unicom_onsite", "service_recovered", "city_quote")
 
 
@@ -35,7 +56,9 @@ def _hash(text):
 
 def build_coverage(ctx):
     """只声明本包原始处理记录的覆盖，不声明源系统绝对完整。"""
-    entries = [e for e in ctx.bundle.process_log.entries if e.entry_kind != "ai_summary" and e.content.strip()]
+    # 只有标点的占位记录（如“-”）没有可核对的内容，不计入覆盖范围。
+    entries = [e for e in ctx.bundle.process_log.entries
+               if e.entry_kind != "ai_summary" and any(ch.isalnum() for ch in e.content)]
     hashes = {str(e.seq): _hash(e.content) for e in entries}
     covered = {}
     for span in ctx.evidence:
@@ -80,6 +103,8 @@ def pending_reason(candidate, name, spans, coverage=None):
         return "缺少完整结构化业务关系，保留待核对。"
     if not r.current_event or r.modality != "asserted":
         return "不是本次事件的明确断言。"
+    if r.source_tier == FALLBACK_TIER:
+        return "工单系统字段只作兜底，不参与来源比较。"
     if r.source_tier not in PRIORITY:
         return "来源不属于 RFO、供应商反馈或分公司处理日志。"
     if r.source_quote is None:
@@ -233,6 +258,8 @@ def evaluate(elements, spans, coverage, suggestions=()):
                 note = SOURCE_LABELS[chosen.relation.source_tier] + "；有记录，未经人工审核。"
                 if name == "responsible_party":
                     note += "路径：" + PATH_LABELS[chosen.relation.decision_path] + "。"
+                    if chosen.relation.third_party:
+                        note += "原文写明由第三方原因造成，按线路所属方记责。"
                     if chosen.relation.decision_path == "customer_self_check":
                         note += "未再追问仅指本次提供的完整已结单处理记录。"
                 if lower:
@@ -241,6 +268,15 @@ def evaluate(elements, spans, coverage, suggestions=()):
                         reason="按来源优先级采用；" + note, evidence_refs=refs))
                 update.update(status=ElementStatus.DOCUMENTED, value=formal_value(chosen, name),
                               selected=chosen.id, evidence_refs=refs, note=note)
+        if name == "responsible_party":
+            fallback, span = _area_fallback(el, spans)
+            label = f"工单系统故障区域字段“{span.text.strip()}”" if fallback else ""
+            if fallback and update["status"] == ElementStatus.UNKNOWN:
+                update.update(status=ElementStatus.DOCUMENTED, value=fallback.relation.category, selected=fallback.id,
+                              evidence_refs=list(fallback.evidence_refs),
+                              note=f"兜底，待核实：原文没有可采用的责任依据，取自{label}。")
+            elif fallback and update["status"] == ElementStatus.DOCUMENTED and update["value"] != fallback.relation.category:
+                update["note"] += f"与{label}不一致，待核实。"
         updates[name] = el.model_copy(update=update)
     return updates, checks
 

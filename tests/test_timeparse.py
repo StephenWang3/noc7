@@ -67,3 +67,40 @@ def test_invalid_or_ambiguous_twelve_hour_time(raw):
 def test_meridiem_without_clock_is_not_a_date(raw):
     value = parse_time(raw, '+08:00')
     assert value.iso is None and value.precision is None and value.raw == raw
+
+
+@pytest.mark.parametrize(
+    "raw, iso, tz",
+    [
+        ("November 6, 2026, 5:26 PM GMT-6", "2026-11-06T17:26:00-06:00", TimeZoneSource.EXPLICIT),
+        ("22:17 (GMT+8) on November 5, 2026", "2026-11-05T22:17:00+08:00", TimeZoneSource.EXPLICIT),
+        ("2026-11-05, 20:12GMT", "2026-11-05T20:12:00+00:00", TimeZoneSource.EXPLICIT),
+        ("Nov 5th 2026 08:00 UTC", "2026-11-05T08:00:00+00:00", TimeZoneSource.EXPLICIT),
+        ("5-Nov-2026 08:00:10", "2026-11-05T08:00:10", TimeZoneSource.UNKNOWN),
+        ("05 Nov 2026 17:15", "2026-11-05T17:15:00", TimeZoneSource.UNKNOWN),
+        ("13:34 hrs 18/11/2026", "2026-11-18T13:34:00", TimeZoneSource.UNKNOWN),
+        ("November 6, 2026", "2026-11-06", TimeZoneSource.UNKNOWN),
+    ],
+)
+def test_english_and_time_first_formats(raw, iso, tz):
+    v = parse_time(raw, None)
+    assert (v.iso, v.tz_source, v.raw) == (iso, tz, raw)
+
+
+@pytest.mark.parametrize(
+    "raw",
+    [
+        "13:34 hrs 8/11/2026",  # 日月顺序有歧义，不猜
+        "13:05 LT, (GMT+7)",  # 只有时刻，没有日期
+        "call 5 Nov 2026 08:00",  # 有多余文字，不猜
+        "restored November 6, 2026, 5:26 PM GMT-6",
+    ],
+)
+def test_ambiguous_or_extra_text_is_not_guessed(raw):
+    assert parse_time(raw, "+08:00").iso is None
+
+
+def test_loose_email_parser_no_longer_drops_meridiem_or_zone():
+    # 旧实现会得到 05:26 并套用系统时区。
+    v = parse_time("November 6, 2026, 5:26 PM GMT-6", "+08:00")
+    assert v.iso == "2026-11-06T17:26:00-06:00"

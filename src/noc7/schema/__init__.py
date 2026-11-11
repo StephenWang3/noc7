@@ -24,6 +24,7 @@ from .common import (
     ElementStatus,
     material_of,
 )
+from .narrative import NarrativeLine, ReportNarrative
 from .elements import (
     CAUSE_KINDS_ALLOWED_AS_VALUE,
     CauseCandidate,

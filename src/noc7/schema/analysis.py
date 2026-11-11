@@ -6,6 +6,7 @@ from enum import StrEnum
 from typing import Iterator, Literal
 
 from .relations import SemanticAssessment
+from .narrative import ReportNarrative
 
 from pydantic import Field, model_validator
 
@@ -80,6 +81,7 @@ class AnalysisResult(Model):
     evidence: list[EvidenceSpan]
     events: list[Event] = Field(default_factory=list)
     semantic_assessment: SemanticAssessment | None = None
+    narrative: ReportNarrative | None = None
     suggestions: list[BusinessSuggestion] = Field(default_factory=list)
     quote_checks: list[QuoteCheck] = Field(default_factory=list)
     elements: SevenElements
@@ -159,6 +161,12 @@ class AnalysisResult(Model):
             if check != match_quote(check.quote, spans[check.evidence_id].text,
                                     path=check.path, evidence_id=check.evidence_id):
                 raise ValueError("引用核验记录与原文不一致")
+        if self.narrative:
+            steps = {s.id for s in self.elements.handling_process.value}
+            if any(ref not in steps for line in self.narrative.process for ref in line.step_refs):
+                raise ValueError("成文处理过程引用了不存在的步骤")
+            if self.narrative.cause and not self.elements.cause.value:
+                raise ValueError("成文原因缺少已核验的原因结论")
         event_ids = [e.id for e in self.events]
         if len(event_ids) != len(set(event_ids)):
             raise ValueError("事件编号重复")

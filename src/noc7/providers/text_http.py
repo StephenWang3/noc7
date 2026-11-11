@@ -50,13 +50,19 @@ class OpenAICompatibleTextProvider:
         return key
 
     def extract(self, ctx: ExtractionContext) -> Extraction:
-        key = self.preflight(ctx.bundle.manifest.data_class)
         clean_ctx, evidence = prepare_evidence(ctx)
+        audit = self.audit.begin(clean_ctx, evidence, PROMPT_VERSION) if self.audit else None
+        raw = self._post(SYSTEM_PROMPT, evidence, ctx.bundle.manifest.data_class, audit)
+        return self._decode(raw, clean_ctx, audit)
+
+    def _post(self, system: str, user: dict, data_class: DataClass, audit=None) -> bytes:
+        """一次模型请求：过闸门、限字节、只对 429／5xx／连接错误重试。"""
+        key = self.preflight(data_class)
         payload = {
             "model": self.config.model,
             "messages": [
-                {"role": "system", "content": SYSTEM_PROMPT},
-                {"role": "user", "content": json.dumps(evidence, ensure_ascii=False)},
+                {"role": "system", "content": system},
+                {"role": "user", "content": json.dumps(user, ensure_ascii=False)},
             ],
             "temperature": 0,
             "max_tokens": self.config.max_tokens,
@@ -79,9 +85,8 @@ class OpenAICompatibleTextProvider:
         if not self.config.external:
             handlers.append(urllib.request.ProxyHandler({}))
         opener = urllib.request.build_opener(*handlers)
-        audit = self.audit.begin(clean_ctx, evidence, PROMPT_VERSION) if self.audit else None
         for attempt in range(self.config.max_retries + 1):
-            ensure_allowed(self.config.gate_config(), ctx.bundle.manifest.data_class)
+            ensure_allowed(self.config.gate_config(), data_class)
             request = urllib.request.Request(self.url, data=body, headers=headers)
             delay = min(2 ** attempt, 30)
             if audit:
@@ -118,7 +123,7 @@ class OpenAICompatibleTextProvider:
                     if audit:
                         audit.record(outcome="response_too_large")
                     raise TextProviderError("模型响应超过配置的字节上限，已拒绝。")
-                return self._decode(raw, clean_ctx, audit)
+                return raw
         raise TextProviderError("文本模型重试次数已耗尽。")
 
     @staticmethod
@@ -137,7 +142,8 @@ class OpenAICompatibleTextProvider:
         return result
 
     @staticmethod
-    def _decode_payload(raw: bytes, ctx: ExtractionContext, audit=None, *, legacy_recovery=False) -> Extraction:
+    def _content(raw: bytes):
+        """取出模型返回的 JSON 对象；结构不合格统一拒绝，不回显远端正文。"""
         try:
             response = json.loads(raw)
             choices = response["choices"]
@@ -155,6 +161,16 @@ class OpenAICompatibleTextProvider:
             parsed = json.loads(content)
         except (ValueError, RecursionError):
             raise TextProviderError("模型输出不是有效 JSON，已拒绝。") from None
+        return parsed
+
+    @staticmethod
+    def _decode_payload(raw: bytes, ctx: ExtractionContext, audit=None, *, legacy_recovery=False) -> Extraction:
+        return OpenAICompatibleTextProvider._decode_parsed(
+            OpenAICompatibleTextProvider._content(raw), ctx, audit, legacy_recovery=legacy_recovery)
+
+    @staticmethod
+    def _decode_parsed(parsed, ctx: ExtractionContext, audit=None, *, legacy_recovery=False,
+                       adjudication="model_selected", extra_original=None) -> Extraction:
         try:
             separated, suggestions = separate_suggestions(parsed)
             normalized = normalize_model_payload(
@@ -169,9 +185,10 @@ class OpenAICompatibleTextProvider:
             from .responsibility_location import build_coverage
             from .recovery_policy import initial_selection
             data.semantic_assessment = SemanticAssessment(recovery_selection=None if legacy_recovery else initial_selection(), original={
-                key: deepcopy(parsed["elements"].get(key))
-                for key in ("start_time", "end_time", "cause", "responsible_party", "location")
-            }, business_coverage=build_coverage(ctx))
+                **{key: deepcopy(parsed["elements"].get(key))
+                   for key in ("start_time", "end_time", "cause", "responsible_party", "location")},
+                **(extra_original or {}),
+            }, adjudication=adjudication, business_coverage=build_coverage(ctx))
         except TextProviderError:
             raise
         except (ValueError, TypeError, RecursionError):
