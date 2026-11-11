@@ -351,3 +351,101 @@ def test_usage_is_recorded_per_request(server):
     assert provider.usage[0] == {"prompt_tokens": 100, "completion_tokens": 20, "prompt_cache_hit_tokens": 40,
                                  "prompt_cache_miss_tokens": 60, "reasoning_tokens": 15}
     assert response_usage(b"not json") == {} and response_usage(envelope({"facts": []})) == {}
+
+
+def _p04_recovery(server, iso):
+    fact = {"type": "recovery_time", "evidence_id": "M02/log:7", "quote": "19:08 告警清除，业务恢复",
+            "time": "19:08 告警清除", "source": "unicom_log", "iso": iso}
+    others = [f for f in FACTS["facts"] if f["type"] != "recovery_time"]
+    return run(server, [{"facts": [*others, fact]}, WRITING])[0]
+
+
+def test_model_normalized_time_is_used_only_after_checking_the_original(server):
+    # “19:08 告警清除”本地解析不了；模型规整值的时、分、时区（日志按系统时区）、日期（记录当天）都对得上才采用。
+    result = _p04_recovery(server, "2026-10-10 19:08+08:00")
+    end = result.elements.end_time
+    assert end.value.raw == "19:08 告警清除" and end.value.iso.startswith("2026-10-10T19:08")
+    record = result.semantic_assessment.recovery_selection
+    assert record.sources[record.selected] == "unicom_monitor"
+    assert "【日期按日志记录时间推定】" in cell(result, "resumed")[0]
+    assert AnalysisResult.model_validate_json(result.model_dump_json()) == result
+
+
+@pytest.mark.parametrize("iso", ["2026-10-10 19:18+08:00", "2026-10-10 11:08+00:00", "2026-10-08 19:08+08:00",
+                                 "2026-10-10 19:08", "not a time"])
+def test_model_normalized_time_that_disagrees_with_the_original_is_not_used(server, iso):
+    result = _p04_recovery(server, iso)
+    record = result.semantic_assessment.recovery_selection
+    assert record.sources[record.selected] == "system_field"
+
+
+def test_model_normalized_time_keeps_the_written_zone(server):
+    from noc7.providers.semantic_constraints import date_inferred
+    result = _s06(server, "since 09:15 GMT+8", "since 09:15 GMT+8")  # 本地格式认不得
+    candidate = next(c for c in result.elements.end_time.candidates if c.id == "T1")
+    assert candidate.time.iso is None  # 没给规整值就不猜
+    server.requests.clear()
+    fact = {"type": "recovery_time", "evidence_id": S06_MAIL, "quote": "since 09:15 GMT+8", "time": "since 09:15 GMT+8",
+            "source": "customer"}
+    for iso, expected in [("2026-09-25 09:15+08:00", "2026-09-25T09:15:00+08:00"), ("2026-09-25 01:15+00:00", None)]:
+        server.replies.clear()  # 这份夹具不走成文那一步，排着的成文回复不留给下一轮
+        result = run(server, [{"facts": [{**fact, "iso": iso}]}, {"facts": []}, WRITING], bundle="SYN-S06")[0]
+        candidate = next(c for c in result.elements.end_time.candidates if c.id == "T1")
+        assert candidate.time.iso == expected
+        if expected:
+            assert date_inferred(candidate) == "工单恢复时间"
+
+
+def test_dates_written_in_the_original_must_agree_with_the_normalized_value():
+    from datetime import datetime
+    from noc7.providers.semantic_constraints import _day_written
+    at = datetime.fromisoformat
+    assert _day_written("Tue Oct 20 15:30:00 GMT 2026", at("2026-10-20T15:30:00+00:00")) is True
+    assert _day_written("Tue Oct 20 15:30:00 GMT 2026", at("2026-10-21T15:30:00+00:00")) is False
+    assert _day_written("2026年10月20日 星期二 15:30:00 GMT", at("2026-10-20T15:30:00+00:00")) is True
+    assert _day_written("北京时间10月20号23:34", at("2026-10-20T23:34:00+08:00")) is True
+    assert _day_written("北京时间10月20号23:34", at("2026-10-19T23:34:00+08:00")) is False
+    assert _day_written("北京时间19日 15:49 - 18:12", at("2026-10-19T18:12:00+08:00")) is True
+    assert _day_written("10:12 UTC", at("2026-10-19T10:12:00+00:00")) is None
+    assert _day_written("12:45左右", at("2026-10-20T12:45:00+08:00")) is None
+
+
+def test_clock_in_description_field_is_read_as_beijing_time(server):
+    # 工单描述由联通侧建单时录入：没写时区的时刻按北京时间推定，日期不晚于建单（发生时间字段 2026-10-08 08:15）。
+    from noc7.providers.semantic_constraints import date_inferred
+    start = {"type": "start_time", "evidence_id": "M01/f:description", "quote": "自 08:15 起中断", "time": "08:15",
+             "source": "customer"}
+    phenomenon = {"type": "phenomenon", "evidence_id": "M01/f:description", "quote": "自 08:15 起中断"}
+    for iso, expected in [("2026-10-08 08:15+08:00", "2026-10-08T08:15:00+08:00"), (None, None),
+                          ("2026-10-08 08:15+00:00", None), ("2026-10-09 08:15+08:00", None)]:
+        server.replies.clear()
+        fact = {**start, "iso": iso} if iso else start
+        result = run(server, [{"facts": [phenomenon, fact]}, {"facts": []}, WRITING], bundle="SYN-P03")[0]
+        candidate = next(c for c in result.elements.start_time.candidates if c.time.raw == "08:15")
+        assert candidate.time.iso == expected
+        if expected:
+            assert candidate.time.tz_source == "assumed" and date_inferred(candidate) == "建单时间"
+
+
+def test_model_time_fills_in_when_local_parser_only_finds_the_date(server):
+    # 本地只解析出日期（时刻夹在星期和时区之间认不得）时，也用核对过的模型值补全时刻。
+    from noc7.extract.baseline import time_phrase
+    from noc7.providers.semantic_constraints import normalized_time
+    from noc7.schema.timeval import TimeValue
+    written = "2026年09月25日 星期四 09:15 GMT+8"
+    assert time_phrase(written, None).precision == "day"
+    server.replies.extend((200, {}, envelope(r)) for r in [
+        {"facts": [{"type": "recovery_time", "evidence_id": S06_MAIL, "quote": "since 09:15 GMT+8",
+                    "time": "09:15 GMT+8", "source": "customer"}]}, {"facts": []}, WRITING])
+    result, ctx, _ = analyze_with_context(BUNDLES / "SYN-S06", TwoStageTextProvider(qwen_config(server)),
+                                          registry=text_registry())
+    candidate = next(c for c in result.elements.end_time.candidates if c.id == "T1")
+    from dataclasses import replace
+    ctx = replace(ctx, evidence=[s.model_copy(update={"text": s.text + "\n" + written}) if s.id == S06_MAIL else s
+                                 for s in ctx.evidence])
+    candidate = candidate.model_copy(update={"time": TimeValue(raw=written)})
+    assert normalized_time(candidate, ctx, None).precision == "day"
+    assert normalized_time(candidate, ctx, "2026-09-25 09:15+08:00").iso == "2026-09-25T09:15:00+08:00"
+    assert normalized_time(candidate, ctx, "2026-09-24 09:15+08:00").precision == "day"
+    settled = candidate.model_copy(update={"time": normalized_time(candidate, ctx, "2026-09-25 09:15+08:00")})
+    assert normalized_time(settled, ctx) == settled.time  # 复核重算一致

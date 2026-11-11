@@ -112,31 +112,133 @@ def colloquial_time(raw, recorded):
 def date_inferred(candidate):
     """只有时刻、又没有原文日期锚点而取得完整时间的，日期是推定的；返回推定依据的说法，否则为空串。"""
     raw = candidate.time.raw
-    if not (candidate.time.iso and candidate.relation
-            and (COLLOQUIAL.fullmatch(raw) or (not candidate.relation.date_anchor and TIME_ONLY.fullmatch(raw)))):
+    moment = candidate.time.as_datetime() if candidate.time.iso else None
+    if not (moment and candidate.relation
+            and (COLLOQUIAL.fullmatch(raw) or (not candidate.relation.date_anchor
+                                               and (TIME_ONLY.fullmatch(raw) or _day_written(raw, moment) is None)))):
         return ""
-    return "日志记录时间" if any("/log:" in ref for ref in candidate.evidence_refs) else "工单恢复时间"
+    if any("/log:" in ref for ref in candidate.evidence_refs):
+        return "日志记录时间"
+    if candidate.time_kind != "business_recovery" and any("/f:" in ref for ref in candidate.evidence_refs):
+        return "建单时间"
+    return "工单恢复时间"
 
 
 def _ticket_recovery(ctx):
     """工单系统的恢复时间字段，只用来给缺日期的时刻定日期。"""
+    return _ticket_field(ctx, "recovered_at")
+
+
+def _ticket_field(ctx, name):
     from ..extract.baseline import time_phrase
     for span in ctx.evidence:
-        if span.locator.type == "field" and span.id.endswith("/f:recovered_at"):
+        if span.locator.type == "field" and span.id.endswith("/f:" + name):
             value = time_phrase(span.text, ctx.bundle.manifest.default_timezone)
             if value.as_datetime() and value.as_datetime().tzinfo:
                 return value.as_datetime()
     return None
 
 
-def normalized_time(candidate, ctx):
+_MONTH_NAMES = {m: i for i, m in enumerate(
+    ("jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"), 1)}
+_CLOCKS = re.compile(r"(?<!\d)(\d{1,2})\s*[:：点时]\s*(\d{2})(?!\d)")
+_AFTERNOON = re.compile(r"\bPM\b|下午|傍晚|晚上|夜里|晚", re.I)
+_UNKNOWN_ZONE = re.compile(r"\b(?:[A-Z]{2,4}T|CST|IST)\b")
+
+
+def _day_written(raw, moment):
+    """原文写了日期时，年、月、日都要与规整值一致；返回 True（写了且一致）、False（矛盾）或 None（没写日期）。"""
+    from ..extract.baseline import DATE
+    clocks = {m.span() for m in _CLOCKS.finditer(raw)}
+    text = raw
+    for a, b in sorted(clocks, reverse=True):
+        text = text[:a] + " " * (b - a) + text[b:]
+    years = {int(y) for y in re.findall(r"(?<!\d)(20\d{2})(?!\d)", text)}
+    if years and moment.year not in years:
+        return False
+    numeric = re.findall(DATE, text)
+    if numeric:
+        from ..extract.baseline import time_phrase
+        return any((time_phrase(d, None).iso or "")[:10] == moment.date().isoformat() for d in numeric)
+    months = {_MONTH_NAMES[w[:3].lower()] for w in re.findall(r"\b([A-Za-z]{3,9})\b", text)
+              if w[:3].lower() in _MONTH_NAMES and (len(w) == 3 or w.lower().startswith(w[:3].lower()))}
+    months |= {int(x) for x in re.findall(r"(?<!\d)(\d{1,2})\s*月", text)}
+    days = {int(x) for x in re.findall(r"(?<!\d)(\d{1,2})\s*[日号]", text)}
+    if not days and months:
+        days = {int(x) for x in re.findall(r"(?<![\d:：.])(\d{1,2})(?![\d:：.])", text) if 1 <= int(x) <= 31}
+    if months and moment.month not in months:
+        return False
+    if days:
+        return moment.day in days
+    return False if months else None
+
+
+def model_time(candidate, ctx, records, offset, proposal, field_backed=False):
+    """本地解析不了时，采用模型规整的完整时间，但须逐项核对原文：
+    时、分出现在原文里；时区与原文写法一致（原文没写时区的，只认处理日志的系统时区）；
+    日期写在原文里的必须一致，没写的只能是记录时间（或工单恢复时间）当天或前一天、且不晚于它。"""
+    from ..extract.baseline import time_phrase, ZONE_RE
+    raw = candidate.time.raw
+    if not isinstance(proposal, str) or not proposal.strip():
+        return None
+    value = time_phrase(proposal, None)
+    moment = value.as_datetime()
+    if not moment or value.tz_source != TimeZoneSource.EXPLICIT:
+        return None
+    clocks = {(int(h), int(m)) for h, m in _CLOCKS.findall(raw)}
+    if (moment.hour, moment.minute) not in clocks and not (
+            moment.hour >= 12 and (moment.hour - 12, moment.minute) in clocks and _AFTERNOON.search(raw)):
+        return None
+    zone = ZONE_RE.search(raw)
+    if zone:
+        if time_phrase("2000-01-01 00:00 " + zone.group(), None).utc_offset != value.utc_offset:
+            return None
+    # 没写时区的：处理日志和工单描述等字段都由联通侧在系统里录入，按北京时间（系统时区）推定；邮件、RFO 不推定。
+    elif (_UNKNOWN_ZONE.search(raw) or not (records or field_backed)
+          or value.utc_offset != time_phrase("2000-01-01 00:00", offset).utc_offset):
+        return None
+    written = _day_written(raw, moment)
+    if written is False:
+        return None
+    reference = None
+    for entry in records:
+        recorded = time_phrase(entry.recorded_at, offset) if entry.recorded_at else None
+        if recorded and recorded.as_datetime():
+            reference = recorded.as_datetime()
+            break
+    if reference is None and candidate.time_kind == "business_recovery":
+        reference = _ticket_recovery(ctx)
+    if reference is None and field_backed:
+        # 描述字段在建单时录入，其中的时刻不晚于建单（发生时间字段）。
+        reference = _ticket_field(ctx, "occurred_at")
+    if reference is None:
+        return None
+    if written is None and not (moment <= reference and (reference - moment) < timedelta(days=2)
+                                and moment.astimezone(reference.tzinfo).date() >= reference.date() - timedelta(days=1)):
+        return None
+    if written and not (reference - timedelta(days=40) <= moment <= reference + timedelta(days=1)):
+        return None
+    # 按原文的精度和时区口径重建，复算时结果不随建议的写法变化：原文写了时区的是显式时区，日志里没写的是系统时区假设。
+    seconds = re.search(r"\d{1,2}[:：]\d{2}[:：]\d{2}", raw)
+    text = moment.strftime("%Y-%m-%d %H:%M:%S" if seconds else "%Y-%m-%d %H:%M")
+    return time_phrase(text + " " + value.utc_offset, None) if zone else time_phrase(text, offset)
+
+
+_SETTLED = object()
+
+
+def normalized_time(candidate, ctx, proposal=_SETTLED):
+    """proposal：模型规整建议（裁决时传入，可为空）。复算已定稿的候选时不传，
+    以候选已采用的 iso 为建议，核对结果不变。"""
+    if proposal is _SETTLED:
+        proposal = candidate.time.iso
     try:
-        return _normalized_time(candidate, ctx)
+        return _normalized_time(candidate, ctx, proposal)
     except (ValueError, OverflowError):
         return TimeValue(raw=candidate.time.raw)
 
 
-def _normalized_time(candidate, ctx):
+def _normalized_time(candidate, ctx, proposal=None):
     """raw 不变。仅来源字段用系统时区；正文锚点必须单独引用。"""
     from ..extract.baseline import time_phrase, ZONE_RE
     spans = {s.id: s for s in ctx.evidence}
@@ -211,6 +313,9 @@ def _normalized_time(candidate, ctx):
                 return value.model_copy(update={"raw": raw})
             base = (value.iso[:16] if value.precision == TimePrecision.MINUTE else value.iso[:19]) if value.iso and value.as_datetime() else raw
             value = time_phrase(base + " " + zone.group(), None)
+    # 本地格式和锚点都定不了的（或只解析出日期、原文其实写了时刻的），才看模型给出的规整值，并逐项核对原文（方案 C）。
+    if value.iso is None or (value.precision == TimePrecision.DAY and _CLOCKS.search(raw)):
+        value = model_time(candidate, ctx, records, offset, proposal, field_backed) or value
     return value.model_copy(update={"raw": raw})
 
 
@@ -283,7 +388,11 @@ def apply_constraints(ctx, data):
                 reason="部分候选缺少时间／断言／来源，原始格式保留在原始三栏。"))
         if isinstance(original, dict) and original.get("value") and el.selected is None:
             checks.append(ConstraintCheck(element=name, outcome="pending", reason="原始结论没有唯一有效的选中候选。"))
-        candidates = [c.model_copy(update={"time": normalized_time(c, ctx)}) if name != "cause" else c
+        # 模型给的规整建议只留在原始三栏里（接地时不信任模型 iso），按候选编号取回，仅作核对后的后备。
+        proposals = {item.get("id"): item["time"].get("iso") for item in raw_candidates or []
+                     if isinstance(item, dict) and isinstance(item.get("time"), dict)
+                     and isinstance(item["time"].get("iso"), str)}
+        candidates = [c.model_copy(update={"time": normalized_time(c, ctx, proposals.get(c.id))}) if name != "cause" else c
                       for c in el.candidates]
         el = el.model_copy(update={"candidates": candidates})
         eligible = []

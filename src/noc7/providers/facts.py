@@ -37,12 +37,13 @@ INSTRUCTION = """你是 NOC 故障工单的事实摘录器。只返回一个 JSO
 - not_fault：原文表明本单不是一次业务故障，而是业务咨询、查询或核对以往的工单／以往的故障、索要报告这类请求。只在整张单都不涉及本次业务异常时才摘。客户报了中断、丢包、时延等现象的，即使后来自行恢复、查无异常或中止查障，也是故障，不要摘；计划内割接引起的中断也不要摘。摘了 not_fault 之后，以往工单里的责任、地点、恢复时间不要再当成本单的事实摘。
 
 时间如果在 quote 里只有时刻没有日期，可另给 date_evidence_id 和 date_quote（写明该时刻所属日期的原文）；不得借用邮件发送时间或记录时间。
+start_time 和 recovery_time 另填 iso：把 time 规整成 "YYYY-MM-DD HH:MM[:SS]±HH:MM" 的完整时间。保持原文写的时区，不要换算成别的时区（原文 15:30 GMT 就写 15:30+00:00，北京时间就写 +08:00）；12 小时制换成 24 小时制；原文没写日期的，按同一句、上下文或该条记录的时间补日期；原文没写时区的，只有处理日志里的时刻按 +08:00 填，邮件和 RFO 里没写时区的不要填 iso。本地会逐项核对 iso 与原文的时、分、时区和日期，对不上就不用。
 没有可摘的事实时返回 {"facts": []}。
 """
 
 EXAMPLE = {"facts": [
     {"type": "start_time", "evidence_id": "M01/f:description", "quote": "客户反映：2026-09-03 08:15 起业务中断。",
-     "time": "2026-09-03 08:15", "kind": "customer_reported"},
+     "time": "2026-09-03 08:15", "iso": "2026-09-03 08:15+08:00", "kind": "customer_reported"},
     {"type": "phenomenon", "evidence_id": "M01/f:description", "quote": "客户反映：2026-09-03 08:15 起业务中断。"},
     {"type": "step", "evidence_id": "M02/log:2", "quote": "已联系现场核查，现场反馈光缆中断。", "actor": "SYN-维护组"},
     {"type": "cause", "evidence_id": "M02/log:4", "quote": "供应商反馈 SYN-城市甲段光缆被施工挖断。",
@@ -50,7 +51,7 @@ EXAMPLE = {"facts": [
     {"type": "fault_location", "evidence_id": "M02/log:4", "quote": "供应商反馈 SYN-城市甲段光缆被施工挖断。",
      "city": "SYN-城市甲", "source": "vendor_feedback"},
     {"type": "recovery_time", "evidence_id": "M02/log:6", "quote": "客户反馈业务已于 2026-09-03 10:00 恢复。",
-     "time": "2026-09-03 10:00", "source": "customer"},
+     "time": "2026-09-03 10:00", "iso": "2026-09-03 10:00+08:00", "source": "customer"},
 ]}
 SYSTEM_PROMPT = INSTRUCTION + "格式示例（内容必须来自实际证据，不要照抄）：\n" + json.dumps(EXAMPLE, ensure_ascii=False)
 # 补充遍只为找回漏摘：同样的证据再读一次，重点放在最容易漏的三类。
@@ -91,6 +92,8 @@ def _checked(item, spans):
         if item["evidence_id"].rsplit("/f:", 1)[-1] in SYSTEM_TIME_FIELDS and "/f:" in item["evidence_id"]:
             return None, "工单系统时间字段不是业务来源，由程序按兜底处理"
         fact["time"] = moment
+        if isinstance(item.get("iso"), str) and item["iso"].strip():
+            fact["iso"] = item["iso"].strip()[:40]
         anchor = spans.get(item.get("date_evidence_id")) if isinstance(item.get("date_evidence_id"), str) else None
         date_quote = item.get("date_quote")
         if anchor is not None and isinstance(date_quote, str) and date_quote.strip() \
@@ -253,6 +256,11 @@ def not_fault(facts):
     return _q(fact) if fact else None
 
 
+def _time(fact):
+    """候选时间：raw 是原文；iso 只是模型的规整建议，本地解析不了时才核对后采用。"""
+    return {"raw": fact["time"], **({"iso": fact["iso"]} if fact.get("iso") else {})}
+
+
 def compile_facts(facts, ctx):
     """把核对过的事实编成既有抽取结构；候选顺序就是本地取值的优先顺序。"""
     spans = {s.id: s for s in ctx.evidence}
@@ -260,7 +268,7 @@ def compile_facts(facts, ctx):
 
     starts = []
     for fact in (f for f in facts if f["type"] == "start_time"):
-        starts.append({**_base("T", len(starts) + 1, fact, spans), "time": {"raw": fact["time"]}, "time_kind": fact["kind"],
+        starts.append({**_base("T", len(starts) + 1, fact, spans), "time": _time(fact), "time_kind": fact["kind"],
                        "relation": _relation(fact, date_anchor=fact.get("date_anchor"), timezone_anchor=None,
                                              customer_confirmation=None)})
     field = _field_time(spans, "occurred_at", "fault_start_field", {})
@@ -271,7 +279,7 @@ def compile_facts(facts, ctx):
     ends = []
     for fact in (f for f in facts if f["type"] == "recovery_time"):
         known = fact["source"] != "unknown"
-        ends.append({**_base("T", len(ends) + 1, fact, spans), "time": {"raw": fact["time"]}, "time_kind": "business_recovery",
+        ends.append({**_base("T", len(ends) + 1, fact, spans), "time": _time(fact), "time_kind": "business_recovery",
                      "relation": _relation(fact, date_anchor=fact.get("date_anchor"), timezone_anchor=None,
                                            customer_confirmation=_q(fact) if fact["source"] == "customer" else None,
                                            recovery_source=fact["source"],
