@@ -473,3 +473,46 @@ def test_record_time_of_a_customer_confirmation_call_is_not_recovery(server):
                                                              tz_source="assumed", utc_offset="+08:00", precision="second"),
                                           "relation": relation})
     assert "客户确认时刻不等于业务恢复时刻" in pending_reason(called, "end_time", spans)
+
+
+def _recorded_run(server, tmp_path, replies, bundle="SYN-P04"):
+    server.replies.extend((200, {}, envelope(r)) if isinstance(r, dict) else r for r in replies)
+    provider = TwoStageTextProvider(qwen_config(server, fact_passes=2), audit_dir=tmp_path / "audit")
+    result, _, _ = analyze_with_context(BUNDLES / bundle, provider, registry=text_registry())
+    (path,) = (tmp_path / "audit").glob("*.json")
+    return result, json.loads(path.read_text(encoding="utf-8"))
+
+
+def _replay(server, record, bundle="SYN-P04"):
+    from noc7.providers.two_stage_replay import TwoStageReplayProvider
+    sent = len(server.requests)
+    provider = TwoStageReplayProvider(qwen_config(server, fact_passes=2), record)
+    result, _, _ = analyze_with_context(BUNDLES / bundle, provider, registry=text_registry())
+    assert len(server.requests) == sent  # 重放不发请求
+    return result, provider
+
+
+def test_offline_replay_reproduces_a_recorded_run(server, tmp_path):
+    original, record = _recorded_run(server, tmp_path, [FACTS, {"facts": []}, WRITING])
+    assert len(record["fact_responses"]) == 2 and record["raw_response"] == record["fact_responses"][0]
+    for mode, rec in [("responses", record), ("facts", {k: v for k, v in record.items() if k != "fact_responses"})]:
+        replayed, provider = _replay(server, rec)
+        assert provider.mode == mode and not provider.prompt_changed
+        assert replayed.elements.model_dump() == original.elements.model_dump()
+        assert replayed.narrative == original.narrative  # 成文回复按当前要素重新核验后复用
+
+
+def test_offline_replay_keeps_a_failed_second_pass_failed(server, tmp_path):
+    original, record = _recorded_run(server, tmp_path, [FACTS, (500, {}, b"{}"), (500, {}, b"{}"), (500, {}, b"{}"), WRITING])
+    assert record["fact_responses"][1] is None
+    replayed, _ = _replay(server, record)
+    assert any("第 2 遍" in d["reason"] for d in replayed.semantic_assessment.original["facts_dropped"])
+    assert replayed.elements.model_dump() == original.elements.model_dump()
+
+
+def test_offline_replay_refuses_other_evidence_and_flags_prompt_changes(server, tmp_path):
+    _, record = _recorded_run(server, tmp_path, [FACTS, {"facts": []}, WRITING])
+    with pytest.raises(TextProviderError, match="证据摘要"):
+        _replay(server, {**record, "evidence_sha256": "0" * 64})
+    _, provider = _replay(server, {**record, "prompt_version": "old"})
+    assert provider.prompt_changed
