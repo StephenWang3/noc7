@@ -40,6 +40,13 @@ def metrics(result):
     )
 
 
+def usage_total(calls):
+    total = Counter()
+    for call in calls:
+        total.update(call)
+    return dict(requests=len(calls), **total)
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("roots", nargs="+", type=Path)
@@ -77,6 +84,7 @@ def main():
             write_reports(result, target, report_type="closure")
             save_replay(target / "replay.json", ctx, extraction)
             row.update(status="ok", **metrics(result))
+            row["usage"] = usage_total(provider.usage)
         except Exception as exc:
             row["status"] = "rejected" if hasattr(exc, "issues") else "failed"
             row["error"] = type(exc).__name__ + "：" + str(exc)[:80] if not hasattr(exc, "issues") else None
@@ -92,7 +100,8 @@ def main():
     summary = dict(total=len(entries), attempted=len(rows), ok=len(ok),
                    filled={name: sum(r["filled"][name] for r in ok) for name in NAMES},
                    recovery_sources=dict(Counter(r["recovery_source"] for r in ok)),
-                   narrative_ok=sum(r["narrative"] is not None for r in ok))
+                   narrative_ok=sum(r["narrative"] is not None for r in ok),
+                   usage=usage_total(r["usage"] for r in ok if r.get("usage")))
     write(out / "summary.json", summary)
     print(json.dumps(summary, ensure_ascii=False))
 

@@ -24,6 +24,24 @@ class _NoRedirect(urllib.request.HTTPRedirectHandler):
         return None
 
 
+USAGE_KEYS = ("prompt_tokens", "completion_tokens", "prompt_cache_hit_tokens", "prompt_cache_miss_tokens")
+
+
+def response_usage(raw: bytes) -> dict[str, int]:
+    """取远端返回的 token 用量；没有或格式不对时返回空字典，不影响请求结果。"""
+    try:
+        usage = json.loads(raw).get("usage")
+    except (ValueError, AttributeError):
+        return {}
+    if not isinstance(usage, dict):
+        return {}
+    out = {k: usage[k] for k in USAGE_KEYS if isinstance(usage.get(k), int) and not isinstance(usage.get(k), bool)}
+    details = usage.get("completion_tokens_details")
+    if isinstance(details, dict) and isinstance(details.get("reasoning_tokens"), int):
+        out["reasoning_tokens"] = details["reasoning_tokens"]
+    return out
+
+
 class OpenAICompatibleTextProvider:
     prompt_version = PROMPT_VERSION
 
@@ -33,6 +51,8 @@ class OpenAICompatibleTextProvider:
         self.url = config.base_url.rstrip("/") + "/chat/completions"
         self.sleep = sleep
         self.audit = AuditStore(audit_dir) if audit_dir is not None else None
+        # 每次成功请求的用量（远端 usage 字段原样取数字），用于统计成本；不含任何正文。
+        self.usage: list[dict[str, int]] = []
 
     def preflight(self, data_class: DataClass) -> str | None:
         """先检查分级，再读取凭据；调用 CLI 与直接使用提供方均受保护。"""
@@ -123,6 +143,9 @@ class OpenAICompatibleTextProvider:
                     if audit:
                         audit.record(outcome="response_too_large")
                     raise TextProviderError("模型响应超过配置的字节上限，已拒绝。")
+                self.usage.append(response_usage(raw))
+                if audit:
+                    audit.record(usage=list(self.usage))
                 return raw
         raise TextProviderError("文本模型重试次数已耗尽。")
 

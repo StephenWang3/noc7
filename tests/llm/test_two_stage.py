@@ -334,3 +334,20 @@ def test_not_fault_ticket_gets_no_party_or_location(server, monkeypatch):
     assert not e.responsible_party.value and not list(e.responsible_party.iter_candidates())
     assert not e.location.value
     assert any("不是业务故障" in line for line in cell(result, "analysis"))
+
+
+def test_usage_is_recorded_per_request(server):
+    from noc7.providers.text_http import response_usage
+    usage = {"prompt_tokens": 100, "completion_tokens": 20, "prompt_cache_hit_tokens": 40,
+             "prompt_cache_miss_tokens": 60, "completion_tokens_details": {"reasoning_tokens": 15}}
+    def with_usage(data):
+        body = json.loads(envelope(data))
+        body["usage"] = usage
+        return (200, {}, json.dumps(body, ensure_ascii=False).encode())
+    server.replies.extend([with_usage(FACTS), with_usage({"facts": []}), with_usage(WRITING)])
+    provider = TwoStageTextProvider(qwen_config(server, fact_passes=2))
+    analyze_with_context(BUNDLES / "SYN-P04", provider, registry=text_registry())
+    assert len(provider.usage) == 3
+    assert provider.usage[0] == {"prompt_tokens": 100, "completion_tokens": 20, "prompt_cache_hit_tokens": 40,
+                                 "prompt_cache_miss_tokens": 60, "reasoning_tokens": 15}
+    assert response_usage(b"not json") == {} and response_usage(envelope({"facts": []})) == {}
