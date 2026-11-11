@@ -449,3 +449,27 @@ def test_model_time_fills_in_when_local_parser_only_finds_the_date(server):
     assert normalized_time(candidate, ctx, "2026-09-24 09:15+08:00").precision == "day"
     settled = candidate.model_copy(update={"time": normalized_time(candidate, ctx, "2026-09-25 09:15+08:00")})
     assert normalized_time(settled, ctx) == settled.time  # 复核重算一致
+
+
+def test_record_time_of_a_customer_confirmation_call_is_not_recovery(server):
+    # 日志开头的记录时间 + “致电客户表示已恢复”：是确认动作的时刻，不能当业务恢复时间。
+    from dataclasses import replace
+    from noc7.providers.semantic_constraints import confirmation_record_time, pending_reason
+    from noc7.schema.timeval import TimeValue
+    assert confirmation_record_time("2026-10-20 15:29:41", "2026-10-20 15:29:41\n\n联系客户确认恢复，请核实原因")
+    assert confirmation_record_time("2026-10-20 17:36:28", "2026-10-20 17:36:28  联系客户表示已解决，可结单")
+    assert not confirmation_record_time("2026-10-20 15:29", "2026-10-20 15:29:41 联系客户确认 15:29 恢复")  # 正文写了时刻
+    assert not confirmation_record_time("2026-10-20 15:29:41", "2026-10-20 15:29:41 告警清除，业务恢复")  # 不是确认动作
+    assert not confirmation_record_time("19:08", "19:08 告警清除，业务恢复")
+
+    result, ctx, _ = run_passes(server, [FACTS, WRITING], passes=1)
+    candidate = next(c for c in result.elements.end_time.candidates if "M02/log:7" in c.evidence_refs)
+    assert pending_reason(candidate, "end_time", {s.id: s for s in ctx.evidence}) is None
+    text = "2026-10-10 19:20:00\n\n致电客户，客户表示业务已恢复"
+    spans = {s.id: (s.model_copy(update={"text": text}) if s.id == "M02/log:7" else s) for s in ctx.evidence}
+    relation = candidate.relation.model_copy(update={"context": [
+        candidate.relation.context[0].model_copy(update={"quote": text})]})
+    called = candidate.model_copy(update={"time": TimeValue(raw="2026-10-10 19:20:00", iso="2026-10-10T19:20:00+08:00",
+                                                             tz_source="assumed", utc_offset="+08:00", precision="second"),
+                                          "relation": relation})
+    assert "客户确认时刻不等于业务恢复时刻" in pending_reason(called, "end_time", spans)

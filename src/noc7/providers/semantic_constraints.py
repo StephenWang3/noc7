@@ -330,6 +330,23 @@ def _reliable(candidate, spans):
                for s in sources)
 
 
+_RECORD_HEAD = re.compile(r"\s*(\d{4}-\d{2}-\d{2}\s+\d{1,2}:\d{2}(?::\d{2})?)")
+_CONFIRM_CALL = re.compile(r"(?:致电|联系|电话|回访|询问|咨询|沟通)[^。；;\n]{0,24}客户[^。；;\n]{0,24}"
+                           r"(?:已?恢复|已?解决|正常|可结单|可以结单)")
+
+
+def confirmation_record_time(raw, text):
+    """恢复时间只是这条日志开头的记录时间，而日志内容是致电／联系客户得知已恢复：这是确认动作的时刻，不是业务恢复时刻。"""
+    head = _RECORD_HEAD.match(text)
+    if not head or match_quote(raw, head.group(1)).status == "mismatch":
+        return False
+    body = text[head.end():]
+    clock = _CLOCKS.search(raw)
+    if clock and any((int(h), int(m)) == (int(clock[1]), int(clock[2])) for h, m in _CLOCKS.findall(body)):
+        return False  # 正文自己又写了这个时刻，不只是记录时间
+    return bool(_CONFIRM_CALL.search(body))
+
+
 def pending_reason(candidate, name, spans):
     r = candidate.relation
     if r is None:
@@ -352,6 +369,9 @@ def pending_reason(candidate, name, spans):
     else:
         if candidate.time_kind not in (END if name == "end_time" else START):
             return "协议状态、确认动作、流程或其他时间不能替代业务起止。"
+        if name == "end_time" and any(confirmation_record_time(candidate.time.raw, spans[ref].text)
+                                      for ref in candidate.evidence_refs if "/log:" in ref and ref in spans):
+            return "这是致电／联系客户确认恢复的记录时间，客户确认时刻不等于业务恢复时刻。"
         if not candidate.time.as_datetime() or candidate.time.precision not in {TimePrecision.MINUTE, TimePrecision.SECOND}:
             return "日期／时区锚点不一致或缺少分钟级以上完整时间，不能正式采用。"
         if candidate.time.tz_source == TimeZoneSource.UNKNOWN:
