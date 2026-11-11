@@ -41,10 +41,20 @@ def metrics(result):
 
 
 def usage_total(calls):
+    """单张工单：把每次请求的用量相加，并记请求次数。"""
+    calls = list(calls)
     total = Counter()
     for call in calls:
         total.update(call)
     return dict(requests=len(calls), **total)
+
+
+def usage_sum(rows):
+    """整轮：把各张工单的用量（已含请求次数）相加。"""
+    total = Counter()
+    for row in rows:
+        total.update(row)
+    return dict(total)
 
 
 def main():
@@ -101,7 +111,7 @@ def main():
                    filled={name: sum(r["filled"][name] for r in ok) for name in NAMES},
                    recovery_sources=dict(Counter(r["recovery_source"] for r in ok)),
                    narrative_ok=sum(r["narrative"] is not None for r in ok),
-                   usage=usage_total(r["usage"] for r in ok if r.get("usage")))
+                   usage=usage_sum(r["usage"] for r in ok if r.get("usage")))
     write(out / "summary.json", summary)
     print(json.dumps(summary, ensure_ascii=False))
 
