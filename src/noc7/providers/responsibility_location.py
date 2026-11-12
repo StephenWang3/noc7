@@ -73,6 +73,53 @@ def admin_area(city, quote=""):
                for m in re.finditer(re.escape(base), quote or "", re.I))
 
 
+_PLACE_SUFFIX = re.compile(r"(?:省|自治区|州|县|市|\b(?:province|state|region|prefecture|oblast|governorate|city)\b)$", re.I)
+_COUNTRY_PREFIX = re.compile(r"^(?:中国|越南|老挝|泰国|缅甸|柬埔寨|马来西亚|新加坡|印度尼西亚|菲律宾|日本|韩国|俄罗斯|蒙古|"
+                             r"哈萨克斯坦|美国|加拿大|墨西哥|巴西|英国|法国|德国|荷兰|意大利|西班牙|澳大利亚|印度|巴基斯坦)")
+
+
+def _place_core(value):
+    core = re.sub(r"[\s,，.、·'’\-]+", " ", (value or "").strip()).strip()
+    core = _COUNTRY_PREFIX.sub("", core).strip()
+    while _PLACE_SUFFIX.search(core):
+        core = _PLACE_SUFFIX.sub("", core).strip()
+    return core.lower()
+
+
+def _edits(a, b, limit=1):
+    """编辑距离，超过 limit 就提前返回 limit + 1。"""
+    if abs(len(a) - len(b)) > limit:
+        return limit + 1
+    prev = list(range(len(b) + 1))
+    for i, ca in enumerate(a, 1):
+        cur = [i]
+        for j, cb in enumerate(b, 1):
+            cur.append(min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + (ca != cb)))
+        if min(cur) > limit:
+            return limit + 1
+        prev = cur
+    return prev[-1]
+
+
+def same_place(a, b):
+    """同一地点的不同写法：去掉国名前缀和省／县／Province 等后缀后相同、一方包含另一方，或外文名（6 个字母以上）只差一个字母。"""
+    x, y = _place_core(a), _place_core(b)
+    if not x or not y:
+        return False
+    if x == y:
+        return True
+    short, long_ = sorted((x, y), key=len)
+    if short.isascii():
+        if re.search(r"\b" + re.escape(short) + r"\b", long_):
+            return True
+        return len(short) >= 6 and _edits(x, y) <= 1
+    return len(short) >= 2 and short in long_
+
+
+def same_value(a, b, name):
+    return a == b or (name == "location" and same_place(a, b))
+
+
 def area_party(text):
     return next((party for word, party in AREA_PARTIES if word in (text or "")), None)
 
@@ -317,31 +364,43 @@ def evaluate(elements, spans, coverage, suggestions=(), layered=False):
             eligible = cities or eligible
         update = dict(status=ElementStatus.UNKNOWN, value=None, selected=None, evidence_refs=[], note="依据不足，保留候选及原始回答待核对。" if el.candidates else None)
         if eligible:
-            rank = min(rank_of(c.relation.source_tier) for c in eligible)
+            ranks = sorted({rank_of(c.relation.source_tier) for c in eligible})
+            rank = ranks[0]
             top = [c for c in eligible if rank_of(c.relation.source_tier) == rank]
-            different = len({formal_value(c, name) for c in top}) > 1
-            opponents = [b for b in el.candidates if any(
-                b.id != a.id and b.relation
-                and b.relation.source_tier == a.relation.source_tier
-                and (b.relation.event_id, b.relation.scope) == (a.relation.event_id, a.relation.scope)
-                # 按层兜底时否定说法只用来排除怀疑，不把明确结论打成冲突。
-                and b.relation.current_event and b.relation.modality in ({"asserted"} if layered else {"asserted", "negated"})
-                and grounded_assertion(b, name, spans)
-                and (b.id in a.relation.contradicts or a.id in b.relation.contradicts
-                     or (b.relation.modality == "negated" and formal_value(b, name) == formal_value(a, name)))
-                for a in top)]
+            opponents = _opponents(el, top, name, spans, layered)
+            different = _differs(top, name, layered)
+            fallback_note = ""
+            if (different or opponents) and layered:
+                # 按层兜底：最高层来源冲突时，退到下一层来源里结论一致的；都不行再取同层被摘到最多的，标“有冲突，待核实”。
+                clash = list(dict.fromkeys(c.id for c in [*top, *opponents]))
+                for lower_rank in ranks[1:]:
+                    group = [c for c in eligible if rank_of(c.relation.source_tier) == lower_rank]
+                    if not _differs(group, name, layered) and not _opponents(el, group, name, spans, layered):
+                        rank, top = lower_rank, group
+                        fallback_note = "较高层来源结论冲突（" + "、".join(clash) + "），取下一层来源，待核实。"
+                        break
+                else:
+                    counts = [sum(same_value(formal_value(o, name), formal_value(c, name), name) for o in top) for c in top]
+                    best = max(counts)
+                    top = [next(c for c, n in zip(top, counts) if n == best)]
+                    fallback_note = "同层来源结论冲突（" + "、".join(clash) + "），取被摘到最多、原文先出现的一条，待核实。"
+                checks.append(ConstraintCheck(element=name, outcome="conflict", code=IssueCode.SEMANTIC_ASSERTIONS_CONFLICT,
+                    reason=fallback_note, evidence_refs=list(dict.fromkeys(r for c in [*top, *opponents] for r in c.evidence_refs))))
+                different, opponents = False, []
             opposing = bool(opponents)
             if different or opposing:
                 update.update(status=ElementStatus.CONFLICTED, note="最高有效来源同层结论无法消解，正式留空。")
                 checks.append(ConstraintCheck(element=name, outcome="conflict", code=IssueCode.SEMANTIC_ASSERTIONS_CONFLICT,
                     reason=update['note'], evidence_refs=list(dict.fromkeys(r for c in [*top, *opponents] for r in c.evidence_refs))))
             else:
-                chosen = top[0]
+                chosen = _fullest(top, name) if layered else top[0]
+                variants = [v for v in dict.fromkeys(formal_value(c, name) for c in top) if v != formal_value(chosen, name)]
                 refs = list(dict.fromkeys([*chosen.evidence_refs, *(q.evidence_id for q in relation_quotes(chosen.relation))]))
                 lower = [c for c in el.candidates if c.relation
                          and (c.relation.source_tier in PRIORITY or (layered and c.relation.source_tier == LOW_TIER))
                          and rank_of(c.relation.source_tier) > rank
-                         and (formal_value(c, name) != formal_value(chosen, name) or c.id in chosen.relation.contradicts
+                         and (not same_value(formal_value(c, name), formal_value(chosen, name), name)
+                              or c.id in chosen.relation.contradicts
                               or chosen.id in c.relation.contradicts)]
                 note = SOURCE_LABELS[chosen.relation.source_tier] + "；有记录，未经人工审核。"
                 if chosen.relation.source_tier == LOW_TIER:
@@ -350,6 +409,9 @@ def evaluate(elements, spans, coverage, suggestions=(), layered=False):
                     note += "原文没有具体城市，只到省、州一级。"
                 if suspected:
                     note += "原文仅为怀疑，待确认。"
+                if variants:
+                    note += "同一地点另有写法：" + "、".join(variants) + "。"
+                note += fallback_note
                 if name == "responsible_party":
                     note += "路径：" + PATH_LABELS[chosen.relation.decision_path] + "。"
                     if chosen.relation.third_party:
@@ -373,6 +435,34 @@ def evaluate(elements, spans, coverage, suggestions=(), layered=False):
                 update["note"] += f"与{label}不一致，待核实。"
         updates[name] = el.model_copy(update=update)
     return updates, checks
+
+
+def _opponents(el, top, name, spans, layered):
+    return [b for b in el.candidates if any(
+        b.id != a.id and b.relation
+        and b.relation.source_tier == a.relation.source_tier
+        and (b.relation.event_id, b.relation.scope) == (a.relation.event_id, a.relation.scope)
+        # 按层兜底时否定说法只用来排除怀疑，不把明确结论打成冲突。
+        and b.relation.current_event and b.relation.modality in ({"asserted"} if layered else {"asserted", "negated"})
+        and grounded_assertion(b, name, spans)
+        and (b.id in a.relation.contradicts or a.id in b.relation.contradicts
+             or (b.relation.modality == "negated" and formal_value(b, name) == formal_value(a, name)))
+        for a in top)]
+
+
+def _differs(group, name, layered):
+    """同组结论是否不一致；按层兜底时，同一地点的不同写法算一致。"""
+    values = [formal_value(c, name) for c in group]
+    if not layered:
+        return len(set(values)) > 1
+    return any(not same_value(a, b, name) for i, a in enumerate(values) for b in values[i + 1:])
+
+
+def _fullest(group, name):
+    """同一结论的几种写法里取被摘到最多的，次数一样取更完整（更长）的，再一样取原文先出现的。"""
+    values = [formal_value(c, name) for c in group]
+    return max(group, key=lambda c: (values.count(formal_value(c, name)), len(formal_value(c, name) or ""),
+                                     -group.index(c)))
 
 
 def apply_constraints(ctx, data):

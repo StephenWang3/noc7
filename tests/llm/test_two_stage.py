@@ -640,3 +640,17 @@ def test_negation_vetoes_suspected_party_but_not_asserted(server):
     sure = {**guess, "certainty": "asserted"}
     result, _, _ = run_passes(server, [{"facts": [*FACTS["facts"][:8], sure, denial]}, WRITING], passes=1)
     assert result.elements.responsible_party.value == "供应商"  # 明确结论不因否定说法变成冲突
+
+
+def test_conflicting_top_tier_falls_back_to_next_tier_then_to_most_cited(server):
+    a = {"type": "responsibility", "evidence_id": "M02/log:5", "quote": "市政道路施工挖断 24 芯光缆", "party": "联通",
+         "source": "branch_log"}
+    b = {**a, "party": "供应商"}
+    low = {**a, "party": "供应商", "source": "noc"}
+    result, _, _ = run_passes(server, [{"facts": [*FACTS["facts"][:8], a, b, low]}, WRITING], passes=1)
+    el = result.elements.responsible_party
+    assert el.value == "供应商" and "较高层来源结论冲突" in el.note and "取下一层来源" in el.note
+
+    result, _, _ = run_passes(server, [{"facts": [*FACTS["facts"][:8], a, b]}, WRITING], passes=1)
+    el = result.elements.responsible_party
+    assert el.status == "documented" and el.value == "联通" and "同层来源结论冲突" in el.note

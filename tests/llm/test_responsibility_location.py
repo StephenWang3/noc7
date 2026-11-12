@@ -535,3 +535,23 @@ def test_base_merge_preserves_both_recovery_and_business_assessments(sample, mon
         assert ('恢复时间业务取值' in report) is not legacy_recovery
         assert '明确责任归属' in report
     assert '有记录，未经人工审核' in render_company_html(result)
+
+
+def test_same_place_spellings_merge_only_when_layered(sample):
+    from noc7.providers.responsibility_location import evaluate
+    ctx, payload = case(sample, 'location', ['分公司：SYN-Kennedy Town故障。', '分公司：SYN-Kenndy Town故障。'])
+    candidate(payload, 'location', 0)['relation']['city'] = 'SYN-Kennedy Town'
+    candidate(payload, 'location', 1)['relation']['city'] = 'SYN-Kenndy Town'
+    data = decode(ctx, payload)
+    assert data.elements.location.status == 'conflicted'  # 不分层时仍按冲突留空
+    spans = {s.id: s for s in ctx.evidence}
+    el = evaluate(data.elements, spans, data.semantic_assessment.business_coverage, layered=True)[0]['location']
+    assert el.value == 'SYN-Kennedy Town' and '同一地点另有写法：SYN-Kenndy Town' in el.note
+
+
+def test_same_place_rules():
+    from noc7.providers.responsibility_location import same_place
+    for a, b in [('勐腊', '勐腊县'), ('Baan Dara', 'Ban Dara'), ('Vientiane Province', 'Vientiane'), ('越南谅山省', '谅山省')]:
+        assert same_place(a, b)
+    for a, b in [('上海', '北京'), ('Paris', 'Parma'), ('香港', '九龙'), ('河内', '河南')]:
+        assert not same_place(a, b)
