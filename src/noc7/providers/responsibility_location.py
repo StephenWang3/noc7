@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import hashlib
+import re
 
 from ..quote_match import match_quote
 from ..schema import ElementStatus, IssueCode, SpanRole
@@ -21,6 +22,45 @@ PATH_LABELS = {"explicit_responsibility": "明确责任归属", "customer_self_c
 AREA_FIELD = "fault_area"
 AREA_PARTIES = (("运营商", "供应商"), ("用户", "客户"))
 FALLBACK_TIER = "system_field"
+
+
+# 地点先取城市；没有可采用的城市时才取省、州一级（业务口径 2026-11-12）。
+_ADMIN_CN = re.compile(r"(?:省|自治区|自治州)$")
+_ADMIN_EN = re.compile(r"\b(?:province|state|region|prefecture|oblast|governorate)\b", re.I)
+_ADMIN_AFTER = re.compile(r"\s*(?:省|自治区|州|(?:province|state|region|prefecture|oblast|governorate)\b)", re.I)
+# “奇瓦瓦州（Chihuahua）”：括号里的外文名跟在省、州名后面，也是省、州。
+_ADMIN_BEFORE = re.compile(r"(?:省|自治区|州)\s*[（(]\s*$")
+_PAREN_TAIL = re.compile(r"\s*[（(][^（()）]*[）)]\s*$")
+
+
+def city_name(city, quote=""):
+    """规整地点名，结果仍是原文的一部分。
+
+    城市去掉“县”“市”后缀和美国州的两字母简写（“NEW BRUNSWICK, NJ”）；
+    省、州保留原文里紧跟的“省／州／Province”等字样（“谅山”→“谅山省”），读者能看出只到省一级。
+    """
+    city = re.sub(r",\s*[A-Z]{2}$", "", city.strip())
+    if admin_area(city, quote):
+        if not admin_area(city):
+            m = re.search(re.escape(city) + r"(?:\s*(?:province|state|region|prefecture|oblast|governorate)\b|省|自治区|州)",
+                          quote or "", re.I)
+            if m:
+                return m.group(0)
+        return city
+    if len(city) >= 3 and city[-1] in "县市":
+        city = city[:-1]
+    return city
+
+
+def admin_area(city, quote=""):
+    """城市名其实是省、州一级行政区：名字本身带“省／州／Province”等，或原文里有一处明说它是省、州（紧跟着这类词，或是省州名后括号里的外文名）。同名的省和城市分不清时按省、州算。"""
+    base = _PAREN_TAIL.sub("", city or "").strip()
+    if not base:
+        return False
+    if _ADMIN_CN.search(base) or (base.endswith("州") and len(base) >= 3) or _ADMIN_EN.search(base):
+        return True
+    return any(_ADMIN_AFTER.match(quote[m.end():]) or _ADMIN_BEFORE.search(quote[:m.start()])
+               for m in re.finditer(re.escape(base), quote or "", re.I))
 
 
 def area_party(text):
@@ -229,6 +269,17 @@ def evaluate(elements, spans, coverage, suggestions=()):
                 evidence_refs=c.evidence_refs))
             if reason is None:
                 eligible.append(c)
+        province = False
+        if name == "location":
+            # 有可采用的城市就不取省、州，不论两者各来自哪一级来源；没有城市时才取省、州。
+            cities = [c for c in eligible if not admin_area(c.relation.city, c.relation.city_quote.quote)]
+            if cities and len(cities) < len(eligible):
+                dropped = {c.id for c in eligible if c not in cities}
+                checks = [ConstraintCheck(element=name, candidate_id=k.candidate_id, outcome="pending",
+                                          reason="已有可采用的城市，省、州一级不采用。", evidence_refs=k.evidence_refs)
+                          if k.element == name and k.candidate_id in dropped else k for k in checks]
+            province = bool(eligible) and not cities
+            eligible = cities or eligible
         update = dict(status=ElementStatus.UNKNOWN, value=None, selected=None, evidence_refs=[], note="依据不足，保留候选及原始回答待核对。" if el.candidates else None)
         if eligible:
             rank = min(PRIORITY[c.relation.source_tier] for c in eligible)
@@ -256,6 +307,8 @@ def evaluate(elements, spans, coverage, suggestions=()):
                          and (formal_value(c, name) != formal_value(chosen, name) or c.id in chosen.relation.contradicts
                               or chosen.id in c.relation.contradicts)]
                 note = SOURCE_LABELS[chosen.relation.source_tier] + "；有记录，未经人工审核。"
+                if province:
+                    note += "原文没有具体城市，只到省、州一级。"
                 if name == "responsible_party":
                     note += "路径：" + PATH_LABELS[chosen.relation.decision_path] + "。"
                     if chosen.relation.third_party:

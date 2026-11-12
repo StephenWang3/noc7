@@ -516,3 +516,28 @@ def test_offline_replay_refuses_other_evidence_and_flags_prompt_changes(server, 
         _replay(server, {**record, "evidence_sha256": "0" * 64})
     _, provider = _replay(server, {**record, "prompt_version": "old"})
     assert provider.prompt_changed
+
+
+def test_closing_cause_field_marks_removed_duplicate_or_retired_tickets():
+    from types import SimpleNamespace
+    def spans(text):
+        span = SimpleNamespace(id="M01/f:cause", text=text, locator=SimpleNamespace(type="field"))
+        return {span.id: span}
+    hit = facts.closing_not_fault(spans("工程师反馈：此条线路已拆除，见文件某号。请核实"))
+    assert hit["kind"] == "已拆机" and hit["quote"] == "工程师反馈：此条线路已拆除，见文件某号"
+    assert facts.closing_not_fault(spans("与BZ-某地-业务故障X重单，此单销账，以该单跟进处理"))["kind"].startswith("重单")
+    assert facts.closing_not_fault(spans("某地3G基站已退网，建议使用VOLTE"))["kind"] == "网络退网说明"
+    # 只写销账（中止查障）、普通原因都不算。
+    assert facts.closing_not_fault(spans("已超24小时客户未回复邮件，请销账")) is None
+    assert facts.closing_not_fault(spans("市政道路施工挖断 24 芯光缆，已熔接恢复。")) is None
+
+
+def test_removed_line_in_closing_cause_needs_no_model_marker(server):
+    # SYN-S10 的结单原因写“线路已拆机”：模型没摘 not_fault，本地规则也判为非故障，责任方、地点留空。
+    party = {"type": "responsibility", "evidence_id": "M01/f:cause", "quote": "线路已拆机", "party": "客户",
+             "source": "noc"}
+    result, _ = run(server, [{"facts": [party]}, {"facts": []}, WRITING], bundle="SYN-S10")
+    marker = result.semantic_assessment.original["not_fault"]
+    assert (marker["kind"], marker["basis"], marker["quote"]) == ("已拆机", "closing_field", "线路已拆机")
+    assert not result.elements.responsible_party.value and not list(result.elements.responsible_party.iter_candidates())
+    assert any("本单按结单原因不是业务故障（已拆机）" in line for line in cell(result, "analysis"))

@@ -344,8 +344,11 @@ def build_company_report(result: AnalysisResult) -> CompanyReport:
     )
     original = result.semantic_assessment.original if result.semantic_assessment else {}
     if original.get("not_fault"):
-        # 咨询、查询以往工单：说明为什么责任方和地点留空。
-        analysis = (*analysis, (Part("本单按原文不是业务故障（咨询或查询），不判责任方和故障位置。"), Part("【待核实】", True)))
+        # 咨询、查询以往工单，已拆机、重单、退网说明：说明为什么责任方和地点留空。
+        marker = original["not_fault"]
+        kind = marker.get("kind") or "咨询或查询"
+        basis = "结单原因" if marker.get("basis") == "closing_field" else "原文"
+        analysis = (*analysis, (Part(f"本单按{basis}不是业务故障（{kind}），不判责任方和故障位置。"), Part("【待核实】", True)))
     cells = {
         "customer": _text_lines(fields.get("customer")),
         "circuit_id": (circuit_line,),

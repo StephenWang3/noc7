@@ -187,6 +187,39 @@ def test_coarse_locations_and_endpoints_do_not_become_cities(sample, change):
     assert decode(ctx, payload).elements.location.value is None
 
 
+@pytest.mark.parametrize('text, city', [
+    ('分公司反馈：SYN-甲省境内光缆中断。', 'SYN-甲省'),
+    ('分公司反馈：SYN-乙州境内光缆中断。', 'SYN-乙州'),
+    ('RFO: fiber cut in SYN-Alpha Province.', 'SYN-Alpha'),
+    ('RFO: fiber cut in SYN-Beta Region.', 'SYN-Beta Region'),
+])
+def test_province_or_state_is_used_when_no_city(sample, text, city):
+    ctx, payload = case(sample, 'location', [text])
+    candidate(payload, 'location')['relation']['city'] = city
+    el = decode(ctx, payload).elements.location
+    assert el.value == city and '只到省、州一级' in el.note
+
+
+def test_city_beats_province_even_from_lower_source(sample):
+    ctx, payload = case(sample, 'location', ['RFO: fiber cut in SYN-Alpha Province.', '分公司反馈：SYN-城市甲机房板卡故障。'])
+    first, second = payload['elements']['location']['candidates']
+    first['relation'].update(city='SYN-Alpha Province', source_tier='rfo')
+    data = decode(ctx, payload)
+    assert data.elements.location.value == 'SYN-城市甲' and data.elements.location.selected == second['id']
+    checks = {c.candidate_id: c for c in data.semantic_assessment.checks if c.element == 'location' and c.candidate_id}
+    assert checks[first['id']].outcome == 'pending' and '省、州一级不采用' in checks[first['id']].reason
+    saved_result(sample, ctx, data)
+
+
+def test_admin_area_and_city_name_rules():
+    from noc7.providers.responsibility_location import admin_area, city_name
+    assert admin_area('SYN-丙州（Gamma）') and admin_area('SYN-Gamma', 'in SYN-Gamma state, near') and admin_area('SYN-Zeta', '位于SYN-戊州（SYN-Zeta）甲乙之间, near SYN-Zeta.')
+    assert not admin_area('广州') and not admin_area('SYN-Delta', 'SYN-Delta hub site, SYN-Delta POP')
+    assert city_name('SYN-丁县') == 'SYN-丁' and city_name('SYN-EPSILON, NJ') == 'SYN-EPSILON'
+    assert city_name('SYN-Alpha', 'cut in SYN-Alpha Province.') == 'SYN-Alpha Province'
+    assert city_name('SYN-甲', 'SYN-甲省境内') == 'SYN-甲省'
+
+
 def test_location_conflict_and_unknown_source(sample):
     ctx, payload = case(sample, 'location', ['分公司：SYN-城市甲故障。', '分公司：SYN-城市乙故障。'])
     candidate(payload, 'location', 1)['relation']['city'] = 'SYN-城市乙'

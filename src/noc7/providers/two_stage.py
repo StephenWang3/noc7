@@ -23,7 +23,7 @@ class TwoStageTextProvider(OpenAICompatibleTextProvider):
                 audit.record(facts_kept=kept, facts_dropped=dropped, fact_passes=self.config.fact_passes)
             data = self._decode_parsed(facts.compile_facts(kept, clean_ctx), clean_ctx, audit,
                                        adjudication="local_priority",
-                                       extra_original={"facts_dropped": dropped, "not_fault": facts.not_fault(kept)})
+                                       extra_original={"facts_dropped": dropped, "not_fault": facts.not_fault(kept, spans)})
         except Exception as exc:
             if audit:
                 audit.record(outcome="rejected", error_type=type(exc).__name__)
