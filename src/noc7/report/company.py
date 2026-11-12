@@ -329,7 +329,7 @@ def build_company_report(result: AnalysisResult) -> CompanyReport:
     if result.semantic_assessment and e.cause.value:
         c = next(c for c in e.cause.candidates if c.id == e.cause.selected)
         cause_lines = ((Part(f"{_speaker(c.relation.speaker)}记载："), *cause_lines[0],
-                        Part("【有记录，未经人工审核】", True)), *cause_lines[1:])
+                        Part("【" + (e.cause.note or "有记录，未经人工审核") + "】", True)), *cause_lines[1:])
     def business_parts(el):
         parts = _value_parts(el)
         chosen = next((c for c in el.candidates if c.id == el.selected), None)

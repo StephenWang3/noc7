@@ -3,7 +3,7 @@ from datetime import timedelta
 from itertools import combinations
 import re
 
-from ..schema import ElementStatus, TimeKind, TimePrecision, TimeZoneSource, SpanRole, IssueCode
+from ..schema import CauseKind, ElementStatus, TimeKind, TimePrecision, TimeZoneSource, SpanRole, IssueCode
 from ..schema.relations import ConstraintCheck
 from ..quote_match import match_quote
 from ..timeparse import parse_time
@@ -347,11 +347,14 @@ def confirmation_record_time(raw, text):
     return bool(_CONFIRM_CALL.search(body))
 
 
-def pending_reason(candidate, name, spans):
+def pending_reason(candidate, name, spans, layered=False):
+    """layered：两段式按“一层层兜底”取值，怀疑的原因也可采用（排在明确的原因之后，报告标“怀疑，待确认”）。"""
     r = candidate.relation
     if r is None:
         return "缺少完整结构化关系，保留候选待核实。"
-    if not r.current_event or r.modality != "asserted":
+    suspected = (layered and name == "cause" and r.modality == "suspected"
+                 and candidate.cause_kind == CauseKind.SUSPECTED_MECHANISM)
+    if not r.current_event or (r.modality != "asserted" and not suspected):
         return "不是本次事件的明确断言，保留推测／否定范围。"
     if not _reliable(candidate, spans):
         return "缺少可靠原始依据。"
@@ -360,9 +363,9 @@ def pending_reason(candidate, name, spans):
     if not any(match_quote(text, q.quote).status != "mismatch" for q in r.context):
         return "关系上下文没有包含候选原文，关系待核实。"
     if name == "cause":
-        if r.assertion not in {"fault", "mechanism", "planned_work"} or not r.affects_service or not r.occurred:
+        if r.assertion not in {"fault", "mechanism", "planned_work"} or not r.affects_service or not (r.occurred or suspected):
             return "不是已发生并影响本次业务的故障／机制／作业断言。"
-        if candidate.cause_kind not in {"root_cause_confirmed", "root_cause_claimed", "planned_work"}:
+        if candidate.cause_kind not in {"root_cause_confirmed", "root_cause_claimed", "planned_work"} and not suspected:
             return "该原因类别只能保留为候选。"
         if (r.assertion == "planned_work") != (candidate.cause_kind == "planned_work"):
             return "作业关系与原因类别不一致。"
@@ -376,6 +379,17 @@ def pending_reason(candidate, name, spans):
             return "日期／时区锚点不一致或缺少分钟级以上完整时间，不能正式采用。"
         if candidate.time.tz_source == TimeZoneSource.UNKNOWN:
             return "时区未知，不能正式采用。"
+    return None
+
+
+def cause_note(chosen):
+    """原因取自哪一层兜底：怀疑的原因、工单结单原因字段；明确的原因不加说明。"""
+    if chosen is None:
+        return None
+    if chosen.attribution == "system_field":
+        return "兜底，待核实：原文没有可采用的原因，取自工单结单原因字段"
+    if chosen.relation.modality == "suspected":
+        return "原文仅为怀疑，待确认"
     return None
 
 
@@ -417,8 +431,9 @@ def apply_constraints(ctx, data):
         el = el.model_copy(update={"candidates": candidates})
         eligible = []
         excluded = {}
+        layered = data.semantic_assessment.adjudication == "local_priority"
         for c in candidates:
-            reason = pending_reason(c, name, spans)
+            reason = pending_reason(c, name, spans, layered)
             checks.append(ConstraintCheck(element=name, candidate_id=c.id,
                 outcome="pending" if reason else "eligible", reason=reason or "关系完整，来源与数值另经独立校验；不代表人工审核。",
                 evidence_refs=c.evidence_refs))
@@ -462,6 +477,8 @@ def apply_constraints(ctx, data):
             if chosen:
                 el = el.model_copy(update=dict(status=ElementStatus.DOCUMENTED, selected=chosen.id,
                     value=chosen.statement if name == "cause" else chosen.time, evidence_refs=chosen.evidence_refs))
+            if name == "cause":
+                el = el.model_copy(update={"note": cause_note(chosen)})
             updates[name] = el
             continue
         conflicts = []

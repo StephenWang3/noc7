@@ -57,8 +57,11 @@ def test_two_requests_and_item_level_drop(server):
     assert "facts" in json.loads(server.requests[1]["body"]["messages"][1]["content"])
     dropped = result.semantic_assessment.original["facts_dropped"]
     assert [d["reason"] for d in dropped] == ["引文不在证据原文中", "证据编号不存在或不可用"]
-    assert [c.statement for c in result.elements.cause.candidates] == ["市政道路施工挖断 24 芯光缆", "所在光缆段 R_LOS"]
-    assert result.elements.cause.value == "市政道路施工挖断 24 芯光缆"
+    statements = [c.statement for c in result.elements.cause.candidates]
+    # 模型摘到的原因在前，工单结单原因字段作最后一层兜底。
+    assert statements[:2] == ["市政道路施工挖断 24 芯光缆", "所在光缆段 R_LOS"]
+    assert [c.id for c in result.elements.cause.candidates][2:] == ["CSYS1"]
+    assert result.elements.cause.value == "市政道路施工挖断 24 芯光缆" and result.elements.cause.note is None
     assert AnalysisResult.model_validate_json(result.model_dump_json()) == result
 
 
@@ -541,3 +544,76 @@ def test_removed_line_in_closing_cause_needs_no_model_marker(server):
     assert (marker["kind"], marker["basis"], marker["quote"]) == ("已拆机", "closing_field", "线路已拆机")
     assert not result.elements.responsible_party.value and not list(result.elements.responsible_party.iter_candidates())
     assert any("本单按结单原因不是业务故障（已拆机）" in line for line in cell(result, "analysis"))
+
+
+NO_CAUSE_WRITING = {**WRITING, "cause": None}
+
+
+def test_suspected_cause_is_used_only_when_nothing_is_asserted(server):
+    suspected = FACTS["facts"][6]
+    result, _ = run(server, [{"facts": [*FACTS["facts"][:5], suspected]}, NO_CAUSE_WRITING])
+    cause = result.elements.cause
+    assert cause.value == "所在光缆段 R_LOS" and cause.note == "原文仅为怀疑，待确认"
+    assert any("【原文仅为怀疑，待确认】" in line for line in cell(result, "analysis"))
+    assert AnalysisResult.model_validate_json(result.model_dump_json()) == result
+    server.replies.clear()
+    result, _ = run(server, [FACTS, WRITING])  # 有明确的原因时不取怀疑的
+    assert result.elements.cause.value == "市政道路施工挖断 24 芯光缆" and result.elements.cause.note is None
+
+
+def test_closing_cause_field_is_the_last_layer_for_cause(server):
+    result, _ = run(server, [{"facts": FACTS["facts"][:5]}, NO_CAUSE_WRITING])
+    cause = result.elements.cause
+    assert cause.selected == "CSYS1" and cause.value == "市政道路施工挖断 24 芯光缆，已熔接恢复。"
+    assert cause.note.startswith("兜底，待核实")
+    assert AnalysisResult.model_validate_json(result.model_dump_json()) == result
+
+
+def test_closing_cause_field_ignores_process_remarks():
+    from types import SimpleNamespace as N
+    for text, used in [("先返单，后续反馈故障原因", False), ("已超24小时客户未回复邮件，请销账", False),
+                       ("烦请让客户提供源IP，谢谢！", False), ("线路已恢复，先返单", False),
+                       ("局方检测自恢", True), ("供应商反馈线路正常，返单", True)]:
+        assert bool(facts.closing_cause({"M01/f:cause": N(text=text)})) is used, text
+
+
+def test_suspected_party_sits_between_explicit_party_and_fault_area_field(server):
+    from noc7.providers.responsibility_location import evaluate
+    from noc7.schema.elements import PartyCandidate
+    party = {"type": "responsibility", "evidence_id": "M02/log:5", "quote": "市政道路施工挖断 24 芯光缆", "party": "联通",
+             "source": "branch_log"}
+    guess = {**party, "party": "供应商", "certainty": "suspected"}
+    result, ctx, _ = run_passes(server, [{"facts": [*FACTS["facts"][:8], party, guess]}, WRITING], passes=1)
+    el = result.elements.responsible_party
+    assert el.value == "联通" and "怀疑" not in el.note  # 有明确的就不取怀疑的
+    checks = {c.candidate_id: c for c in result.semantic_assessment.checks if c.element == "responsible_party"}
+    assert "怀疑的不采用" in checks["P2"].reason
+
+    base = next(s for s in ctx.evidence if s.id == "M01/f:description")
+    area = base.model_copy(update={"id": "M01/f:fault_area", "text": "省内-用户",
+                                   "locator": base.locator.model_copy(update={"field_key": "fault_area"})})
+    spans = {s.id: s for s in ctx.evidence} | {area.id: area}
+    fallback = PartyCandidate.model_validate(facts._party_nodes([], {area.id: area})[0])
+    only_guess = [c for c in el.candidates if c.id == "P2"]
+    elements = result.elements.model_copy(update={"responsible_party": el.model_copy(update={"candidates": [*only_guess, fallback]})})
+    after = evaluate(elements, spans, result.semantic_assessment.business_coverage, layered=True)[0]["responsible_party"]
+    assert after.value == "供应商" and "原文仅为怀疑，待确认" in after.note and "不一致，待核实" in after.note
+    strict = evaluate(elements, spans, result.semantic_assessment.business_coverage)[0]["responsible_party"]
+    assert strict.value == "客户"  # 不分层时怀疑的不采用，退回故障区域字段
+
+
+def test_noc_or_field_source_is_the_lowest_tier_for_party(server):
+    from noc7.providers.responsibility_location import evaluate
+    noc = {"type": "responsibility", "evidence_id": "M02/log:5", "quote": "市政道路施工挖断 24 芯光缆", "party": "联通",
+           "source": "noc"}
+    result, ctx, _ = run_passes(server, [{"facts": [*FACTS["facts"][:8], noc]}, WRITING], passes=1)
+    el = result.elements.responsible_party
+    assert el.value == "联通" and "来源层级最低" in el.note  # 没有更高层来源时用最低一层
+    spans = {s.id: s for s in ctx.evidence}
+    strict = evaluate(result.elements, spans, result.semantic_assessment.business_coverage)[0]["responsible_party"]
+    assert strict.value is None  # 不分层时仍不采用
+
+    high = {**noc, "party": "供应商", "source": "branch_log"}
+    result, _, _ = run_passes(server, [{"facts": [*FACTS["facts"][:8], noc, high]}, WRITING], passes=1)
+    el = result.elements.responsible_party
+    assert el.value == "供应商" and "来源层级最低" not in el.note and "低优先级差异保留待核对" in el.note

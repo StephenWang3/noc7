@@ -22,6 +22,14 @@ PATH_LABELS = {"explicit_responsibility": "明确责任归属", "customer_self_c
 AREA_FIELD = "fault_area"
 AREA_PARTIES = (("运营商", "供应商"), ("用户", "客户"))
 FALLBACK_TIER = "system_field"
+# 两段式按层兜底时，来源不属于 RFO、供应商反馈、分公司处理日志的（NOC 记录、工单字段、其他）排在最后一层，
+# 仍在故障区域字段兜底之前。
+LOW_TIER = "unknown"
+LOW_NOTE = "来源层级最低（不属于 RFO、供应商反馈或分公司处理日志），待核实。"
+
+
+def rank_of(tier):
+    return PRIORITY.get(tier, len(PRIORITY))
 
 
 # 地点先取城市；没有可采用的城市时才取省、州一级（业务口径 2026-11-12）。
@@ -137,15 +145,17 @@ def formal_value(candidate, name):
     return candidate.party if name == "responsible_party" else candidate.description
 
 
-def pending_reason(candidate, name, spans, coverage=None):
+def pending_reason(candidate, name, spans, coverage=None, layered=False):
+    """layered：两段式按“一层层兜底”取值，怀疑的责任归属也可采用（排在明确的之后）。"""
     r = candidate.relation
     if r is None:
         return "缺少完整结构化业务关系，保留待核对。"
-    if not r.current_event or r.modality != "asserted":
+    suspected = layered and name == "responsible_party" and r.modality == "suspected"
+    if not r.current_event or (r.modality != "asserted" and not suspected):
         return "不是本次事件的明确断言。"
     if r.source_tier == FALLBACK_TIER:
         return "工单系统字段只作兜底，不参与来源比较。"
-    if r.source_tier not in PRIORITY:
+    if r.source_tier not in PRIORITY and not (layered and r.source_tier == LOW_TIER):
         return "来源不属于 RFO、供应商反馈或分公司处理日志。"
     if r.source_quote is None:
         return "缺少来源层级的直接引文依据。"
@@ -240,7 +250,7 @@ def grounded_assertion(candidate, name, spans):
             and any(match_quote(r.statement, q.quote).status != "mismatch" for q in r.context))
 
 
-def evaluate(elements, spans, coverage, suggestions=()):
+def evaluate(elements, spans, coverage, suggestions=(), layered=False):
     """纯函数，首次分析、完整证据校验及保存结果再加载共同调用。"""
     updates, checks = {}, []
     for name in NAMES:
@@ -248,7 +258,7 @@ def evaluate(elements, spans, coverage, suggestions=()):
         eligible = []
         known = {c.id for c in el.candidates}
         for c in el.candidates:
-            reason = pending_reason(c, name, spans, coverage)
+            reason = pending_reason(c, name, spans, coverage, layered)
             if reason is None and any(q["evidence_id"] in c.evidence_refs
                                       and (q["evidence_id"] not in spans
                                            or match_quote(q["quote"], spans[q["evidence_id"]].text).status == "mismatch")
@@ -269,7 +279,17 @@ def evaluate(elements, spans, coverage, suggestions=()):
                 evidence_refs=c.evidence_refs))
             if reason is None:
                 eligible.append(c)
-        province = False
+        province = suspected = False
+        if name == "responsible_party":
+            # 有明确的责任归属就不取怀疑的；没有明确的才取怀疑的，再没有才用故障区域字段兜底。
+            asserted = [c for c in eligible if c.relation.modality == "asserted"]
+            if asserted and len(asserted) < len(eligible):
+                dropped = {c.id for c in eligible if c not in asserted}
+                checks = [ConstraintCheck(element=name, candidate_id=k.candidate_id, outcome="pending",
+                                          reason="已有明确的责任归属，怀疑的不采用。", evidence_refs=k.evidence_refs)
+                          if k.element == name and k.candidate_id in dropped else k for k in checks]
+            suspected = bool(eligible) and not asserted
+            eligible = asserted or eligible
         if name == "location":
             # 有可采用的城市就不取省、州，不论两者各来自哪一级来源；没有城市时才取省、州。
             cities = [c for c in eligible if not admin_area(c.relation.city, c.relation.city_quote.quote)]
@@ -282,8 +302,8 @@ def evaluate(elements, spans, coverage, suggestions=()):
             eligible = cities or eligible
         update = dict(status=ElementStatus.UNKNOWN, value=None, selected=None, evidence_refs=[], note="依据不足，保留候选及原始回答待核对。" if el.candidates else None)
         if eligible:
-            rank = min(PRIORITY[c.relation.source_tier] for c in eligible)
-            top = [c for c in eligible if PRIORITY[c.relation.source_tier] == rank]
+            rank = min(rank_of(c.relation.source_tier) for c in eligible)
+            top = [c for c in eligible if rank_of(c.relation.source_tier) == rank]
             different = len({formal_value(c, name) for c in top}) > 1
             opponents = [b for b in el.candidates if any(
                 b.id != a.id and b.relation
@@ -302,13 +322,18 @@ def evaluate(elements, spans, coverage, suggestions=()):
             else:
                 chosen = top[0]
                 refs = list(dict.fromkeys([*chosen.evidence_refs, *(q.evidence_id for q in relation_quotes(chosen.relation))]))
-                lower = [c for c in el.candidates if c.relation and c.relation.source_tier in PRIORITY
-                         and PRIORITY[c.relation.source_tier] > rank
+                lower = [c for c in el.candidates if c.relation
+                         and (c.relation.source_tier in PRIORITY or (layered and c.relation.source_tier == LOW_TIER))
+                         and rank_of(c.relation.source_tier) > rank
                          and (formal_value(c, name) != formal_value(chosen, name) or c.id in chosen.relation.contradicts
                               or chosen.id in c.relation.contradicts)]
                 note = SOURCE_LABELS[chosen.relation.source_tier] + "；有记录，未经人工审核。"
+                if chosen.relation.source_tier == LOW_TIER:
+                    note += LOW_NOTE
                 if province:
                     note += "原文没有具体城市，只到省、州一级。"
+                if suspected:
+                    note += "原文仅为怀疑，待确认。"
                 if name == "responsible_party":
                     note += "路径：" + PATH_LABELS[chosen.relation.decision_path] + "。"
                     if chosen.relation.third_party:
@@ -338,7 +363,8 @@ def apply_constraints(ctx, data):
     assessment = data.semantic_assessment
     if not assessment or not any(n in assessment.original for n in NAMES):
         return data  # 规则提供方和没有新关系的旧保存结果不重解释
-    updates, checks = evaluate(data.elements, {s.id: s for s in ctx.evidence}, assessment.business_coverage, data.suggestions)
+    updates, checks = evaluate(data.elements, {s.id: s for s in ctx.evidence}, assessment.business_coverage, data.suggestions,
+                               layered=assessment.adjudication == "local_priority")
     kept = [c for c in assessment.checks if c.element not in NAMES]
     return data.model_copy(update={"elements": data.elements.model_copy(update=updates),
                                   "semantic_assessment": assessment.model_copy(update={"checks": [*kept, *checks]})})
@@ -349,7 +375,8 @@ def validate_saved(elements, spans, assessment, suggestions=()):
         if any(c.relation is not None for name in NAMES for c in getattr(elements, name).candidates):
             raise ValueError("新增业务关系缺少本地原答审计，不能伪装成旧结果")
         return
-    updates, _ = evaluate(elements, spans, assessment.business_coverage, suggestions)
+    updates, _ = evaluate(elements, spans, assessment.business_coverage, suggestions,
+                          layered=assessment.adjudication == "local_priority")
     for name in NAMES:
         actual, expected = getattr(elements, name), updates[name]
         if any(getattr(actual, k) != getattr(expected, k) for k in ("status", "value", "selected", "evidence_refs", "note")):

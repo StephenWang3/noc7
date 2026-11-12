@@ -144,7 +144,8 @@ class AnalysisResult(Model):
                             raise ValueError("关系引文与证据不符")
                 if el.value is not None:
                     chosen = next((c for c in el.candidates if c.id == el.selected), None)
-                    if chosen is None or pending_reason(chosen, name, spans):
+                    layered = self.semantic_assessment.adjudication == "local_priority"
+                    if chosen is None or pending_reason(chosen, name, spans, layered):
                         raise ValueError("正式结论缺少合格模型关系")
                     if el.value != (chosen.statement if name == "cause" else chosen.time):
                         raise ValueError("正式结论与选中候选不一致")

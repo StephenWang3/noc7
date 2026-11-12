@@ -245,7 +245,9 @@ class CauseElement(ElementBase):
     def _kind_allowed(self) -> CauseElement:
         if self.selected is not None:
             chosen = next(c for c in self.candidates if c.id == self.selected)
-            if chosen.cause_kind not in CAUSE_KINDS_ALLOWED_AS_VALUE:
+            # 两段式按层兜底时，怀疑的原因可以作结论，但必须带说明（如“原文仅为怀疑，待确认”）告诉读者这一层的可信度。
+            suspected = chosen.cause_kind == CauseKind.SUSPECTED_MECHANISM and bool(self.note)
+            if chosen.cause_kind not in CAUSE_KINDS_ALLOWED_AS_VALUE and not suspected:
                 raise ValueError(f"原因类别 {chosen.cause_kind} 不能作为故障原因结论，只能留作候选")
         return self
 

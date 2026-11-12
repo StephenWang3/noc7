@@ -27,7 +27,7 @@ INSTRUCTION = """你是 NOC 故障工单的事实摘录器。只返回一个 JSO
 - phenomenon：故障现象，如中断、丢包、时延增大、告警内容。
 - cause：原文对本次故障原因的说明。source 填 rfo、vendor_feedback（供应商反馈）、branch_log（集团／国内或海外分公司的处理反馈）、customer、noc 或 other；certainty 填 asserted（明确说明）或 suspected（怀疑、可能、待确认）。排查中“未发现异常”、自行恢复、现象描述不算原因。
 - step：一步实际处理动作、检查结果、与客户或供应商的关键沟通、恢复确认。actor 填 quote 所在证据里出现的执行方原文（没有就不填）；time 填 quote 里的时间原文（没有就不填，本地会用记录时间）。签收、转派、挂起、返单、结单等流程流转不要摘。
-- responsibility：原文直接写明责任归属，或明确写明某一方的网络／设备发生了导致本次故障的实际故障。party 填 客户、供应商 或 联通；source 同 cause。常见写法：供应商（运营商、合作伙伴）在 RFO 或反馈里说明故障发生在其自身网络、线路、光缆或设备上，摘为 供应商，即使起因是第三方施工、人为破坏、偷盗或自然灾害也摘为 供应商，并加 third_party: true；原文写明是联通自有网络或设备故障，摘为 联通；联通的分公司、海外分公司（如“某分”“某国分公司”）只是转述或反馈当地运营商、供应商的线路、光缆、传输段或设备故障的，故障仍在供应商一侧，摘为 供应商，不要因为说话的是联通分公司就摘为 联通；原文写明是客户自身操作、配置或业务变更造成，摘为 客户。quote 取写明故障归属的那一句。只出现供应商名称、处理部门、原因未明、仅怀疑，或只说设备在客户侧（这种摘 customer_device_fault），都不算。
+- responsibility：原文直接写明责任归属，或明确写明某一方的网络／设备发生了导致本次故障的实际故障。party 填 客户、供应商 或 联通；source 同 cause。常见写法：供应商（运营商、合作伙伴）在 RFO 或反馈里说明故障发生在其自身网络、线路、光缆或设备上，摘为 供应商，即使起因是第三方施工、人为破坏、偷盗或自然灾害也摘为 供应商，并加 third_party: true；原文写明是联通自有网络或设备故障，摘为 联通；联通的分公司、海外分公司（如“某分”“某国分公司”）只是转述或反馈当地运营商、供应商的线路、光缆、传输段或设备故障的，故障仍在供应商一侧，摘为 供应商，不要因为说话的是联通分公司就摘为 联通；原文写明是客户自身操作、配置或业务变更造成，摘为 客户。certainty 填 asserted（明确写明）或 suspected（怀疑、可能、初步判断是某一方的网络或设备故障，也要摘）。quote 取写明故障归属的那一句。只出现供应商名称、处理部门、原因未明，或只说设备在客户侧（这种摘 customer_device_fault），都不算。
 - customer_device_fault：原文写明故障在客户侧设备。source 同 cause。
 - self_check：原文写明已请客户自查，或客户表示由其自行排查、处理。
 - customer_followup：客户在被请自查之后再次追问或继续报障。
@@ -108,6 +108,9 @@ def _checked(item, spans):
         fact["source"] = item.get("source") if item.get("source") in SOURCE_ORDER else "other"
     if kind == "cause":
         fact["certainty"] = "suspected" if item.get("certainty") != "asserted" else "asserted"
+    if kind == "responsibility":
+        # 责任归属原先只摘明确写明的；没标 certainty 的仍按明确处理。
+        fact["certainty"] = "suspected" if item.get("certainty") == "suspected" else "asserted"
     if kind == "responsibility":
         if item.get("party") not in PARTIES:
             return None, "责任方不是客户、供应商或联通"
@@ -214,8 +217,10 @@ def _party_nodes(facts, spans):
     nodes = []
     for fact in (f for f in facts if f["type"] == "responsibility"):
         tier = fact["source"] if fact["source"] in TIERS else "unknown"
+        # 怀疑的责任归属排在明确的之后，只在没有明确结论时采用（报告标“怀疑，待确认”）。
         nodes.append({**_base("P", len(nodes) + 1, fact, spans), "party": fact["quote"], "basis": "formal_determination",
                       "relation": {**_business(fact, tier), **blank, "category": fact["party"],
+                                   "modality": fact.get("certainty", "asserted"),
                                    "decision_path": "explicit_responsibility", "customer_device_fault": False,
                                    "responsibility_quote": _q(fact), "third_party": fact.get("third_party", False)}})
     device = next((f for f in facts if f["type"] == "customer_device_fault"), None)
@@ -277,6 +282,24 @@ def closing_not_fault(spans):
     return None
 
 
+# 结单原因字段里常见的流程话（返单、销账、待补原因、请客户提供材料），去掉后剩不下实质内容的不拿来兜底原因。
+_PROCESS = re.compile(r"先?返单|此单销账|请?销账|(?:后续|后)(?:反馈|提供|反复)故障原因|用户同意结单|谢谢|"
+                      r"(?:已超\d+小时)?客户未回复(?:邮件)?|"
+                      r"(?:客户)?(?:确认|反馈)?(?:线路|电路)?已?恢复")
+_REQUEST = re.compile(r"^\s*(?:烦?请|麻烦)")
+
+
+def closing_cause(spans):
+    """工单结单原因字段，作原因的最后一层兜底；只有流程话或请求材料的不算。返回 (span, 去掉流程话后的文字)。"""
+    span = next((s for i, s in spans.items() if i.endswith("/f:" + CLOSING_FIELD) and s.text.strip()), None)
+    if span is None or _REQUEST.match(span.text):
+        return None
+    rest = _PROCESS.sub("", span.text)
+    if sum(ch.isalnum() for ch in rest) < 2:
+        return None
+    return span, rest
+
+
 def not_fault(facts, spans=None):
     """本单不是业务故障时返回依据 {evidence_id, quote, kind, basis}，否则 None。
     先看结单原因字段（确定的本地规则），再看模型摘到的 not_fault 引文。"""
@@ -321,13 +344,25 @@ def compile_facts(facts, ctx):
         ends.append(field)
 
     causes = []
-    for fact in sorted((f for f in facts if f["type"] == "cause"), key=lambda f: SOURCE_ORDER.index(f["source"])):
+    # 原因分层兜底：明确的原因 → 怀疑的原因 → 工单结单原因字段。
+    for fact in sorted((f for f in facts if f["type"] == "cause"),
+                       key=lambda f: (f["certainty"] != "asserted", SOURCE_ORDER.index(f["source"]))):
         asserted = fact["certainty"] == "asserted"
         causes.append({**_base("C", len(causes) + 1, fact, spans), "statement": fact["quote"],
                        "cause_kind": "root_cause_claimed" if asserted else "suspected_mechanism",
                        "relation": {**_relation(fact, assertion="fault" if asserted else "mechanism", affects_service=True,
                                                 occurred=asserted, speaker=SOURCE_LABELS[fact["source"]], contradicts=[]),
                                     "modality": fact["certainty"]}})
+
+    field = closing_cause(spans)
+    if field:
+        span, text = field
+        ref = {"evidence_id": span.id, "quote": span.text}
+        causes.append({"id": "CSYS1", "evidence_refs": [span.id], "attribution": "system_field", "statement": span.text,
+                       "cause_kind": "root_cause_claimed",
+                       "relation": {**SCOPE, "modality": "asserted", "context": [ref], "assertion": "fault",
+                                    "affects_service": True, "occurred": True, "speaker": "工单结单原因字段",
+                                    "contradicts": []}})
 
     locations = []
     for fact in (f for f in facts if f["type"] == "fault_location"):
