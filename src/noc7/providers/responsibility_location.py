@@ -116,8 +116,52 @@ def same_place(a, b):
     return len(short) >= 2 and short in long_
 
 
+def _coarse_level(candidate):
+    """按层兜底时城市、省州之后的两层：线路段（两端地名）和国家。"""
+    g, r = candidate.granularity, candidate.relation
+    if g == "segment" and r.city_scope == "cross_city" and r.city.endswith("段") and r.city.count("–") == 1:
+        return "segment"
+    if g == "country" and r.city_scope == "unknown":
+        return "country"
+    return None
+
+
+def _place_parts(candidate):
+    """要在引文里逐一核对的地名：线路段是两端，其余是取值本身。"""
+    if _coarse_level(candidate) == "segment":
+        return candidate.relation.city[:-1].split("–")
+    return [candidate.relation.city]
+
+
+def place_level(candidate):
+    """地点层级：0 城市，1 省州，2 线路段，3 国家。"""
+    coarse = _coarse_level(candidate)
+    if coarse:
+        return 2 if coarse == "segment" else 3
+    return 1 if admin_area(candidate.relation.city, candidate.relation.city_quote.quote) else 0
+
+
+LEVEL_NOTES = {1: "原文没有具体城市，只到省、州一级。", 2: "原文只到线路段，未定位到单一城市。", 3: "原文只到国家。"}
+LEVEL_DROPPED = {1: "已有可采用的城市，省、州一级不采用。", 2: "已有更具体的地点，线路段不采用。", 3: "已有更具体的地点，国家不采用。"}
+
+
+def _segment_ends(value):
+    if isinstance(value, str) and value.endswith("段") and value.count("–") == 1:
+        return value[:-1].split("–")
+    return None
+
+
 def same_value(a, b, name):
-    return a == b or (name == "location" and same_place(a, b))
+    if a == b:
+        return True
+    if name != "location":
+        return False
+    x, y = _segment_ends(a), _segment_ends(b)
+    if x or y:
+        # 线路段两端相同（不论先后）才算同一段。
+        return bool(x and y) and ((same_place(x[0], y[0]) and same_place(x[1], y[1]))
+                                  or (same_place(x[0], y[1]) and same_place(x[1], y[0])))
+    return same_place(a, b)
 
 
 def area_party(text):
@@ -231,11 +275,13 @@ def pending_reason(candidate, name, spans, coverage=None, layered=False):
     if name == "location":
         if candidate.role != "located_fault_point" or not r.located:
             return "不是已定位故障点，端点、告警位置和测试节点不能采用。"
-        if r.city_scope != "single_city":
+        coarse = layered and _coarse_level(candidate) is not None
+        if r.city_scope != "single_city" and not coarse:
             return "城市范围未明确为 single_city，跨城或范围未知只能留候选。"
-        if candidate.granularity in {None, "country"}:
+        if candidate.granularity in {None, "country"} and not coarse:
             return "地点仅到国家、跨城段落或粒度未明，不能推测城市。"
-        if not r.city or not r.city.strip() or not r.city_quote or match_quote(r.city, r.city_quote.quote).status == "mismatch":
+        if not r.city or not r.city.strip() or not r.city_quote or not all(
+                match_quote(part, r.city_quote.quote).status != "mismatch" for part in _place_parts(candidate)):
             return "没有可核验的明确城市归属。"
     else:
         if r.category not in {"客户", "供应商", "联通"}:
@@ -330,7 +376,7 @@ def evaluate(elements, spans, coverage, suggestions=(), layered=False):
                 evidence_refs=c.evidence_refs))
             if reason is None:
                 eligible.append(c)
-        province = suspected = False
+        suspected = False
         if name == "responsible_party" and layered:
             # 怀疑某一方、而原文另有可靠的说法否定这一方有故障（如“供应商反馈网内无作业”），怀疑不采用。
             denied = {formal_value(o, name) for o in el.candidates
@@ -352,16 +398,16 @@ def evaluate(elements, spans, coverage, suggestions=(), layered=False):
                           if k.element == name and k.candidate_id in dropped else k for k in checks]
             suspected = bool(eligible) and not asserted
             eligible = asserted or eligible
-        if name == "location":
-            # 有可采用的城市就不取省、州，不论两者各来自哪一级来源；没有城市时才取省、州。
-            cities = [c for c in eligible if not admin_area(c.relation.city, c.relation.city_quote.quote)]
-            if cities and len(cities) < len(eligible):
-                dropped = {c.id for c in eligible if c not in cities}
-                checks = [ConstraintCheck(element=name, candidate_id=k.candidate_id, outcome="pending",
-                                          reason="已有可采用的城市，省、州一级不采用。", evidence_refs=k.evidence_refs)
-                          if k.element == name and k.candidate_id in dropped else k for k in checks]
-            province = bool(eligible) and not cities
-            eligible = cities or eligible
+        level = 0
+        if name == "location" and eligible:
+            # 城市 → 省、州 → 线路段 → 国家，取最具体的一层，不论各来自哪一级来源。
+            levels = {c.id: place_level(c) for c in eligible}
+            level = min(levels.values())
+            dropped = {k: v for k, v in levels.items() if v > level}
+            checks = [ConstraintCheck(element=name, candidate_id=k.candidate_id, outcome="pending",
+                                      reason=LEVEL_DROPPED[dropped[k.candidate_id]], evidence_refs=k.evidence_refs)
+                      if k.element == name and k.candidate_id in dropped else k for k in checks]
+            eligible = [c for c in eligible if c.id not in dropped]
         update = dict(status=ElementStatus.UNKNOWN, value=None, selected=None, evidence_refs=[], note="依据不足，保留候选及原始回答待核对。" if el.candidates else None)
         if eligible:
             ranks = sorted({rank_of(c.relation.source_tier) for c in eligible})
@@ -405,8 +451,8 @@ def evaluate(elements, spans, coverage, suggestions=(), layered=False):
                 note = SOURCE_LABELS[chosen.relation.source_tier] + "；有记录，未经人工审核。"
                 if chosen.relation.source_tier == LOW_TIER:
                     note += LOW_NOTE
-                if province:
-                    note += "原文没有具体城市，只到省、州一级。"
+                if level:
+                    note += LEVEL_NOTES[level]
                 if suspected:
                     note += "原文仅为怀疑，待确认。"
                 if variants:

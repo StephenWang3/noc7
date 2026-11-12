@@ -555,3 +555,5 @@ def test_same_place_rules():
         assert same_place(a, b)
     for a, b in [('上海', '北京'), ('Paris', 'Parma'), ('香港', '九龙'), ('河内', '河南')]:
         assert not same_place(a, b)
+    from noc7.providers.responsibility_location import same_value
+    assert same_value('Perm–Omsk段', 'Omsk–Perm段', 'location') and not same_value('Perm–Omsk段', 'Perm', 'location')

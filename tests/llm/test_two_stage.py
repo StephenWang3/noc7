@@ -654,3 +654,38 @@ def test_conflicting_top_tier_falls_back_to_next_tier_then_to_most_cited(server)
     result, _, _ = run_passes(server, [{"facts": [*FACTS["facts"][:8], a, b]}, WRITING], passes=1)
     el = result.elements.responsible_party
     assert el.status == "documented" and el.value == "联通" and "同层来源结论冲突" in el.note
+
+
+def test_location_layers_segment_then_country_after_city(server):
+    seg = {"type": "fault_location", "evidence_id": "M02/log:3", "quote": "OTDR 测试显示断点距 A 端局站约 3.2 km。",
+           "source": "branch_log", "level": "segment", "ends": ["OTDR", "A 端局站"]}
+    country = {**seg, "level": "country", "country": "OTDR", "ends": None}
+    result, _, _ = run_passes(server, [{"facts": [*FACTS["facts"][:8], country, seg]}, WRITING], passes=1)
+    el = result.elements.location
+    assert el.value == "OTDR–A 端局站段" and "只到线路段" in el.note
+    checks = {c.candidate_id: c for c in result.semantic_assessment.checks if c.element == "location"}
+    assert "国家不采用" in checks["L1"].reason
+
+    result, _, _ = run_passes(server, [{"facts": [*FACTS["facts"][:8], country]}, WRITING], passes=1)
+    assert result.elements.location.value == "OTDR" and "只到国家" in result.elements.location.note
+
+    city = {"type": "fault_location", "evidence_id": "M02/log:4", "quote": "派线路维护部现场抢修。", "city": "线路维护部",
+            "source": "noc"}
+    result, _, _ = run_passes(server, [{"facts": [*FACTS["facts"][:8], seg, city]}, WRITING], passes=1)
+    assert result.elements.location.value == "线路维护部"  # 城市不论来源层级都先于线路段
+
+    bad = {**seg, "ends": ["OTDR", "不在引文"]}
+    result, _, _ = run_passes(server, [{"facts": [*FACTS["facts"][:8], bad]}, WRITING], passes=1)
+    assert result.elements.location.value is None
+
+
+
+def test_segment_end_drops_trailing_site_code():
+    from types import SimpleNamespace
+    text = "Fiber cut between Air Hitam and T. Gembira(AHT-TGB) span."
+    spans = {"M01/log:1": SimpleNamespace(id="M01/log:1", text=text)}
+    item = {"type": "fault_location", "evidence_id": "M01/log:1", "quote": text, "source": "rfo",
+            "level": "segment", "ends": ["Air Hitam", "T. Gembira(AHT-TGB)"]}
+    fact, reason = facts._checked(item, spans)
+    assert reason is None and facts.place_of(fact) == "Air Hitam–T. Gembira段"
+    assert facts._checked({**item, "ends": ["Air Hitam", "Kuala Lumpur"]}, spans)[0] is None

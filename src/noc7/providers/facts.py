@@ -34,7 +34,7 @@ INSTRUCTION = """你是 NOC 故障工单的事实摘录器。只返回一个 JSO
 - vendor_onsite：原文写明已联络供应商上门处理（计划、预约不算）。
 - unicom_onsite：原文写明联通分公司已上门处理（计划、预约不算）。
 - service_recovered：原文写明处理后业务已恢复。
-- fault_location：原文写明本次故障点已定位，且明确位于某一个城市。city 填 quote 里出现的城市名原文（中文或外文均可）；source 同 cause。RFO、邮件里的 Location／Incident location／Fault location 字段要看。原文写故障点在某城市的机房、站点，或距该城市（或以该城市命名的站点、POP）若干公里处，都算位于该城市。业务两端地址、告警设备位置、测试节点不算；只写“甲地至乙地段”而没有说明更靠近哪一端的也不算。原文没有具体城市、但写明故障点在某一个省、州（含整段线路都在同一个省、州内）的，也摘，city 填省、州名原文并带上“省／州／Province／State／Region”等字样；跨省、州的段落不算。
+- fault_location：原文写明本次故障点已定位，且明确位于某一个城市。city 填 quote 里出现的城市名原文（中文或外文均可）；source 同 cause。RFO、邮件里的 Location／Incident location／Fault location 字段要看。原文写故障点在某城市的机房、站点，或距该城市（或以该城市命名的站点、POP）若干公里处，都算位于该城市。业务两端地址、告警设备位置、测试节点不算。原文没有具体城市、但写明故障点在某一个省、州（含整段线路都在同一个省、州内）的，也摘，city 填省、州名原文并带上“省／州／Province／State／Region”等字样；跨省、州的段落不算。以上都没有时：原文写明故障发生在某一段线路上（“甲地至乙地段”“A–B span”“between A and B”），没有说明在哪个城市的，也摘，level 填 segment，ends 填两端地名原文 [甲, 乙]（业务两端地址不算线路段）；只写明故障在某个国家境内的，level 填 country，country 填国家名原文。写明城市或省、州的 level 填 city（可省略）。
 - not_fault：原文表明本单不是一次业务故障，而是业务咨询、查询或核对以往的工单／以往的故障、索要报告这类请求；或者报障对象已不存在、不归本单处理：线路／电路已拆机、已拆除，与另一张工单重单并以那张单跟进，网络或基站已退网的政策说明。只在整张单都不涉及本次业务异常时才摘。客户报了中断、丢包、时延等现象的，即使后来自行恢复、查无异常或中止查障，也是故障，不要摘；计划内割接引起的中断也不要摘。摘了 not_fault 之后，以往工单里的责任、地点、恢复时间不要再当成本单的事实摘。
 
 时间如果在 quote 里只有时刻没有日期，可另给 date_evidence_id 和 date_quote（写明该时刻所属日期的原文）；不得借用邮件发送时间或记录时间。
@@ -117,7 +117,20 @@ def _checked(item, spans):
             return None, "责任方不是客户、供应商或联通"
         fact["party"] = item["party"]
         fact["third_party"] = item.get("third_party") is True
-    if kind == "fault_location":
+    if kind == "fault_location" and item.get("level") == "segment":
+        ends = item.get("ends")
+        if (not isinstance(ends, list) or len(ends) != 2 or not all(isinstance(e, str) and e.strip() for e in ends)
+                or any(match_quote(e, quote).status == "mismatch" for e in ends)
+                or ends[0].strip().lower() == ends[1].strip().lower()):
+            return None, "线路段两端不在引文中"
+        # 端点名后面括号里的站点代码（如“T. Gembira(AHT-TGB)”）不算地名；括号里的外文地名（“乌兰巴托（Ulaanbaatar）”）保留。
+        fact.update(level="segment", ends=[re.sub(r"\s*[（(][A-Z0-9][A-Z0-9 _/\-]*[）)]\s*$", "", e).strip() or e.strip() for e in ends])
+    elif kind == "fault_location" and item.get("level") == "country":
+        country = item.get("country")
+        if not isinstance(country, str) or not country.strip() or match_quote(country, quote).status == "mismatch":
+            return None, "国家不在引文中"
+        fact.update(level="country", country=country.strip())
+    elif kind == "fault_location":
         city = item.get("city")
         if not isinstance(city, str) or not city.strip() or match_quote(city, quote).status == "mismatch":
             return None, "城市不在引文中"
@@ -153,7 +166,7 @@ def check_facts(payload, spans):
     return kept, dropped
 
 
-_MERGE_KEY = {"start_time": "time", "recovery_time": "time", "responsibility": "party", "fault_location": "city"}
+_MERGE_KEY = {"start_time": "time", "recovery_time": "time", "responsibility": "party", "fault_location": "place"}
 
 
 def merge_facts(base, more):
@@ -162,7 +175,8 @@ def merge_facts(base, more):
         return list(more)
 
     def key(f):
-        return f["type"], f["evidence_id"], str(f.get(_MERGE_KEY.get(f["type"], "quote"))).strip().lower()
+        value = place_of(f) if f["type"] == "fault_location" else f.get(_MERGE_KEY.get(f["type"], "quote"))
+        return f["type"], f["evidence_id"], str(value).strip().lower()
 
     seen = {key(f) for f in base}
     narrative_types = {t for t in ("step", "phenomenon") if any(f["type"] == t for f in base)}
@@ -173,6 +187,15 @@ def merge_facts(base, more):
         seen.add(key(fact))
         out.append(fact)
     return out
+
+
+def place_of(fact):
+    """地点事实的取值：城市（或省、州）、“甲–乙段”或国家名。"""
+    if fact.get("level") == "segment":
+        return "–".join(fact["ends"]) + "段"
+    if fact.get("level") == "country":
+        return fact["country"]
+    return city_name(fact["city"], fact["quote"])
 
 
 def _q(fact):
@@ -368,10 +391,13 @@ def compile_facts(facts, ctx):
     locations = []
     for fact in (f for f in facts if f["type"] == "fault_location"):
         tier = fact["source"] if fact["source"] in TIERS else "unknown"
+        level = fact.get("level", "city")
+        # 线路段和国家只在按层兜底时、没有城市和省州时才采用（见 responsibility_location）。
         locations.append({**_base("L", len(locations) + 1, fact, spans), "description": fact["quote"],
-                          "role": "located_fault_point", "granularity": "city",
-                          "relation": {**_business(fact, tier), "city": city_name(fact["city"], fact["quote"]), "city_quote": _q(fact),
-                                       "located": True, "city_scope": "single_city"}})
+                          "role": "located_fault_point", "granularity": level,
+                          "relation": {**_business(fact, tier), "city": place_of(fact), "city_quote": _q(fact),
+                                       "located": True, "city_scope": "cross_city" if level == "segment" else
+                                       "unknown" if level == "country" else "single_city"}})
 
     observations = [{**_base("O", n, fact, spans), "description": fact["quote"]}
                     for n, fact in enumerate((f for f in facts if f["type"] == "phenomenon"), 1)]
