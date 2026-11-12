@@ -25,6 +25,8 @@ FALLBACK_TIER = "system_field"
 # 两段式按层兜底时，来源不属于 RFO、供应商反馈、分公司处理日志的（NOC 记录、工单字段、其他）排在最后一层，
 # 仍在故障区域字段兜底之前。
 LOW_TIER = "unknown"
+CUSTOMER_SPEAKER = "客户"
+NEGATED_NOTE = "原文另有否定这一方故障的说法，怀疑不采用。"
 LOW_NOTE = "来源层级最低（不属于 RFO、供应商反馈或分公司处理日志），待核实。"
 
 
@@ -153,6 +155,8 @@ def pending_reason(candidate, name, spans, coverage=None, layered=False):
     suspected = layered and name == "responsible_party" and r.modality == "suspected"
     if not r.current_event or (r.modality != "asserted" and not suspected):
         return "不是本次事件的明确断言。"
+    if suspected and r.speaker == CUSTOMER_SPEAKER:
+        return "客户（报障方）的猜测不算怀疑归属。"
     if r.source_tier == FALLBACK_TIER:
         return "工单系统字段只作兜底，不参与来源比较。"
     if r.source_tier not in PRIORITY and not (layered and r.source_tier == LOW_TIER):
@@ -280,6 +284,17 @@ def evaluate(elements, spans, coverage, suggestions=(), layered=False):
             if reason is None:
                 eligible.append(c)
         province = suspected = False
+        if name == "responsible_party" and layered:
+            # 怀疑某一方、而原文另有可靠的说法否定这一方有故障（如“供应商反馈网内无作业”），怀疑不采用。
+            denied = {formal_value(o, name) for o in el.candidates
+                      if o.relation and o.relation.modality == "negated" and o.relation.current_event
+                      and grounded_assertion(o, name, spans)}
+            vetoed = {c.id for c in eligible if c.relation.modality == "suspected" and formal_value(c, name) in denied}
+            if vetoed:
+                checks = [ConstraintCheck(element=name, candidate_id=k.candidate_id, outcome="pending",
+                                          reason=NEGATED_NOTE, evidence_refs=k.evidence_refs)
+                          if k.element == name and k.candidate_id in vetoed else k for k in checks]
+                eligible = [c for c in eligible if c.id not in vetoed]
         if name == "responsible_party":
             # 有明确的责任归属就不取怀疑的；没有明确的才取怀疑的，再没有才用故障区域字段兜底。
             asserted = [c for c in eligible if c.relation.modality == "asserted"]
@@ -309,7 +324,8 @@ def evaluate(elements, spans, coverage, suggestions=(), layered=False):
                 b.id != a.id and b.relation
                 and b.relation.source_tier == a.relation.source_tier
                 and (b.relation.event_id, b.relation.scope) == (a.relation.event_id, a.relation.scope)
-                and b.relation.current_event and b.relation.modality in {"asserted", "negated"}
+                # 按层兜底时否定说法只用来排除怀疑，不把明确结论打成冲突。
+                and b.relation.current_event and b.relation.modality in ({"asserted"} if layered else {"asserted", "negated"})
                 and grounded_assertion(b, name, spans)
                 and (b.id in a.relation.contradicts or a.id in b.relation.contradicts
                      or (b.relation.modality == "negated" and formal_value(b, name) == formal_value(a, name)))

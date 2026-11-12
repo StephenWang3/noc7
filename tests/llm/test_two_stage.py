@@ -617,3 +617,26 @@ def test_noc_or_field_source_is_the_lowest_tier_for_party(server):
     result, _, _ = run_passes(server, [{"facts": [*FACTS["facts"][:8], noc, high]}, WRITING], passes=1)
     el = result.elements.responsible_party
     assert el.value == "供应商" and "来源层级最低" not in el.note and "低优先级差异保留待核对" in el.note
+
+
+def test_customer_guess_is_not_a_suspected_party(server):
+    guess = {"type": "responsibility", "evidence_id": "M02/log:5", "quote": "市政道路施工挖断 24 芯光缆", "party": "联通",
+             "source": "customer", "certainty": "suspected"}
+    result, _, _ = run_passes(server, [{"facts": [*FACTS["facts"][:8], guess]}, WRITING], passes=1)
+    assert result.elements.responsible_party.value is None
+    checks = [c for c in result.semantic_assessment.checks if c.element == "responsible_party"]
+    assert any("客户（报障方）的猜测" in (c.reason or "") for c in checks)
+
+
+def test_negation_vetoes_suspected_party_but_not_asserted(server):
+    guess = {"type": "responsibility", "evidence_id": "M02/log:5", "quote": "市政道路施工挖断 24 芯光缆", "party": "供应商",
+             "source": "branch_log", "certainty": "suspected"}
+    denial = {**guess, "source": "vendor_feedback", "certainty": "negated"}
+    result, _, _ = run_passes(server, [{"facts": [*FACTS["facts"][:8], guess, denial]}, WRITING], passes=1)
+    assert result.elements.responsible_party.value is None
+    checks = {c.candidate_id: c for c in result.semantic_assessment.checks if c.element == "responsible_party"}
+    assert "否定这一方故障" in checks["P1"].reason
+
+    sure = {**guess, "certainty": "asserted"}
+    result, _, _ = run_passes(server, [{"facts": [*FACTS["facts"][:8], sure, denial]}, WRITING], passes=1)
+    assert result.elements.responsible_party.value == "供应商"  # 明确结论不因否定说法变成冲突
