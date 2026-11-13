@@ -85,6 +85,7 @@ def analyze_with_context(path, provider=None, *, registry=None):
         evidence=spans,
         events=data.events,
         semantic_assessment=data.semantic_assessment,
+        narrative=data.narrative,
         suggestions=data.suggestions,
         quote_checks=data.quote_checks,
         elements=payload,

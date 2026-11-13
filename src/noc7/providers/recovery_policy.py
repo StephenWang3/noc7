@@ -12,6 +12,26 @@ SOURCE_LABELS = {
     "unicom_monitor": "联通网管恢复时间",
 }
 PRIORITY = tuple(SOURCE_LABELS)
+# 系统恢复字段不在业务优先级内；只在三类业务来源都没有合格记载时兜底，并在报告中标注。
+FALLBACK = "system_field"
+FALLBACK_LABEL = "系统恢复字段（兜底，待核实）"
+
+
+# 两段式按层兜底：业务恢复记载 → 没写时区、按北京时间推定的 → 告警清除时刻 → 客户确认时刻 → 系统恢复字段。
+TIER_NOTES = {1: "原文未写时区，按北京时间推定，待核实。",
+              2: "取告警清除时刻，非业务恢复声明，待核实。",
+              3: "取致电／联系客户确认已恢复的时刻，实际恢复不晚于此，待核实。"}
+
+
+def tier(candidate, spans, assumed=()):
+    from ..schema import TimeKind
+    from .semantic_constraints import confirmation_record_time
+    if any(confirmation_record_time(candidate.time.raw, spans[ref].text)
+           for ref in candidate.evidence_refs if "/log:" in ref and ref in spans):
+        return 3
+    if candidate.time_kind == TimeKind.ALARM_CLEARED:
+        return 2
+    return 1 if candidate.id in assumed else 0
 
 
 def initial_selection():
@@ -35,6 +55,11 @@ def usable_quote(quote, spans):
 
 def source_reason(candidate, spans):
     r = candidate.relation
+    if r.recovery_source == FALLBACK:
+        if candidate.time_kind != "recovery_field" or not any(
+                ref in spans and spans[ref].locator.type == "field" for ref in candidate.evidence_refs):
+            return "系统字段兜底只接受工单恢复时间字段。"
+        return None
     if r.recovery_source not in PRIORITY:
         return "恢复来源未知，不使用系统字段兜底。"
     if not usable_quote(r.recovery_source_basis, spans):
@@ -64,14 +89,44 @@ def _model_group(original, candidates):
     return None
 
 
-def select_recovery(candidates, eligible, original, spans, threshold_minutes, excluded=None):
+def select_recovery(candidates, eligible, original, spans, threshold_minutes, excluded=None, layered=False, assumed=()):
     record = RecoverySelection(threshold_minutes=threshold_minutes,
                                excluded=dict(excluded or {}))
+    note = ""
     for c in eligible:
         reason = source_reason(c, spans)
         if reason:
             record.excluded[c.id] = reason
     pool = [c for c in eligible if c.id not in record.excluded]
+    fallback = [c for c in pool if c.relation.recovery_source == FALLBACK]
+    pool = [c for c in pool if c.relation.recovery_source != FALLBACK]
+    if layered and pool and fallback:
+        # 客户确认时刻只说明“实际恢复不晚于此”；比系统恢复字段还晚就没有提供更多信息，不采用。
+        floor = min(c.time.as_datetime() for c in fallback)
+        for c in pool:
+            if tier(c, spans, assumed) == 3 and c.time.as_datetime() and floor and c.time.as_datetime() >= floor:
+                record.excluded[c.id] = "客户确认时刻不早于系统恢复字段，不采用。"
+        pool = [c for c in pool if c.id not in record.excluded]
+    if layered and pool:
+        levels = {c.id: tier(c, spans, assumed) for c in pool}
+        best = min(levels.values())
+        for c in pool:
+            if levels[c.id] > best:
+                record.excluded[c.id] = "已有更可靠的恢复记载，" + TIER_NOTES[levels[c.id]].replace("待核实。", "不采用。")
+        pool = [c for c in pool if levels[c.id] == best]
+        note = TIER_NOTES.get(best, "")
+    if pool:
+        for c in fallback:
+            record.excluded[c.id] = "已有客户／供应商 RFO／联通日志的恢复记载，系统字段只作参照。"
+    elif fallback:
+        chosen = min(fallback, key=lambda c: (c.time.as_datetime(), c.id))
+        record.sources = {c.id: c.relation.recovery_source for c in candidates if c.relation}
+        record.target_group = group(chosen)
+        record.participating = sorted(c.id for c in fallback)
+        record.span_seconds = 0.0
+        record.selected, record.outcome = chosen.id, "selected"
+        record.reason = "客户、供应商 RFO、联通日志均无合格恢复记载，取工单系统恢复时间字段兜底。"
+        return record
     record.sources = {c.id: c.relation.recovery_source for c in candidates if c.relation}
     target = _model_group(original, candidates)
     groups = {group(c) for c in pool}
@@ -128,7 +183,7 @@ def select_recovery(candidates, eligible, original, spans, threshold_minutes, ex
     # 除以六十比较，避免非常大的有限分钟参数相乘溢出。
     if record.span_seconds / 60 <= threshold_minutes:
         chosen = min(pool, key=lambda c: (c.time.as_datetime(), c.id))
-        record.reason = "全部合格恢复时间相差不大，采用最早时间。"
+        record.reason = "全部合格恢复时间相差不大，采用最早时间。" + note
     else:
         source = next(s for s in PRIORITY if any(c.relation.recovery_source == s for c in pool))
         preferred = [c for c in pool if c.relation.recovery_source == source]
@@ -138,7 +193,7 @@ def select_recovery(candidates, eligible, original, spans, threshold_minutes, ex
             record.reason = "最高优先来源内部恢复时间超过阈值，保留冲突，不降级取其他来源。"
             return record
         chosen = min(preferred, key=lambda c: (c.time.as_datetime(), c.id))
-        record.reason = "恢复时间跨度超过阈值，按客户→供应商 RFO→联通网管取最高优先来源的最早值。"
+        record.reason = "恢复时间跨度超过阈值，按客户→供应商 RFO→联通网管取最高优先来源的最早值。" + note
     record.selected = chosen.id
     record.outcome = "selected"
     for c in pool:
@@ -150,6 +205,8 @@ def select_recovery(candidates, eligible, original, spans, threshold_minutes, ex
 
 
 def selection_text(record):
+    if record.sources.get(record.selected) == FALLBACK:
+        return f"恢复取值来源：{FALLBACK_LABEL}；{record.reason}"
     source = SOURCE_LABELS.get(record.sources.get(record.selected), "待核实")
     return (f"恢复取值来源：{source}；{record.reason}"
             f" 接近阈值 {record.threshold_minutes:g} 分钟（暂定，待业务方确认）。")

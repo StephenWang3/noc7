@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from typing import Protocol
 
 from ..schema.relations import SemanticAssessment
+from ..schema.narrative import ReportNarrative
 
 from pydantic import Field
 
@@ -22,6 +23,7 @@ class EvidenceQuote(Model):
 
 class Extraction(Model):
     semantic_assessment: SemanticAssessment | None = None
+    narrative: ReportNarrative | None = None
     suggestions: list[BusinessSuggestion] = Field(default_factory=list)
     quote_checks: list[QuoteCheck] = Field(default_factory=list)
     elements: SevenElements

@@ -37,6 +37,9 @@ class TextModelConfig(Model):
     max_response_bytes: int = Field(default=4 * 1024 * 1024, ge=1024, le=32 * 1024 * 1024)
     timeout_seconds: float = Field(default=90, gt=0, le=300, allow_inf_nan=False)
     max_retries: int = Field(default=2, ge=0, le=2)
+    fact_passes: int = Field(default=1, ge=1, le=3, description="两段式抽事实的遍数；多遍取并集后交本地规则裁决，用来抵消模型漏摘。")
+    pipeline: Literal["single", "two_stage"] = Field(
+        default="single", description="two_stage：抽事实、本地裁决、成文分开，每单请求数为 fact_passes + 1")
 
     @model_validator(mode="after")
     def _validate_service(self):
@@ -100,5 +103,8 @@ def load_model_config(path: Path | str) -> TextModelConfig:
 
 def create_text_provider(path: Path | str, *, audit_dir: Path | None = None):
     from .text_http import OpenAICompatibleTextProvider
+    from .two_stage import TwoStageTextProvider
 
-    return OpenAICompatibleTextProvider(load_model_config(path), audit_dir=audit_dir)
+    config = load_model_config(path)
+    cls = TwoStageTextProvider if config.pipeline == "two_stage" else OpenAICompatibleTextProvider
+    return cls(config, audit_dir=audit_dir)

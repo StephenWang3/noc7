@@ -58,6 +58,7 @@ class ResponsibilityBasis(StrEnum):
     CLAIMED = "claimed"  # 某方自称/指称，未经认定
     BUSINESS_CONTEXT = "business_context"  # 按已确认业务路径判定，未经人工审核
     INFERRED_FROM_ROLE = "inferred_from_role"  # 只是供应商、处理部门、经办人等角色——不能作为结论
+    SYSTEM_FIELD = "system_field"  # 工单系统分类字段（结单人填写），只在原文没有依据时兜底并标注待核实
 
 
 class PartyCandidate(CandidateBase):
@@ -244,7 +245,9 @@ class CauseElement(ElementBase):
     def _kind_allowed(self) -> CauseElement:
         if self.selected is not None:
             chosen = next(c for c in self.candidates if c.id == self.selected)
-            if chosen.cause_kind not in CAUSE_KINDS_ALLOWED_AS_VALUE:
+            # 两段式按层兜底时，怀疑的原因可以作结论，但必须带说明（如“原文仅为怀疑，待确认”）告诉读者这一层的可信度。
+            suspected = chosen.cause_kind == CauseKind.SUSPECTED_MECHANISM and bool(self.note)
+            if chosen.cause_kind not in CAUSE_KINDS_ALLOWED_AS_VALUE and not suspected:
                 raise ValueError(f"原因类别 {chosen.cause_kind} 不能作为故障原因结论，只能留作候选")
         return self
 

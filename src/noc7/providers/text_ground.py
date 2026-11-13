@@ -565,7 +565,7 @@ def ground_extraction(ctx: ExtractionContext, data: Extraction) -> Extraction:
     elements = data.elements
     elements = elements.model_copy(update={
         "phenomenon": _ground_phenomenon(elements.phenomenon, ctx),
-        "handling_process": _ground_steps(elements.handling_process, spans),
+        "handling_process": _step_times(_ground_steps(elements.handling_process, spans), ctx),
     })
     from .semantic_constraints import apply_constraints
     from .responsibility_location import apply_constraints as apply_business
@@ -644,6 +644,27 @@ def _ground_steps(element, spans):
     steps = [_narrative(step, spans) for step in element.value]
     note = _note(element.note, _blob(_all_refs(element), spans))
     return element.model_copy(update={"value": steps, "note": note})
+
+
+def _step_times(element, ctx):
+    """模型没给时间的步骤取所引处理记录的记录时间，不再显示“时间未知”。"""
+    spans = {span.id: span for span in ctx.evidence}
+    steps = []
+    for step in element.value:
+        if step.time is None or step.time.iso is None:
+            for ref in step.evidence_refs:
+                span = spans.get(ref)
+                entry = (ctx.bundle.process_log.entry(span.locator.seq)
+                         if span is not None and span.locator.type == "log_entry" else None)
+                if entry and entry.recorded_at:
+                    try:
+                        moment = time_phrase(entry.recorded_at, ctx.bundle.manifest.default_timezone)
+                    except ValueError:
+                        break
+                    step = step.model_copy(update={"time": moment})
+                    break
+        steps.append(step)
+    return element.model_copy(update={"value": steps})
 
 
 def _ground_event(event, spans):

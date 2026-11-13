@@ -56,6 +56,17 @@ def _candidate_value(candidate, name):
     return next((getattr(candidate, key) for key in ("time", "statement") if hasattr(candidate, key)), None)
 
 
+def _accepted_values(candidate, name, data):
+    """选中候选对应的结论值；两段式按层取值时地点可以是统一后的显示名。"""
+    value = _candidate_value(candidate, name)
+    values = [value]
+    if (name == ElementName.LOCATION and value and data.semantic_assessment is not None
+            and data.semantic_assessment.adjudication == "local_priority"):
+        from ..providers.place_names import display_place
+        values.append(display_place(value))
+    return values
+
+
 def validate_extraction(ctx: ExtractionContext, data: Extraction) -> None:
     """不可信提供方先过证据校验；失败整份拒绝，不渲染带错引用的报告。"""
     spans = {s.id: s for s in ctx.evidence}
@@ -209,8 +220,13 @@ def validate_extraction(ctx: ExtractionContext, data: Extraction) -> None:
                         else ctx.bundle.manifest.default_timezone
                     )
                     if data.semantic_assessment:
-                        from ..providers.semantic_constraints import normalized_time
+                        from ..providers.semantic_constraints import assume_beijing, normalized_time
                         expected = normalized_time(candidate, ctx)
+                        # 分层兜底：原文未写时区的恢复时刻按北京时间推定，复算同一推定。
+                        if (candidate.time.tz_source == TimeZoneSource.ASSUMED
+                                and expected.tz_source == TimeZoneSource.UNKNOWN
+                                and data.semantic_assessment.adjudication == "local_priority"):
+                            expected = assume_beijing(candidate.model_copy(update={"time": expected}), ctx) or expected
                     else:
                         expected = time_phrase(raw, offset)
                     if (expected != candidate.time if data.semantic_assessment else expected.iso != candidate.time.iso):
@@ -255,7 +271,7 @@ def validate_extraction(ctx: ExtractionContext, data: Extraction) -> None:
                         name,
                     )
                 )
-            elif getattr(el, "value") != _candidate_value(chosen, name):
+            elif getattr(el, "value") not in _accepted_values(chosen, name, data):
                 errors.append(
                     issue(
                         IssueCode.EVIDENCE_QUOTE_MISMATCH,

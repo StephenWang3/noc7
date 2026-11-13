@@ -40,7 +40,9 @@ def test_same_cli_switches_services_only_by_config(server, tmp_path, monkeypatch
 
     monkeypatch.setattr("noc7.providers.text_http.urllib.request.build_opener", lambda *args: Transport())
     monkeypatch.setenv("DEEPSEEK_API_KEY", "synthetic-key")
-    configs = [load_model_config(ROOT / "config/models/deepseek.json"), qwen_config(server, json_mode=False)]
+    # 本用例只比较两种服务的请求构造；桩回复是单次抽取格式，两段式另见 test_two_stage。
+    configs = [load_model_config(ROOT / "config/models/deepseek.json").model_copy(update={"pipeline": "single"}),
+               qwen_config(server, json_mode=False)]
     results = []
     for config in configs:
         path = write_config(tmp_path / f"{config.name}.json", config)

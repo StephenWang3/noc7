@@ -211,6 +211,10 @@ def _time_lines(el, *, semantic=False) -> tuple[Line, ...]:
             line = (Part(label + "："), *line)
             if el.value.tz_source == "assumed":
                 line = (*line, Part("【时区按系统口径假设】", True))
+            from ..providers.semantic_constraints import date_inferred
+            basis = date_inferred(c)
+            if basis:
+                line = (*line, Part(f"【日期按{basis}推定】", True))
     return (line,)
 
 
@@ -219,8 +223,26 @@ def _recovery_lines(result: AnalysisResult) -> tuple[Line, ...]:
     record = result.semantic_assessment.recovery_selection if result.semantic_assessment else None
     if record is not None:
         from ..providers.recovery_policy import selection_text
-        lines = (*lines, (Part(selection_text(record)),))
+        lines = (*lines, (Part(selection_text(record)),), *_unadopted_recovery(result, record))
     return lines
+
+
+def _unadopted_recovery(result: AnalysisResult, record) -> tuple[Line, ...]:
+    """走系统字段兜底时，把原文里写了但没能采用的业务恢复时间原样列出，核实的人不用再翻附件。"""
+    from ..providers.recovery_policy import FALLBACK, SOURCE_LABELS
+
+    if not record.selected or record.sources.get(record.selected) != FALLBACK:
+        return ()
+    seen, lines = set(), []
+    for c in result.elements.end_time.candidates:
+        source = c.relation.recovery_source if c.relation else None
+        raw = " ".join(c.time.raw.split())
+        if source not in SOURCE_LABELS or c.time_kind != "business_recovery" or not raw or raw in seen:
+            continue
+        seen.add(raw)
+        why = "时区未知" if c.time.iso and c.time.as_datetime() else "日期或格式不完整"
+        lines.append((Part(f"原文另有{SOURCE_LABELS[source]}：{raw}（{why}，未采用）"), Part("【待核实】", True)))
+    return tuple(lines[:3])
 
 
 def _duration_lines(result: AnalysisResult) -> tuple[Line, ...]:
@@ -242,20 +264,39 @@ def _duration_lines(result: AnalysisResult) -> tuple[Line, ...]:
     return (PENDING_LINE,)
 
 
+def _step_when(step) -> Line:
+    return company_time(step.time, paren=False) if step.time else (Part("（时间未知）"),)
+
+
 def _process_lines(result: AnalysisResult) -> tuple[Line, ...]:
+    from ..providers.narrative import mask_contacts, step_text
+
+    steps = {s.id: s for s in result.elements.handling_process.value}
+    if result.narrative and result.narrative.process:
+        # 成文行不带时间，取所引第一步的时间；模型不写时间。
+        return tuple((*_step_when(steps[line.step_refs[0]]), Part(mask_contacts(f" {line.text}")))
+                     for line in result.narrative.process)
+    kept = [s for s in steps.values() if not s.duplicate_of]
+    # 有实际处理步骤时不列签收、转派、返单等流程流转。
+    if result.semantic_assessment and any(s.step_kind != StepKind.WORKFLOW for s in kept):
+        kept = [s for s in kept if s.step_kind != StepKind.WORKFLOW]
     lines = []
-    for step in result.elements.handling_process.value:
-        if step.duplicate_of:
-            continue
-        when = company_time(step.time, paren=False) if step.time else (Part("（时间未知）"),)
-        text = step.action.strip()
-        if step.result:
-            text = f"{text.rstrip('。；;，, ')}，{step.result.strip().rstrip('。')}。"
+    for step in kept:
+        text = step_text(step)
         if step.step_kind == StepKind.PLANNED:
             text = f"（计划）{text}"
         actor = f"{step.actor} " if step.actor else ""
-        lines.append((*when, Part(f" {actor}{' '.join(text.split())}")))
+        lines.append((*_step_when(step), Part(mask_contacts(f" {actor}{text}"))))
     return tuple(lines) or (PENDING_LINE,)
+
+
+def _speaker(raw: str) -> str:
+    """陈述方是内部归属枚举时换成中文标签，不把 system_field 这类写进报告。"""
+    from ..schema import ATTRIBUTION_LABELS_ZH, Attribution
+    try:
+        return ATTRIBUTION_LABELS_ZH[Attribution(raw)]
+    except ValueError:
+        return raw
 
 
 def _report_date(generated: datetime | None, raw: str) -> str:
@@ -279,11 +320,16 @@ def build_company_report(result: AnalysisResult) -> CompanyReport:
         generated = datetime.fromisoformat(raw)
     except ValueError:
         generated = None
+    from ..providers.narrative import mask_contacts
+    narrative = result.narrative
     cause_lines = _element_lines(e.cause)
+    if e.cause.value:
+        text = narrative.cause if narrative and narrative.cause else " ".join(e.cause.value.split())
+        cause_lines = ((Part(mask_contacts(text)),),)
     if result.semantic_assessment and e.cause.value:
         c = next(c for c in e.cause.candidates if c.id == e.cause.selected)
-        cause_lines = ((Part(f"{c.relation.speaker}记载："), *cause_lines[0],
-                        Part("【有记录，未经人工审核】", True)), *cause_lines[1:])
+        cause_lines = ((Part(f"{_speaker(c.relation.speaker)}记载："), *cause_lines[0],
+                        Part("【" + (e.cause.note or "有记录，未经人工审核") + "】", True)), *cause_lines[1:])
     def business_parts(el):
         parts = _value_parts(el)
         chosen = next((c for c in el.candidates if c.id == el.selected), None)
@@ -296,6 +342,13 @@ def build_company_report(result: AnalysisResult) -> CompanyReport:
         (Part("责任方："), *business_parts(e.responsible_party),
          Part("；故障位置："), *business_parts(e.location)),
     )
+    original = result.semantic_assessment.original if result.semantic_assessment else {}
+    if original.get("not_fault"):
+        # 咨询、查询以往工单，已拆机、重单、退网说明：说明为什么责任方和地点留空。
+        marker = original["not_fault"]
+        kind = marker.get("kind") or "咨询或查询"
+        basis = "结单原因" if marker.get("basis") == "closing_field" else "原文"
+        analysis = (*analysis, (Part(f"本单按{basis}不是业务故障（{kind}），不判责任方和故障位置。"), Part("【待核实】", True)))
     cells = {
         "customer": _text_lines(fields.get("customer")),
         "circuit_id": (circuit_line,),
@@ -304,7 +357,8 @@ def build_company_report(result: AnalysisResult) -> CompanyReport:
         "declared": _time_lines(e.start_time, semantic=result.semantic_assessment is not None),
         "resumed": _recovery_lines(result),
         "duration": _duration_lines(result),
-        "phenomenon": _element_lines(e.phenomenon),
+        "phenomenon": (((Part(mask_contacts(narrative.phenomenon)),),) if narrative and narrative.phenomenon
+                       else _element_lines(e.phenomenon)),
         "process": _process_lines(result),
         "analysis": analysis,
         "improvement": ((Part(DEFAULT_IMPROVEMENT), Part(IMPROVEMENT_NOTE, True)),),

@@ -25,7 +25,7 @@ class TimeRelation(SemanticRelation):
     date_anchor: RelationQuote | None = None
     timezone_anchor: RelationQuote | None = None
     customer_confirmation: RelationQuote | None = None
-    recovery_source: Literal["customer", "vendor_rfo", "unicom_monitor", "unknown"] = Field(
+    recovery_source: Literal["customer", "vendor_rfo", "unicom_monitor", "system_field", "unknown"] = Field(
         default="unknown", description="缺省仅用于兼容旧数据；新模型须通读证据归类，存在对应来源陈述时填写明确来源。"
     )
     recovery_source_basis: RelationQuote | None = None
@@ -44,7 +44,7 @@ class CauseRelation(SemanticRelation):
 
 class BusinessRelation(SemanticRelation):
     statement: str = Field(min_length=1, description="原文断言，与标准化结论分开")
-    source_tier: Literal["rfo", "vendor_feedback", "branch_log", "unknown"]
+    source_tier: Literal["rfo", "vendor_feedback", "branch_log", "system_field", "unknown"]
     source_quote: RelationQuote | None = None
     speaker: str | None = Field(default=None, min_length=1)
     contradicts: list[str] = Field(default_factory=list)
@@ -54,7 +54,8 @@ class PartyRelation(BusinessRelation):
     responsibility_quote: RelationQuote | None = None
     category: Literal["客户", "供应商", "联通", "other", "joint", "unknown"]
     decision_path: Literal["explicit_responsibility", "customer_self_check", "vendor_onsite_contact",
-                           "unicom_onsite_recovery", "equipment_ownership", "role_only", "unknown"]
+                           "unicom_onsite_recovery", "equipment_ownership", "role_only", "system_field", "rfo_cause",
+                           "unknown"]
     customer_device_fault: bool | None = None
     procurement: Literal["客户", "供应商", "联通", "unknown"] = "unknown"
     procurement_quote: RelationQuote | None = None
@@ -63,6 +64,7 @@ class PartyRelation(BusinessRelation):
     vendor_contact: RelationQuote | None = None
     unicom_onsite: RelationQuote | None = None
     service_recovered: RelationQuote | None = None
+    third_party: bool = Field(default=False, description="原文写明故障由第三方（施工、人为破坏、自然灾害等）造成；责任仍记线路所属方，报告注明。")
 
 
 class LocationRelation(BusinessRelation):
@@ -109,6 +111,8 @@ class RecoverySelection(Model):
 class SemanticAssessment(Model):
     """只由本地解码器构建；original 的来源与引文须核验，但不用于补造正式结论。"""
     recovery_selection: RecoverySelection | None = None
+    adjudication: Literal["model_selected", "local_priority"] = Field(
+        default="model_selected", description="local_priority：起障时间和原因由本地按候选顺序取第一条合格项，不采用模型选中项。")
     original: dict[str, Any] = Field(default_factory=dict)
     checks: list[ConstraintCheck] = Field(default_factory=list)
     business_coverage: BusinessCoverage | None = None
