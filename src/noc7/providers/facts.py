@@ -337,6 +337,27 @@ def not_fault(facts, spans=None):
     return {**_q(fact), "kind": "咨询或查询", "basis": "model"} if fact else None
 
 
+_HEADING_ZONE = re.compile(r"[（(]\s*(?:GMT|UTC)\s*[+\-−]\s*\d{1,2}(?::?\d{2})?\s*[）)]\s*[:：]?$", re.I)
+
+
+def _heading_zone(fact, spans):
+    """时间本身没写时区、但所在行或紧挨的上一行是以“(GMT+7):”结尾的小标题（如 RFO 的“Outage Resolved Time (GMT+7):”），
+    把这一行作时区锚点；其他位置出现的时区不借用。"""
+    from ..extract.baseline import ZONE_RE
+    raw = fact.get("time") or ""
+    span = spans.get(fact["evidence_id"])
+    if not raw or ZONE_RE.search(raw) or span is None:
+        return None
+    pos = span.text.find(raw)
+    if pos < 0:
+        return None
+    prefix = re.sub(r"(?:\s|<br\s*/?>)+$", "", span.text[:pos], flags=re.I)
+    line = re.split(r"\r|\n|<br\s*/?>", prefix, flags=re.I)[-1].strip()
+    if not _HEADING_ZONE.search(line):
+        return None
+    return {"evidence_id": span.id, "quote": line}
+
+
 def _time(fact):
     """候选时间：raw 是原文；iso 只是模型的规整建议，本地解析不了时才核对后采用。"""
     return {"raw": fact["time"], **({"iso": fact["iso"]} if fact.get("iso") else {})}
@@ -350,7 +371,7 @@ def compile_facts(facts, ctx):
     starts = []
     for fact in (f for f in facts if f["type"] == "start_time"):
         starts.append({**_base("T", len(starts) + 1, fact, spans), "time": _time(fact), "time_kind": fact["kind"],
-                       "relation": _relation(fact, date_anchor=fact.get("date_anchor"), timezone_anchor=None,
+                       "relation": _relation(fact, date_anchor=fact.get("date_anchor"), timezone_anchor=_heading_zone(fact, spans),
                                              customer_confirmation=None)})
     field = _field_time(spans, "occurred_at", "fault_start_field", {})
     if field:
@@ -361,14 +382,14 @@ def compile_facts(facts, ctx):
     for fact in (f for f in facts if f["type"] == "recovery_time"):
         known = fact["source"] != "unknown"
         ends.append({**_base("T", len(ends) + 1, fact, spans), "time": _time(fact), "time_kind": "business_recovery",
-                     "relation": _relation(fact, date_anchor=fact.get("date_anchor"), timezone_anchor=None,
+                     "relation": _relation(fact, date_anchor=fact.get("date_anchor"), timezone_anchor=_heading_zone(fact, spans),
                                            customer_confirmation=_q(fact) if fact["source"] == "customer" else None,
                                            recovery_source=fact["source"],
                                            recovery_source_basis=_q(fact) if known else None, **no_recovery)})
     for fact in (f for f in facts if f["type"] == "alarm_clear"):
         # 告警清除排在业务恢复记载之后、客户确认时刻和系统字段之前（见 recovery_policy.tier）。
         ends.append({**_base("T", len(ends) + 1, fact, spans), "time": _time(fact), "time_kind": "alarm_cleared",
-                     "relation": _relation(fact, date_anchor=fact.get("date_anchor"), timezone_anchor=None,
+                     "relation": _relation(fact, date_anchor=fact.get("date_anchor"), timezone_anchor=_heading_zone(fact, spans),
                                            customer_confirmation=None, recovery_source="unicom_monitor",
                                            recovery_source_basis=_q(fact), **no_recovery)})
     # 客户确认层：模型按提示词把“致电客户，客户表示已恢复”摘成处理步骤；本地从这些步骤认出确认记录，

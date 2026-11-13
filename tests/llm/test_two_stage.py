@@ -792,3 +792,17 @@ def test_slash_date_is_read_by_the_ticket_window():
     assert slash_date_time("13:34 hrs 8/11/2026", ctx("2026-03-01 00:00:00", "2026-03-02 00:00:00"), None) is None
     assert slash_date_time("13:34 8/9/2026 or 9/9/2026", nov, None) is None  # 多个日期不猜
     assert slash_date_time("13:34 hrs 8/11/2026 GMT+7", nov, None).utc_offset == "+07:00"
+
+
+def test_heading_zone_is_used_only_from_the_time_line_or_the_line_above():
+    from types import SimpleNamespace as NS
+    from noc7.providers.facts import _heading_zone
+    rfo = "1. Outage Start Time (GMT+7):\n2026-10-20 18:24:30\n2. Outage Resolved Time (GMT+7):\n2026-10-20 18:24:34\n3. Root Cause:"
+    spans = {"M1/msg:0:body": NS(id="M1/msg:0:body", text=rfo),
+             "M2/log:1": NS(id="M2/log:1", text="Resolved Time (UTC+3):\r<br>2026-10-20 18:24:34"),
+             "M3/log:1": NS(id="M3/log:1", text="供应商于2026-10-21 08:26:15（GMT+8）回复。\n恢复 2026-10-20 18:24:34")}
+    fact = {"evidence_id": "M1/msg:0:body", "time": "2026-10-20 18:24:34"}
+    assert _heading_zone(fact, spans) == {"evidence_id": "M1/msg:0:body", "quote": "2. Outage Resolved Time (GMT+7):"}
+    assert _heading_zone({**fact, "evidence_id": "M2/log:1"}, spans)["quote"] == "Resolved Time (UTC+3):"
+    assert _heading_zone({**fact, "evidence_id": "M3/log:1"}, spans) is None  # 别处的时区不借用
+    assert _heading_zone({**fact, "time": "2026-10-20 18:24:34 GMT+7"}, spans) is None  # 自带时区不动
