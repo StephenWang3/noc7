@@ -24,6 +24,8 @@ RFO_CAUSE_NOTE = "原文没有直接写责任方，按供应商 RFO 所述本方
 AREA_FIELD = "fault_area"
 AREA_PARTIES = (("运营商", "供应商"), ("用户", "客户"))
 FALLBACK_TIER = "system_field"
+# 工单系统“故障地址”字段：国内单是客户所在城市，海外单只写“海外”。分层模式下作地点最低一层兜底。
+ADDRESS_FIELD = "fault_detail_address"
 # 两段式按层兜底时，来源不属于 RFO、供应商反馈、分公司处理日志的（NOC 记录、工单字段、其他）排在最后一层，
 # 仍在故障区域字段兜底之前。
 LOW_TIER = "unknown"
@@ -180,6 +182,17 @@ def _area_fallback(el, spans):
         if (r and r.source_tier == FALLBACK_TIER and r.decision_path == FALLBACK_TIER and span is not None
                 and span.locator.type == "field" and span.locator.field_key == AREA_FIELD
                 and area_party(span.text) == r.category):
+            return c, span
+    return None, None
+
+
+def _address_fallback(el, spans):
+    from .place_names import address_city
+    for c in el.candidates:
+        r = c.relation
+        span = spans.get(c.evidence_refs[0]) if len(c.evidence_refs) == 1 else None
+        if (r and r.source_tier == FALLBACK_TIER and span is not None and span.locator.type == "field"
+                and span.locator.field_key == ADDRESS_FIELD and r.city and address_city(span.text) == r.city):
             return c, span
     return None, None
 
@@ -505,6 +518,13 @@ def evaluate(elements, spans, coverage, suggestions=(), layered=False):
                               note=f"兜底，待核实：原文没有可采用的责任依据，取自{label}。")
             elif fallback and update["status"] == ElementStatus.DOCUMENTED and update["value"] != fallback.relation.category:
                 update["note"] += f"与{label}不一致，待核实。"
+        if name == "location" and layered and update["status"] == ElementStatus.UNKNOWN:
+            fallback, span = _address_fallback(el, spans)
+            if fallback:
+                update.update(status=ElementStatus.DOCUMENTED, value=fallback.relation.city, selected=fallback.id,
+                              evidence_refs=list(fallback.evidence_refs),
+                              note=f"兜底，待核实：原文没有可采用的地点，取自工单系统故障地址字段“{span.text.strip()}”"
+                                   "（通常是客户所在城市，不一定是故障点）。")
         updates[name] = el.model_copy(update=update)
     return updates, checks
 

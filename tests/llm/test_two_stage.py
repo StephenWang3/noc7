@@ -828,3 +828,26 @@ def test_rfo_cause_layer_is_used_only_without_explicit_party(server):
     result, _, _ = run_passes(server, [{"facts": facts}, WRITING], passes=1)
     el = result.elements.responsible_party
     assert el.value == "供应商" and "按供应商 RFO 所述本方网络故障原因推定" in el.note
+
+
+def test_address_field_is_the_last_location_layer(server, monkeypatch, tmp_path):
+    """合成工单没有“故障地址”字段，借“故障类型”字段走一遍完整流程：原文没有地点时取地址字段的城市，标兜底待核实。"""
+    from noc7.providers import place_names, responsibility_location as rl
+    from noc7.report import write_reports
+    for module in (rl, facts):
+        monkeypatch.setattr(module, "ADDRESS_FIELD", "fault_type")
+    monkeypatch.setattr(place_names, "address_city", lambda text: "SYN-城市乙" if text.strip() else None)
+    no_location = {"facts": [f for f in FACTS["facts"] if f["type"] != "fault_location"]}
+    result, _ = run(server, [no_location, WRITING])
+    location = result.elements.location
+    assert (location.value, location.selected) == ("SYN-城市乙", "LSYS1")
+    assert "兜底，待核实" in location.note and "故障地址字段" in location.note
+    assert AnalysisResult.model_validate_json(result.model_dump_json()) == result
+    write_reports(result, tmp_path)
+
+
+def test_address_city_reads_only_plain_administrative_addresses():
+    from noc7.providers.place_names import address_city
+    assert [address_city(t) for t in ("江苏省南京市", "上海市市辖区", "辽宁省大连市高新园区",
+                                      "云南省西双版纳傣族自治州勐腊县", "香港")] == ["南京", "上海", "大连", "勐腊", "香港"]
+    assert address_city("海外") is None and address_city("") is None

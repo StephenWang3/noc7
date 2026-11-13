@@ -109,3 +109,26 @@ def display_place(name):
         # 只改多词全大写地名（NEW BRUNSWICK）；单词全大写多半是缩写（OTDR、POP），不动
         return " ".join(w.capitalize() for w in name.split(" "))
     return name
+
+
+_PROVINCE = re.compile(r"^.{2,8}?(?:省|自治区|特别行政区)")
+_CITY = re.compile(r"^(.{2,6}?)市")
+_COUNTY = re.compile(r"(?:自治州|地区|盟)(.{2,4}?)(?:县|旗)")
+
+
+def address_city(text):
+    """工单系统“故障地址”字段（如“江苏省南京市”“上海市市辖区”“云南省西双版纳傣族自治州勐腊县”）里的城市名。
+
+    只认国内行政区划写法；“海外”、空值和认不出的返回 None（不猜）。
+    """
+    t = re.sub(r"\s+", "", text or "")
+    if not t or t == "海外":
+        return None
+    if t in _CITIES:
+        return t  # 香港、澳门这类直接写城市名的
+    rest = _PROVINCE.sub("", t)
+    m = _CITY.match(rest)
+    if m:
+        return m.group(1)
+    m = _COUNTY.search(rest)
+    return m.group(1) if m else None
