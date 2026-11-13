@@ -551,9 +551,21 @@ def test_same_place_spellings_merge_only_when_layered(sample):
 
 def test_same_place_rules():
     from noc7.providers.responsibility_location import same_place
-    for a, b in [('勐腊', '勐腊县'), ('Baan Dara', 'Ban Dara'), ('Vientiane Province', 'Vientiane'), ('越南谅山省', '谅山省')]:
-        assert same_place(a, b)
-    for a, b in [('上海', '北京'), ('Paris', 'Parma'), ('香港', '九龙'), ('河内', '河南')]:
+    for a, b in [('勐腊', '勐腊县'), ('Baan Dara', 'Ban Dara'), ('Vientiane Province', 'Vientiane'), ('越南谅山省', '谅山省'),
+                 ('Frankfurt', '法兰克福'), ('香港', '九龙'), ('Kennedy Town', '香港'), ('HCM', '胡志明市')]:
+        assert same_place(a, b)  # 后四对是地名表认得的同一城市（城区归所属城市）
+    for a, b in [('上海', '北京'), ('Paris', 'Parma'), ('香港', '深圳'), ('河内', '河南'), ('Perth', 'Perm')]:
         assert not same_place(a, b)
     from noc7.providers.responsibility_location import same_value
     assert same_value('Perm–Omsk段', 'Omsk–Perm段', 'location') and not same_value('Perm–Omsk段', 'Perm', 'location')
+
+
+def test_display_place_unifies_known_names_and_leaves_others():
+    from noc7.providers.place_names import display_place
+    assert display_place('Kennedy Town') == '香港'
+    assert display_place('Frankfurt am Main') == '法兰克福'
+    assert display_place('HCMC') == '胡志明市'
+    assert display_place('Perm–Omsk段') == '彼尔姆–鄂木斯克段'
+    assert display_place('NEW BRUNSWICK') == 'New Brunswick'  # 表外：只改大小写
+    assert display_place('SYN-Kennedy Town') == 'SYN-Kennedy Town'  # 表外原样
+    assert display_place('南京') == '南京' and display_place('') == ''

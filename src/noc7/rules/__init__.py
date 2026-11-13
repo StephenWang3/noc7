@@ -56,6 +56,17 @@ def _candidate_value(candidate, name):
     return next((getattr(candidate, key) for key in ("time", "statement") if hasattr(candidate, key)), None)
 
 
+def _accepted_values(candidate, name, data):
+    """选中候选对应的结论值；两段式按层取值时地点可以是统一后的显示名。"""
+    value = _candidate_value(candidate, name)
+    values = [value]
+    if (name == ElementName.LOCATION and value and data.semantic_assessment is not None
+            and data.semantic_assessment.adjudication == "local_priority"):
+        from ..providers.place_names import display_place
+        values.append(display_place(value))
+    return values
+
+
 def validate_extraction(ctx: ExtractionContext, data: Extraction) -> None:
     """不可信提供方先过证据校验；失败整份拒绝，不渲染带错引用的报告。"""
     spans = {s.id: s for s in ctx.evidence}
@@ -260,7 +271,7 @@ def validate_extraction(ctx: ExtractionContext, data: Extraction) -> None:
                         name,
                     )
                 )
-            elif getattr(el, "value") != _candidate_value(chosen, name):
+            elif getattr(el, "value") not in _accepted_values(chosen, name, data):
                 errors.append(
                     issue(
                         IssueCode.EVIDENCE_QUOTE_MISMATCH,

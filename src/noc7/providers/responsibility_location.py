@@ -105,6 +105,9 @@ def _edits(a, b, limit=1):
 
 def same_place(a, b):
     """同一地点的不同写法：去掉国名前缀和省／县／Province 等后缀后相同、一方包含另一方，或外文名（6 个字母以上）只差一个字母。"""
+    from .place_names import display_place
+    if a and b and display_place(a) == display_place(b):
+        return True  # 表里认得的同一城市（Frankfurt／法兰克福、Kennedy Town／香港）
     x, y = _place_core(a), _place_core(b)
     if not x or not y:
         return False
@@ -484,7 +487,14 @@ def evaluate(elements, spans, coverage, suggestions=(), layered=False):
                     note += "低优先级差异保留待核对：" + "、".join(c.id for c in lower) + "。"
                     checks.append(ConstraintCheck(element=name, candidate_id=chosen.id, outcome="downgraded",
                         reason="按来源优先级采用；" + note, evidence_refs=refs))
-                update.update(status=ElementStatus.DOCUMENTED, value=formal_value(chosen, name),
+                value = formal_value(chosen, name)
+                if name == "location" and layered:
+                    from .place_names import display_place
+                    shown = display_place(value)
+                    if shown != value:
+                        note += f"原文写作“{value}”，统一为“{shown}”。"
+                        value = shown
+                update.update(status=ElementStatus.DOCUMENTED, value=value,
                               selected=chosen.id, evidence_refs=refs, note=note)
         if name == "responsible_party":
             fallback, span = _area_fallback(el, spans)
