@@ -209,8 +209,13 @@ def validate_extraction(ctx: ExtractionContext, data: Extraction) -> None:
                         else ctx.bundle.manifest.default_timezone
                     )
                     if data.semantic_assessment:
-                        from ..providers.semantic_constraints import normalized_time
+                        from ..providers.semantic_constraints import assume_beijing, normalized_time
                         expected = normalized_time(candidate, ctx)
+                        # 分层兜底：原文未写时区的恢复时刻按北京时间推定，复算同一推定。
+                        if (candidate.time.tz_source == TimeZoneSource.ASSUMED
+                                and expected.tz_source == TimeZoneSource.UNKNOWN
+                                and data.semantic_assessment.adjudication == "local_priority"):
+                            expected = assume_beijing(candidate.model_copy(update={"time": expected}), ctx) or expected
                     else:
                         expected = time_phrase(raw, offset)
                     if (expected != candidate.time if data.semantic_assessment else expected.iso != candidate.time.iso):

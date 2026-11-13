@@ -319,6 +319,45 @@ def _normalized_time(candidate, ctx, proposal=None):
     return value.model_copy(update={"raw": raw})
 
 
+BEIJING = "+08:00"
+
+
+def _settle_end(el, selection, eligible, spans, assumed, checks):
+    """按恢复选择结果写入 end_time 结论并记录核对项。"""
+    from .recovery_policy import tier
+    chosen = next((c for c in eligible if c.id == selection.selected), None)
+    el = _clear(el, conflict=selection.outcome == "conflict")
+    if chosen:
+        confirmation = chosen.relation.customer_confirmation
+        confirmation_span = spans.get(confirmation.evidence_id) if confirmation else None
+        status = ElementStatus.DOCUMENTED
+        if (confirmation_span and not confirmation_span.needs_review and not tier(chosen, spans, assumed)
+            and confirmation_span.role not in {SpanRole.QUOTED, SpanRole.SIGNATURE, SpanRole.DERIVED_SUMMARY}):
+            status = ElementStatus.CONFIRMED
+        el = el.model_copy(update=dict(status=status, selected=chosen.id, value=chosen.time,
+                                      evidence_refs=chosen.evidence_refs))
+    checks.append(ConstraintCheck(element="end_time", candidate_id=selection.selected,
+        outcome="eligible" if chosen else "conflict" if selection.outcome == "conflict" else "pending",
+        code=IssueCode.TIME_CANDIDATES_DIFFER if selection.outcome == "conflict" else IssueCode.SEMANTIC_RELATION_INCOMPLETE,
+        reason=selection.reason, evidence_refs=el.evidence_refs))
+    return el
+
+
+def assume_beijing(candidate, ctx):
+    """恢复时间原文有完整日期时刻但没写时区：按北京时间推定；推不出完整时刻的返回 None。"""
+    from ..extract.baseline import time_phrase
+    value = candidate.time
+    if candidate.relation is None or value.tz_source != TimeZoneSource.UNKNOWN or value.utc_offset:
+        return None
+    if candidate.time_kind == TimeKind.RECOVERY_FIELD:
+        return None
+    base = value.iso if value.iso and value.precision in {TimePrecision.MINUTE, TimePrecision.SECOND} else None
+    guess = time_phrase(base.replace("T", " ") if base else value.raw, BEIJING)
+    if not guess.as_datetime() or guess.precision not in {TimePrecision.MINUTE, TimePrecision.SECOND}:
+        return None
+    return guess.model_copy(update={"raw": value.raw, "tz_source": TimeZoneSource.ASSUMED})
+
+
 def _reliable(candidate, spans):
     relation = candidate.relation
     refs = set(candidate.evidence_refs)
@@ -331,16 +370,33 @@ def _reliable(candidate, spans):
 
 
 _RECORD_HEAD = re.compile(r"\s*(\d{4}-\d{2}-\d{2}\s+\d{1,2}:\d{2}(?::\d{2})?)")
-_CONFIRM_CALL = re.compile(r"(?:致电|联系|电话|回访|询问|咨询|沟通)[^。；;\n]{0,24}客户[^。；;\n]{0,24}"
-                           r"(?:已?恢复|已?解决|正常|可结单|可以结单)")
+_RESTORED = r"(?<![未没不非])(?:已?恢复|已?解决|正常|可结单|可以结单)"
+_CONFIRM_CALL = re.compile(r"(?:(?:致电|联系|电话|回访|询问|咨询|沟通)[^。；;\n]{0,24}客户"
+                           r"|客户[^。；;\n]{0,6}(?:表示|反馈|确认|回复|称))[^。；;\n]{0,24}" + _RESTORED)
+
+
+def confirmation_record(span, ctx):
+    """处理日志里“致电／联系客户，客户表示已恢复”这类记录：返回这条记录的录入时间原文
+    （正文开头的时间，没有就取日志元数据里的录入时间），否则 None。"""
+    if span.locator.type != "log_entry":
+        return None
+    head = _RECORD_HEAD.match(span.text)
+    entry = ctx.bundle.process_log.entry(span.locator.seq)
+    raw = head.group(1) if head else entry.recorded_at if entry else None
+    if head and _CLOCKS.search(span.text[head.end():]):
+        return None  # 正文另写了时刻（如同一条里先后两次致电），开头时间不一定是确认时刻
+    return raw if raw and confirmation_record_time(raw, span.text) else None
 
 
 def confirmation_record_time(raw, text):
     """恢复时间只是这条日志开头的记录时间，而日志内容是致电／联系客户得知已恢复：这是确认动作的时刻，不是业务恢复时刻。"""
     head = _RECORD_HEAD.match(text)
-    if not head or match_quote(raw, head.group(1)).status == "mismatch":
+    if head and match_quote(raw, head.group(1)).status == "mismatch":
         return False
-    body = text[head.end():]
+    # 没有开头时间的日志正文：时间只能来自这条记录的录入时间元数据（证据复核另行核对）。
+    body = text[head.end():] if head else text
+    if not head and _CLOCKS.search(body):
+        return False  # 正文自己写了时刻，用正文时刻，不拿录入时间顶替
     clock = _CLOCKS.search(raw)
     if clock and any((int(h), int(m)) == (int(clock[1]), int(clock[2])) for h, m in _CLOCKS.findall(body)):
         return False  # 正文自己又写了这个时刻，不只是记录时间
@@ -360,7 +416,11 @@ def pending_reason(candidate, name, spans, layered=False):
         return "缺少可靠原始依据。"
     # 必须有一段上下文同时包含该时间/断言；不能用无关原句拼出关系。
     text = candidate.statement if name == "cause" else candidate.time.raw
-    if not any(match_quote(text, q.quote).status != "mismatch" for q in r.context):
+    # 例外（分层）：客户确认记录正文开头没写时间，时间取自这条日志的录入时间元数据（证据复核核对元数据）。
+    metadata_time = (layered and name == "end_time" and any(
+        "/log:" in ref and ref in spans and not _RECORD_HEAD.match(spans[ref].text)
+        and confirmation_record_time(text, spans[ref].text) for ref in candidate.evidence_refs))
+    if not metadata_time and not any(match_quote(text, q.quote).status != "mismatch" for q in r.context):
         return "关系上下文没有包含候选原文，关系待核实。"
     if name == "cause":
         if r.assertion not in {"fault", "mechanism", "planned_work"} or not r.affects_service or not (r.occurred or suspected):
@@ -370,9 +430,11 @@ def pending_reason(candidate, name, spans, layered=False):
         if (r.assertion == "planned_work") != (candidate.cause_kind == "planned_work"):
             return "作业关系与原因类别不一致。"
     else:
-        if candidate.time_kind not in (END if name == "end_time" else START):
+        ends = END | {TimeKind.ALARM_CLEARED} if layered else END
+        if candidate.time_kind not in (ends if name == "end_time" else START):
             return "协议状态、确认动作、流程或其他时间不能替代业务起止。"
-        if name == "end_time" and any(confirmation_record_time(candidate.time.raw, spans[ref].text)
+        # 按层兜底时客户确认时刻作较低一层（recovery_policy.tier），不在这里排除。
+        if name == "end_time" and not layered and any(confirmation_record_time(candidate.time.raw, spans[ref].text)
                                       for ref in candidate.evidence_refs if "/log:" in ref and ref in spans):
             return "这是致电／联系客户确认恢复的记录时间，客户确认时刻不等于业务恢复时刻。"
         if not candidate.time.as_datetime() or candidate.time.precision not in {TimePrecision.MINUTE, TimePrecision.SECOND}:
@@ -428,10 +490,18 @@ def apply_constraints(ctx, data):
                      and isinstance(item["time"].get("iso"), str)}
         candidates = [c.model_copy(update={"time": normalized_time(c, ctx, proposals.get(c.id))}) if name != "cause" else c
                       for c in el.candidates]
+        layered = data.semantic_assessment.adjudication == "local_priority"
+        assumed = set()
+        if name == "end_time" and layered:
+            # 按层兜底：没写时区的恢复时间按北京时间推定，作较低一层（recovery_policy.tier）。
+            for i, c in enumerate(candidates):
+                guess = assume_beijing(c, ctx)
+                if guess is not None:
+                    candidates[i] = c.model_copy(update={"time": guess})
+                    assumed.add(c.id)
         el = el.model_copy(update={"candidates": candidates})
         eligible = []
         excluded = {}
-        layered = data.semantic_assessment.adjudication == "local_priority"
         for c in candidates:
             reason = pending_reason(c, name, spans, layered)
             checks.append(ConstraintCheck(element=name, candidate_id=c.id,
@@ -442,24 +512,12 @@ def apply_constraints(ctx, data):
             else:
                 excluded[c.id] = reason
         if name == "end_time" and recovery_selection is not None:
-            from .recovery_policy import select_recovery
+            from .recovery_policy import select_recovery, tier
             recovery_selection = select_recovery(candidates, eligible, original, spans,
-                                                 recovery_selection.threshold_minutes, excluded)
-            chosen = next((c for c in eligible if c.id == recovery_selection.selected), None)
-            el = _clear(el, conflict=recovery_selection.outcome == "conflict")
-            if chosen:
-                confirmation = chosen.relation.customer_confirmation
-                confirmation_span = spans.get(confirmation.evidence_id) if confirmation else None
-                status = ElementStatus.DOCUMENTED
-                if (confirmation_span and not confirmation_span.needs_review
-                    and confirmation_span.role not in {SpanRole.QUOTED, SpanRole.SIGNATURE, SpanRole.DERIVED_SUMMARY}):
-                    status = ElementStatus.CONFIRMED
-                el = el.model_copy(update=dict(status=status, selected=chosen.id, value=chosen.time,
-                                              evidence_refs=chosen.evidence_refs))
-            checks.append(ConstraintCheck(element=name, candidate_id=recovery_selection.selected,
-                outcome="eligible" if chosen else "conflict" if recovery_selection.outcome == "conflict" else "pending",
-                code=IssueCode.TIME_CANDIDATES_DIFFER if recovery_selection.outcome == "conflict" else IssueCode.SEMANTIC_RELATION_INCOMPLETE,
-                reason=recovery_selection.reason, evidence_refs=el.evidence_refs))
+                                                 recovery_selection.threshold_minutes, excluded,
+                                                 layered=layered, assumed=assumed)
+            end_inputs = (el, candidates, eligible, excluded, original, assumed)
+            el = _settle_end(el, recovery_selection, eligible, spans, assumed, checks)
             updates[name] = el
             continue
         if data.semantic_assessment.adjudication == "local_priority":
@@ -528,6 +586,23 @@ def apply_constraints(ctx, data):
         if (a.time_kind != TimeKind.ALARM_RAISED and
             (a.relation.event_id, a.relation.scope) == (b.relation.event_id, b.relation.scope) and
             _interval(b)[1] <= _interval(a)[0]):
+            if layered and recovery_selection is not None:
+                # 分层模式：早于起点的恢复记载不采用，落到下一层（直至系统字段），不留空。
+                from .recovery_policy import select_recovery
+                el0, candidates, eligible, excluded, original, assumed = end_inputs
+                early = {c.id for c in eligible if c.relation
+                         and (c.relation.event_id, c.relation.scope) == (a.relation.event_id, a.relation.scope)
+                         and _interval(c)[1] <= _interval(a)[0]}
+                eligible = [c for c in eligible if c.id not in early]
+                excluded = {**excluded, **{i: "早于业务起点，不采用。" for i in early}}
+                checks.append(ConstraintCheck(element="end_time", outcome="pending", code=IssueCode.TIME_ORDER_INVERTED,
+                    reason="选出的恢复时刻早于业务起点，改取下一层恢复记载。", evidence_refs=a.evidence_refs+b.evidence_refs))
+                recovery_selection = select_recovery(candidates, eligible, original, spans,
+                    recovery_selection.threshold_minutes, excluded, layered=True, assumed=assumed)
+                updates['end_time'] = _settle_end(el0, recovery_selection, eligible, spans, assumed, checks)
+                end = updates['end_time']
+                assessment = data.semantic_assessment.model_copy(update={"checks": checks, "recovery_selection": recovery_selection})
+                return data.model_copy(update={"elements": data.elements.model_copy(update=updates), "semantic_assessment": assessment})
             updates['end_time'] = _clear(end)
             if recovery_selection is not None:
                 recovery_selection = recovery_selection.model_copy(update=dict(selected=None, outcome="pending",

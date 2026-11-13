@@ -689,3 +689,87 @@ def test_segment_end_drops_trailing_site_code():
     fact, reason = facts._checked(item, spans)
     assert reason is None and facts.place_of(fact) == "Air Hitam–T. Gembira段"
     assert facts._checked({**item, "ends": ["Air Hitam", "Kuala Lumpur"]}, spans)[0] is None
+
+
+def test_recovery_layers_alarm_clear_then_confirmation_then_system_field(server):
+    from noc7.providers.recovery_policy import select_recovery, tier
+    from noc7.schema.timeval import TimeValue
+    alarm = {"type": "alarm_clear", "evidence_id": "M02/log:7", "quote": "19:08 告警清除，业务恢复", "time": "19:08"}
+    result, ctx, _ = run_passes(server, [{"facts": [*NO_RECOVERY["facts"], alarm]}, WRITING], passes=1)
+    el = result.elements.end_time
+    chosen = next(c for c in el.candidates if c.id == el.selected)
+    assert chosen.time_kind == "alarm_cleared" and el.status == "documented"
+    assert "告警清除时刻" in result.semantic_assessment.recovery_selection.reason
+
+    # 客户确认时刻排在告警清除之后、系统字段之前，且不算“已确认”。
+    text = "2026-10-10 19:05:00\n\n致电客户，客户表示业务已恢复"
+    spans = {s.id: (s.model_copy(update={"text": text}) if s.id == "M02/log:7" else s) for s in ctx.evidence}
+    confirm = chosen.model_copy(update={
+        "id": "T9", "time_kind": "business_recovery",
+        "time": TimeValue(raw="2026-10-10 19:05:00", iso="2026-10-10T19:05:00+08:00", tz_source="assumed",
+                          utc_offset="+08:00", precision="second"),
+        "relation": chosen.relation.model_copy(update={
+            "context": [chosen.relation.context[0].model_copy(update={"quote": text})],
+            "recovery_source_basis": chosen.relation.recovery_source_basis.model_copy(update={"quote": text})})})
+    system = next(c for c in el.candidates if c.id == "SYS1")
+    assert tier(confirm, spans) == 3
+    record = select_recovery([confirm, system], [confirm, system], None, spans, 30, layered=True)
+    assert record.selected == "T9" and "实际恢复不晚于此" in record.reason
+    record = select_recovery([confirm, system], [confirm, system], None, spans, 30)
+    assert record.selected == "T9"  # 不分层时 pending_reason 已先把它排除，这里只验证分层逻辑
+    # 确认时刻不早于系统恢复字段（19:08）就不采用，取系统字段。
+    later_text = text.replace("19:05:00", "19:20:00")
+    later_spans = {**spans, "M02/log:7": spans["M02/log:7"].model_copy(update={"text": later_text})}
+    later = confirm.model_copy(update={"time": confirm.time.model_copy(update={
+        "raw": "2026-10-10 19:20:00", "iso": "2026-10-10T19:20:00+08:00"}),
+        "relation": confirm.relation.model_copy(update={
+            "context": [confirm.relation.context[0].model_copy(update={"quote": later_text})],
+            "recovery_source_basis": confirm.relation.recovery_source_basis.model_copy(update={"quote": later_text})})})
+    record = select_recovery([later, system], [later, system], None, later_spans, 30, layered=True)
+    assert record.selected == "SYS1" and "不早于系统恢复字段" in record.excluded["T9"]
+
+
+def test_unzoned_recovery_is_assumed_beijing_only_as_a_lower_layer(server):
+    from noc7.providers.semantic_constraints import assume_beijing
+    from noc7.schema.timeval import TimeValue
+    result, ctx, _ = run_passes(server, [FACTS, WRITING], passes=1)
+    c = next(c for c in result.elements.end_time.candidates if c.id != "SYS1")
+    bare = c.model_copy(update={"time": TimeValue(raw="05 Nov 2026 17:15")})
+    guess = assume_beijing(bare, ctx)
+    assert guess.iso.startswith("2026-11-05T17:15") and guess.utc_offset == "+08:00" and guess.tz_source == "assumed"
+    assert assume_beijing(bare.model_copy(update={"time": TimeValue(raw="17:15")}), ctx) is None  # 没有日期不推
+    assert assume_beijing(c, ctx) is None  # 已有时区的不动
+
+
+def test_recovery_before_start_falls_to_next_layer_instead_of_empty(server):
+    # 选出的恢复时刻（这里是告警清除 15:40）早于业务起点 15:42：分层模式不留空，改取下一层（系统字段）。
+    early = {"type": "alarm_clear", "evidence_id": "M02/log:5", "quote": "施工时间约 15:40", "time": "15:40"}
+    result, _, _ = run_passes(server, [{"facts": [*NO_RECOVERY["facts"], early]}, WRITING], passes=1)
+    el = result.elements.end_time
+    assert el.selected == "SYS1" and el.value.raw == "2026-10-10 19:08:00"
+    checks = result.semantic_assessment.checks
+    assert any(c.code == "TIME_ORDER_INVERTED" and "下一层" in c.reason for c in checks)
+
+
+def test_confirmation_record_is_recognized_locally_from_log_entries():
+    from types import SimpleNamespace as NS
+    from noc7.providers.semantic_constraints import confirmation_record
+    entries = {1: NS(recorded_at="2026-10-20 15:00:19")}
+    ctx = NS(bundle=NS(process_log=NS(entry=entries.get)))
+
+    def span(text, seq=1):
+        return NS(id=f"M01/log:{seq}", text=text, locator=NS(type="log_entry", seq=seq))
+
+    # 正文开头有录入时间：取开头时间。
+    assert confirmation_record(span("2026-11-05 18:15:44   致电客户表示故障已恢复，要求继续排查原因"), ctx) == "2026-11-05 18:15:44"
+    # 正文没写时间：取日志元数据里的录入时间。
+    assert confirmation_record(span("报障客户表示链路恢复了，请反馈故障原因"), ctx) == "2026-10-20 15:00:19"
+    # 正文自己写了时刻、否定说法、非确认动作：都不算。
+    assert confirmation_record(span("19:08 告警清除；19:15 客户电话确认业务正常。"), ctx) is None
+    assert confirmation_record(span("致电客户，客户表示业务仍未恢复"), ctx) is None
+    assert confirmation_record(span("客户表示网络不正常"), ctx) is None
+    assert confirmation_record(span("派线路维护部现场抢修。"), ctx) is None
+    # 非处理日志不认。
+    assert confirmation_record(NS(id="M02/e:1", text="客户表示已恢复", locator=NS(type="email", seq=None)), ctx) is None
+    # 正文另写了时刻：开头时间不一定是确认时刻，不认。
+    assert confirmation_record(span("2026-10-27 01:09:16致电客户无人接。2026-10-27 01:11:16致电客户确认业务已经恢复"), ctx) is None

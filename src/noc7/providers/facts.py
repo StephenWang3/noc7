@@ -24,6 +24,7 @@ INSTRUCTION = """你是 NOC 故障工单的事实摘录器。只返回一个 JSO
 事实类型和各自的附加字段：
 - start_time：原文写明本次故障／业务受影响从何时开始。time 填 quote 里的时间原文；kind 填 customer_reported（客户报告的开始时间）、alarm（告警产生时间）或 business_start（其他来源写明的业务中断开始时间）。
 - recovery_time：原文写明本次业务实际在何时恢复。time 填 quote 里的时间原文；source 填 customer（客户说业务于某时恢复）、vendor_rfo（供应商 RFO 写明的恢复时间）、unicom_log（联通人员在处理日志里写明的线路／业务恢复时间）或 unknown。RFO、邮件和英文正文也要看：Restore／Restoration Time、Service Restored、Resolved Time、Recovery Time、Outage End、End、End of incidence 等字段，以及“中断时间 甲–乙”“from 甲 to 乙”这类起止区间的结束时刻，写的就是恢复时间；time 要连同原文里的时区写法一起摘（如 UTC、GMT+3）。协议 Up、修复完成、客户事后确认的动作时刻、结单时间都不是业务恢复时间，不要摘。处理日志开头的日期时间是这条记录的录入时间，不是原文写的时刻；“致电／联系客户，客户表示已恢复／已解决”这类记录只说明客户确认过，没写恢复在几点的，不摘 recovery_time（可以摘成 step）。
+- alarm_clear：原文写明本次故障相关告警的清除（消失、恢复）时刻，而没有写业务恢复时刻时也要摘。time 填 quote 里的时间原文（连同时区写法）。告警产生时刻不算。
 - phenomenon：故障现象，如中断、丢包、时延增大、告警内容。
 - cause：原文对本次故障原因的说明。source 填 rfo、vendor_feedback（供应商反馈）、branch_log（集团／国内或海外分公司的处理反馈）、customer、noc 或 other；certainty 填 asserted（明确说明）或 suspected（怀疑、可能、待确认）。排查中“未发现异常”、自行恢复、现象描述不算原因。
 - step：一步实际处理动作、检查结果、与客户或供应商的关键沟通、恢复确认。actor 填 quote 所在证据里出现的执行方原文（没有就不填）；time 填 quote 里的时间原文（没有就不填，本地会用记录时间）。签收、转派、挂起、返单、结单等流程流转不要摘。
@@ -69,7 +70,7 @@ SOURCE_LABELS = {"rfo": "供应商 RFO", "vendor_feedback": "供应商反馈", "
 TIERS = {"rfo", "vendor_feedback", "branch_log"}
 PARTIES = {"客户", "供应商", "联通"}
 ANCHORS = ("self_check", "customer_followup", "vendor_onsite", "unicom_onsite", "service_recovered")
-TYPES = {"start_time", "recovery_time", "phenomenon", "cause", "step", "responsibility",
+TYPES = {"start_time", "recovery_time", "alarm_clear", "phenomenon", "cause", "step", "responsibility",
          "customer_device_fault", "fault_location", "not_fault", *ANCHORS}
 SCOPE = {"event_id": "current", "scope": "本次业务", "current_event": True}
 
@@ -86,7 +87,7 @@ def _checked(item, spans):
         return None, "引文不在证据原文中"
     fact = {"type": item["type"], "evidence_id": span.id, "quote": quote}
     kind = item["type"]
-    if kind in {"start_time", "recovery_time"}:
+    if kind in {"start_time", "recovery_time", "alarm_clear"}:
         moment = item.get("time")
         if not isinstance(moment, str) or not moment.strip() or match_quote(moment, quote).status == "mismatch":
             return None, "时间原文不在引文中"
@@ -102,6 +103,8 @@ def _checked(item, spans):
             fact["date_anchor"] = {"evidence_id": anchor.id, "quote": date_quote}
         if kind == "start_time":
             fact["kind"] = START_KINDS.get(item.get("kind"), "business_start")
+        elif kind == "alarm_clear":
+            fact["source"] = "unicom_monitor"  # 告警清除只作恢复时间的兜底层，按网管记录核对来源
         else:
             fact["source"] = RECOVERY_SOURCES.get(item.get("source"), "unknown")
     if kind in {"cause", "responsibility", "customer_device_fault", "fault_location"}:
@@ -166,7 +169,7 @@ def check_facts(payload, spans):
     return kept, dropped
 
 
-_MERGE_KEY = {"start_time": "time", "recovery_time": "time", "responsibility": "party", "fault_location": "place"}
+_MERGE_KEY = {"start_time": "time", "recovery_time": "time", "alarm_clear": "time", "responsibility": "party", "fault_location": "place"}
 
 
 def merge_facts(base, more):
@@ -362,6 +365,24 @@ def compile_facts(facts, ctx):
                                            customer_confirmation=_q(fact) if fact["source"] == "customer" else None,
                                            recovery_source=fact["source"],
                                            recovery_source_basis=_q(fact) if known else None, **no_recovery)})
+    for fact in (f for f in facts if f["type"] == "alarm_clear"):
+        # 告警清除排在业务恢复记载之后、客户确认时刻和系统字段之前（见 recovery_policy.tier）。
+        ends.append({**_base("T", len(ends) + 1, fact, spans), "time": _time(fact), "time_kind": "alarm_cleared",
+                     "relation": _relation(fact, date_anchor=fact.get("date_anchor"), timezone_anchor=None,
+                                           customer_confirmation=None, recovery_source="unicom_monitor",
+                                           recovery_source_basis=_q(fact), **no_recovery)})
+    # 客户确认层：模型按提示词把“致电客户，客户表示已恢复”摘成处理步骤；本地从这些步骤认出确认记录，
+    # 以该条日志的录入时间作候选（实际恢复不晚于此），排在告警清除之后、系统字段之前（见 recovery_policy.tier）。
+    from .semantic_constraints import confirmation_record
+    taken = {(c["evidence_refs"][0], c["time"]["raw"]) for c in ends}
+    for fact in (f for f in facts if f["type"] == "step"):
+        raw = confirmation_record(spans[fact["evidence_id"]], ctx)
+        if raw and (fact["evidence_id"], raw) not in taken:
+            taken.add((fact["evidence_id"], raw))
+            ends.append({**_base("T", len(ends) + 1, fact, spans), "time": {"raw": raw}, "time_kind": "business_recovery",
+                         "relation": _relation(fact, date_anchor=None, timezone_anchor=None,
+                                               customer_confirmation=_q(fact), recovery_source="customer",
+                                               recovery_source_basis=_q(fact), **no_recovery)})
     field = _field_time(spans, "recovered_at", "recovery_field",
                         dict(recovery_source="system_field", recovery_source_basis=None, **no_recovery))
     if field:
