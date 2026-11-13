@@ -773,3 +773,22 @@ def test_confirmation_record_is_recognized_locally_from_log_entries():
     assert confirmation_record(NS(id="M02/e:1", text="客户表示已恢复", locator=NS(type="email", seq=None)), ctx) is None
     # 正文另写了时刻：开头时间不一定是确认时刻，不认。
     assert confirmation_record(span("2026-10-27 01:09:16致电客户无人接。2026-10-27 01:11:16致电客户确认业务已经恢复"), ctx) is None
+
+
+def test_slash_date_is_read_by_the_ticket_window():
+    from types import SimpleNamespace as NS
+    from noc7.providers.semantic_constraints import slash_date_time
+
+    def ctx(occurred, recovered):
+        fields = [NS(id="M01/f:occurred_at", text=occurred, locator=NS(type="field")),
+                  NS(id="M01/f:recovered_at", text=recovered, locator=NS(type="field"))]
+        return NS(evidence=fields, bundle=NS(manifest=NS(default_timezone="+08:00")))
+
+    nov = ctx("2026-11-08 13:00:00", "2026-11-08 17:02:57")
+    v = slash_date_time("13:34 hrs 8/11/2026", nov, None)
+    assert v.iso.startswith("2026-11-08T13:34") and v.tz_source == "unknown"  # 日／月读法落在工单时间内
+    aug = ctx("2026-08-11 09:00:00", "2026-08-11 12:00:00")
+    assert slash_date_time("13:34 hrs 8/11/2026", aug, None).iso.startswith("2026-08-11T13:34")  # 月／日读法
+    assert slash_date_time("13:34 hrs 8/11/2026", ctx("2026-03-01 00:00:00", "2026-03-02 00:00:00"), None) is None
+    assert slash_date_time("13:34 8/9/2026 or 9/9/2026", nov, None) is None  # 多个日期不猜
+    assert slash_date_time("13:34 hrs 8/11/2026 GMT+7", nov, None).utc_offset == "+07:00"

@@ -129,6 +129,38 @@ def _ticket_recovery(ctx):
     return _ticket_field(ctx, "recovered_at")
 
 
+_SLASH_DATE = re.compile(r"(?<![\d/])(\d{1,2})/(\d{1,2})/(\d{4})(?![\d/])")
+_SLASH_CLOCK = re.compile(r"(?<![\d:])(\d{1,2}:\d{2}(?::\d{2})?)(?![\d:])")
+
+
+def slash_date_time(raw, ctx, offset):
+    """“13:34 hrs 8/11/2026”这类斜杠日期：日／月和月／日两种读法都试，只留落在工单起止时间前后 3 天内的那一种；
+    两种都合理（或都不合理）时不猜，返回 None。"""
+    from datetime import date
+    from ..extract.baseline import time_phrase, ZONE_RE
+    dates, clocks = _SLASH_DATE.findall(raw), _SLASH_CLOCK.findall(raw)
+    if len(dates) != 1 or len(clocks) != 1:
+        return None
+    bounds = [t for t in (_ticket_field(ctx, "occurred_at"), _ticket_field(ctx, "recovered_at")) if t]
+    if not bounds:
+        return None
+    low, high = min(bounds).date() - timedelta(days=3), max(bounds).date() + timedelta(days=3)
+    a, b, year = (int(x) for x in dates[0])
+    readings = set()
+    for day, month in ((a, b), (b, a)):
+        try:
+            d = date(year, month, day)
+        except ValueError:
+            continue
+        if low <= d <= high:
+            readings.add(d)
+    if len(readings) != 1:
+        return None
+    zone = ZONE_RE.search(raw)
+    value = time_phrase(f"{readings.pop().isoformat()} {clocks[0]}" + (" " + zone.group() if zone else ""), offset)
+    return value if value.as_datetime() else None
+
+
 def _ticket_field(ctx, name):
     from ..extract.baseline import time_phrase
     for span in ctx.evidence:
@@ -253,6 +285,8 @@ def _normalized_time(candidate, ctx, proposal=None):
     log_backed = bool(records)
     offset = ctx.bundle.manifest.default_timezone if field_backed or log_backed else None
     value = time_phrase(raw, offset)
+    if value.iso is None:
+        value = slash_date_time(raw, ctx, offset) or value
     if not relation:
         return value
     if value.iso is None and not relation.date_anchor and TIME_ONLY.fullmatch(raw):
