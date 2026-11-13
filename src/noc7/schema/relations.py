@@ -54,7 +54,8 @@ class PartyRelation(BusinessRelation):
     responsibility_quote: RelationQuote | None = None
     category: Literal["客户", "供应商", "联通", "other", "joint", "unknown"]
     decision_path: Literal["explicit_responsibility", "customer_self_check", "vendor_onsite_contact",
-                           "unicom_onsite_recovery", "equipment_ownership", "role_only", "system_field", "unknown"]
+                           "unicom_onsite_recovery", "equipment_ownership", "role_only", "system_field", "rfo_cause",
+                           "unknown"]
     customer_device_fault: bool | None = None
     procurement: Literal["客户", "供应商", "联通", "unknown"] = "unknown"
     procurement_quote: RelationQuote | None = None

@@ -238,6 +238,9 @@ def _business(fact, tier):
                      speaker=SOURCE_LABELS[fact["source"]], contradicts=[])
 
 
+_CUSTOMER_SIDE = re.compile(r"客户|用户|终端|customer|client|end[- ]?user|CPE|subscriber|premises", re.I)
+
+
 def _party_nodes(facts, spans):
     blank = dict(procurement="unknown", procurement_quote=None, self_check=None, no_followup=None,
                  vendor_contact=None, unicom_onsite=None, service_recovered=None, responsibility_quote=None)
@@ -269,6 +272,15 @@ def _party_nodes(facts, spans):
         nodes.append({**_base("P", len(nodes) + 1, device, spans), "party": device["quote"], "basis": "business_context",
                       "relation": {**_business(device, _tier(device, spans)), **blank, **anchors, "category": category,
                                    "decision_path": decision, "customer_device_fault": True}})
+    # 供应商 RFO 写明了本次的具体故障原因（如“主缆信号劣化”“停电致设备重启”），但没写责任方：推定为供应商，
+    # 排在明确与怀疑的责任归属之间（responsibility_location.evaluate）；原因指向客户侧的不推。
+    rfo = next((f for f in facts if f["type"] == "cause" and f["source"] == "rfo" and f["certainty"] == "asserted"
+                and not _CUSTOMER_SIDE.search(f["quote"])), None)
+    if rfo:
+        nodes.append({**_base("P", len(nodes) + 1, rfo, spans), "party": rfo["quote"], "basis": "formal_determination",
+                      "relation": {**_business(rfo, "rfo"), **blank, "category": "供应商", "modality": "asserted",
+                                   "decision_path": "rfo_cause", "customer_device_fault": False,
+                                   "responsibility_quote": _q(rfo), "third_party": False}})
     # 工单系统“故障区域”字段是结单人填的分类，不是原文依据；只在以上都没有结论时兜底。
     for span in spans.values():
         if span.locator.type == "field" and span.locator.field_key == AREA_FIELD and area_party(span.text):

@@ -2054,6 +2054,7 @@
             "equipment_ownership",
             "role_only",
             "system_field",
+            "rfo_cause",
             "unknown"
           ],
           "title": "Decision Path",

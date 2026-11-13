@@ -806,3 +806,25 @@ def test_heading_zone_is_used_only_from_the_time_line_or_the_line_above():
     assert _heading_zone({**fact, "evidence_id": "M2/log:1"}, spans)["quote"] == "Resolved Time (UTC+3):"
     assert _heading_zone({**fact, "evidence_id": "M3/log:1"}, spans) is None  # 别处的时区不借用
     assert _heading_zone({**fact, "time": "2026-10-20 18:24:34 GMT+7"}, spans) is None  # 自带时区不动
+
+
+def test_rfo_cause_infers_vendor_between_explicit_and_suspected_party():
+    from noc7.providers import facts as F
+    rfo = {"type": "cause", "evidence_id": "M02/log:5", "quote": "市政道路施工挖断 24 芯光缆", "source": "rfo", "certainty": "asserted"}
+    base = [f for f in NO_RECOVERY["facts"] if f["type"] not in {"responsibility", "cause"}]
+    # 只看候选生成：RFO 写明原因 → 供应商推定节点；原因指向客户侧的不推。
+    spans = {"M02/log:5": type("S", (), {"id": "M02/log:5", "text": "市政道路施工挖断 24 芯光缆；客户侧 CPE 掉电",
+                                          "locator": type("L", (), {"type": "log_entry", "field_key": None})()})()}
+    nodes = F._party_nodes([*base, rfo], spans)
+    node = next(n for n in nodes if n["relation"]["decision_path"] == "rfo_cause")
+    assert node["relation"]["category"] == "供应商" and node["relation"]["source_tier"] == "rfo"
+    customer = {**rfo, "quote": "客户侧 CPE 掉电"}
+    assert not any(n["relation"]["decision_path"] == "rfo_cause" for n in F._party_nodes([*base, customer], spans))
+
+
+def test_rfo_cause_layer_is_used_only_without_explicit_party(server):
+    rfo = {"type": "cause", "evidence_id": "M02/log:5", "quote": "市政道路施工挖断 24 芯光缆", "source": "rfo", "certainty": "asserted"}
+    facts = [f for f in NO_RECOVERY["facts"] if f["type"] != "responsibility"] + [rfo]
+    result, _, _ = run_passes(server, [{"facts": facts}, WRITING], passes=1)
+    el = result.elements.responsible_party
+    assert el.value == "供应商" and "按供应商 RFO 所述本方网络故障原因推定" in el.note

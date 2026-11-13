@@ -17,7 +17,9 @@ PRIORITY = {"rfo": 0, "vendor_feedback": 1, "branch_log": 2}
 SOURCE_LABELS = {"rfo": "RFO", "vendor_feedback": "供应商反馈", "branch_log": "分公司处理日志", "system_field": "工单系统字段（兜底）", "unknown": "来源未明"}
 PATH_LABELS = {"explicit_responsibility": "明确责任归属", "customer_self_check": "客户自查且未再追问",
                "vendor_onsite_contact": "联络供应商上门", "unicom_onsite_recovery": "联通上门处理后恢复",
-               "equipment_ownership": "设备采购归属线索", "role_only": "仅角色", "system_field": "工单系统字段兜底", "unknown": "依据未明"}
+               "equipment_ownership": "设备采购归属线索", "role_only": "仅角色", "system_field": "工单系统字段兜底",
+               "rfo_cause": "供应商 RFO 所述故障原因", "unknown": "依据未明"}
+RFO_CAUSE_NOTE = "原文没有直接写责任方，按供应商 RFO 所述本方网络故障原因推定为供应商，待核实。"
 # 工单系统“故障区域”字段到责任方的映射；映射不出的（如“局方检测正常自恢”）不兜底。
 AREA_FIELD = "fault_area"
 AREA_PARTIES = (("运营商", "供应商"), ("用户", "客户"))
@@ -303,6 +305,13 @@ def pending_reason(candidate, name, spans, coverage=None, layered=False):
             if not any(match_quote(r.responsibility_quote.quote, q.quote).status != "mismatch" for q in r.context):
                 return "责任依据没有包含在本条关系上下文中。"
             return None
+        if path == "rfo_cause":
+            # 分层模式才有：供应商 RFO 写明了具体故障原因、但没写责任方，推定为供应商（排在明确与怀疑归属之后）。
+            if not layered:
+                return "按 RFO 故障原因推定责任只用于分层兜底。"
+            if r.category != "供应商" or r.source_tier != "rfo" or not r.responsibility_quote:
+                return "RFO 原因推定须为供应商且来源为 RFO。"
+            return None
         if not r.customer_device_fault:
             return "上下文路径缺少客户侧设备故障前提。"
         if path == "customer_self_check":
@@ -382,7 +391,8 @@ def evaluate(elements, spans, coverage, suggestions=(), layered=False):
             denied = {formal_value(o, name) for o in el.candidates
                       if o.relation and o.relation.modality == "negated" and o.relation.current_event
                       and grounded_assertion(o, name, spans)}
-            vetoed = {c.id for c in eligible if c.relation.modality == "suspected" and formal_value(c, name) in denied}
+            vetoed = {c.id for c in eligible if (c.relation.modality == "suspected" or c.relation.decision_path == "rfo_cause")
+                      and formal_value(c, name) in denied}
             if vetoed:
                 checks = [ConstraintCheck(element=name, candidate_id=k.candidate_id, outcome="pending",
                                           reason=NEGATED_NOTE, evidence_refs=k.evidence_refs)
@@ -390,14 +400,18 @@ def evaluate(elements, spans, coverage, suggestions=(), layered=False):
                 eligible = [c for c in eligible if c.id not in vetoed]
         if name == "responsible_party":
             # 有明确的责任归属就不取怀疑的；没有明确的才取怀疑的，再没有才用故障区域字段兜底。
-            asserted = [c for c in eligible if c.relation.modality == "asserted"]
-            if asserted and len(asserted) < len(eligible):
-                dropped = {c.id for c in eligible if c not in asserted}
+            # 层次：明确的责任归属 → 按供应商 RFO 故障原因推定 → 怀疑的责任归属 → 故障区域字段。
+            asserted = [c for c in eligible if c.relation.modality == "asserted" and c.relation.decision_path != "rfo_cause"]
+            inferred = [c for c in eligible if c.relation.decision_path == "rfo_cause"]
+            keep = asserted or inferred
+            if keep and len(keep) < len(eligible):
+                dropped = {c.id for c in eligible if c not in keep}
+                reason = "已有明确的责任归属，推定或怀疑的不采用。" if asserted else "已有按 RFO 故障原因的推定，怀疑的不采用。"
                 checks = [ConstraintCheck(element=name, candidate_id=k.candidate_id, outcome="pending",
-                                          reason="已有明确的责任归属，怀疑的不采用。", evidence_refs=k.evidence_refs)
+                                          reason=reason, evidence_refs=k.evidence_refs)
                           if k.element == name and k.candidate_id in dropped else k for k in checks]
-            suspected = bool(eligible) and not asserted
-            eligible = asserted or eligible
+            suspected = bool(eligible) and not keep
+            eligible = keep or eligible
         level = 0
         if name == "location" and eligible:
             # 城市 → 省、州 → 线路段 → 国家，取最具体的一层，不论各来自哪一级来源。
@@ -460,6 +474,8 @@ def evaluate(elements, spans, coverage, suggestions=(), layered=False):
                 note += fallback_note
                 if name == "responsible_party":
                     note += "路径：" + PATH_LABELS[chosen.relation.decision_path] + "。"
+                    if chosen.relation.decision_path == "rfo_cause":
+                        note += RFO_CAUSE_NOTE
                     if chosen.relation.third_party:
                         note += "原文写明由第三方原因造成，按线路所属方记责。"
                     if chosen.relation.decision_path == "customer_self_check":
