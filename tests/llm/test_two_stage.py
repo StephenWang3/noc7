@@ -505,6 +505,19 @@ def test_offline_replay_reproduces_a_recorded_run(server, tmp_path):
         assert replayed.narrative == original.narrative  # 成文回复按当前要素重新核验后复用
 
 
+def test_facts_mode_replay_rechecks_the_first_reply_with_current_rules(server, tmp_path):
+    # 旧记录只有已核对的事实：模拟当时丢掉了一条（如引文带 HTML 实体），重放时按当前规则重新核对第一遍回复并补回。
+    original, record = _recorded_run(server, tmp_path, [FACTS, {"facts": []}, WRITING])
+    lost = next(f for f in record["facts_kept"] if f["type"] not in {"step", "phenomenon"})
+    old = {k: v for k, v in record.items() if k != "fact_responses"}
+    old["facts_kept"] = [f for f in record["facts_kept"] if f is not lost]
+    old["facts_dropped"] = [{"type": lost["type"], "reason": "引文不在证据原文中"}]
+    replayed, provider = _replay(server, old)
+    assert provider.mode == "facts"
+    assert replayed.elements.model_dump() == original.elements.model_dump()
+    assert replayed.semantic_assessment.original["facts_dropped"] == []
+
+
 def test_offline_replay_keeps_a_failed_second_pass_failed(server, tmp_path):
     original, record = _recorded_run(server, tmp_path, [FACTS, (500, {}, b"{}"), (500, {}, b"{}"), (500, {}, b"{}"), WRITING])
     assert record["fact_responses"][1] is None

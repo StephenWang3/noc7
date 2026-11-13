@@ -3,8 +3,9 @@
 两种模式：
 - responses：记录里有每一遍事实抽取的原始回复（fact_responses），从原始回复开始重放，
   逐条核对、多遍合并、裁决、成文全部重走；
-- facts：较早的记录只有第一遍原始回复和合并后的事实（facts_kept），从已核对的事实开始重放，
-  “逐条核对”和“多遍合并”这两步不重走。
+- facts：较早的记录只有第一遍原始回复和合并后的事实（facts_kept），从已核对的事实开始重放；
+  第一遍原始回复按当前规则重新逐条核对，原先丢弃、现在能通过的事实并入（如引文匹配放宽后），
+  第二遍以后的回复没存，那部分不重走。
 
 成文一律使用记录里的成文回复，再按当前要素重新核验；要素变了对不上时退回本地拼接写法。
 提示词改动不能靠重放验证，那时须真实调用模型。
@@ -44,7 +45,22 @@ class TwoStageReplayProvider(TwoStageTextProvider):
     def _collect_facts(self, evidence, data_class, spans, audit):
         if self.mode == "responses":
             return super()._collect_facts(evidence, data_class, spans, audit)
-        return list(self.record["facts_kept"]), list(self.record.get("facts_dropped") or [])
+        kept = list(self.record["facts_kept"])
+        dropped = list(self.record.get("facts_dropped") or [])
+        first = self.record.get("raw_response")
+        if isinstance(first, str):
+            try:
+                again, _ = facts.check_facts(self._content(first.encode("utf-8")), spans)
+            except (TextProviderError, ValueError):
+                again = []
+            merged = facts.merge_facts(kept, again)
+            for fact in merged[len(kept):]:  # 现在能通过的：从原丢弃记录里去掉一条同类的引文不匹配
+                hit = next((d for d in dropped if d.get("type") == fact["type"]
+                            and d.get("reason") == "引文不在证据原文中"), None)
+                if hit:
+                    dropped.remove(hit)
+            kept = merged
+        return kept, dropped
 
     def _post(self, system, user, data_class, audit=None):
         if system in (facts.SYSTEM_PROMPT, facts.RECHECK_PROMPT):

@@ -1,6 +1,7 @@
-"""仅统一空白的引用匹配；位置始终指向未改写的原文。"""
+"""只统一空白和 HTML 字符实体（&#39;、&gt; 等，邮件原文常带）的引用匹配；位置始终指向未改写的原文。"""
 from __future__ import annotations
 
+import html
 import re
 from typing import Literal
 
@@ -20,10 +21,23 @@ class QuoteCheck(BaseModel):
     original: str | None = None
 
 
+_TOKEN = re.compile(r"&(?:#\d{1,7}|#[xX][0-9a-fA-F]{1,6}|[a-zA-Z]{2,8});|\s+|\S")
+
+
 def _fold(text):
+    """连续空白折成一个空格，能解成单个字符的 HTML 实体折成那个字符；positions 记每个折后字符在原文里的范围。"""
     chars, positions = [], []
-    for token in re.finditer(r"\s+|\S", text):
-        chars.append(" " if token[0].isspace() else token[0])
+    for token in _TOKEN.finditer(text):
+        char = token[0]
+        if len(char) > 1 and char[0] == "&":
+            decoded = html.unescape(char)
+            char = decoded if len(decoded) == 1 else None
+        if char is None:  # 解不出单个字符的实体按原样逐字符比较
+            for i, c in enumerate(token[0]):
+                chars.append(c)
+                positions.append((token.start() + i, token.start() + i + 1))
+            continue
+        chars.append(" " if char.isspace() else char)
         positions.append(token.span())
     return "".join(chars), positions
 
