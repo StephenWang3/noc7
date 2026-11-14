@@ -18,8 +18,11 @@ SOURCE_LABELS = {"rfo": "RFO", "vendor_feedback": "供应商反馈", "branch_log
 PATH_LABELS = {"explicit_responsibility": "明确责任归属", "customer_self_check": "客户自查且未再追问",
                "vendor_onsite_contact": "联络供应商上门", "unicom_onsite_recovery": "联通上门处理后恢复",
                "equipment_ownership": "设备采购归属线索", "role_only": "仅角色", "system_field": "工单系统字段兜底",
-               "rfo_cause": "供应商 RFO 所述故障原因", "unknown": "依据未明"}
+               "rfo_cause": "供应商 RFO 所述故障原因", "cutover_notice": "已通知的割接", "unknown": "依据未明"}
 RFO_CAUSE_NOTE = "原文没有直接写责任方，按供应商 RFO 所述本方网络故障原因推定为供应商，待核实。"
+CUTOVER_NOTE = "原文没有直接写责任方，按割接通知推定为供应商，待核实。"
+# 没有明确责任归属时的推定层（排在明确与怀疑之间）。
+INFERRED_PATHS = ("rfo_cause", "cutover_notice")
 # 工单系统“故障区域”字段到责任方的映射；映射不出的（如“局方检测正常自恢”）不兜底。
 # “用户”不映射：对照标注，字段写“用户”的 4 张责任方实为供应商（客户报障时多选“用户”，不代表责任方）。
 AREA_FIELD = "fault_area"
@@ -329,6 +332,13 @@ def pending_reason(candidate, name, spans, coverage=None, layered=False):
             if r.category != "供应商" or r.source_tier != "rfo" or not r.responsibility_quote:
                 return "RFO 原因推定须为供应商且来源为 RFO。"
             return None
+        if path == "cutover_notice":
+            # 业务口径（2026-11-14）：已通知的割接推定为供应商，只用于分层兜底。
+            if not layered:
+                return "按割接通知推定责任只用于分层兜底。"
+            if r.category != "供应商" or not r.responsibility_quote:
+                return "割接通知推定须为供应商且有割接依据。"
+            return None
         if not r.customer_device_fault:
             return "上下文路径缺少客户侧设备故障前提。"
         if path == "customer_self_check":
@@ -408,7 +418,7 @@ def evaluate(elements, spans, coverage, suggestions=(), layered=False):
             denied = {formal_value(o, name) for o in el.candidates
                       if o.relation and o.relation.modality == "negated" and o.relation.current_event
                       and grounded_assertion(o, name, spans)}
-            vetoed = {c.id for c in eligible if (c.relation.modality == "suspected" or c.relation.decision_path == "rfo_cause")
+            vetoed = {c.id for c in eligible if (c.relation.modality == "suspected" or c.relation.decision_path in INFERRED_PATHS)
                       and formal_value(c, name) in denied}
             if vetoed:
                 checks = [ConstraintCheck(element=name, candidate_id=k.candidate_id, outcome="pending",
@@ -417,13 +427,13 @@ def evaluate(elements, spans, coverage, suggestions=(), layered=False):
                 eligible = [c for c in eligible if c.id not in vetoed]
         if name == "responsible_party":
             # 有明确的责任归属就不取怀疑的；没有明确的才取怀疑的，再没有才用故障区域字段兜底。
-            # 层次：明确的责任归属 → 按供应商 RFO 故障原因推定 → 怀疑的责任归属 → 故障区域字段。
-            asserted = [c for c in eligible if c.relation.modality == "asserted" and c.relation.decision_path != "rfo_cause"]
-            inferred = [c for c in eligible if c.relation.decision_path == "rfo_cause"]
+            # 层次：明确的责任归属 → 按供应商 RFO 故障原因或割接通知推定 → 怀疑的责任归属 → 故障区域字段。
+            asserted = [c for c in eligible if c.relation.modality == "asserted" and c.relation.decision_path not in INFERRED_PATHS]
+            inferred = [c for c in eligible if c.relation.decision_path in INFERRED_PATHS]
             keep = asserted or inferred
             if keep and len(keep) < len(eligible):
                 dropped = {c.id for c in eligible if c not in keep}
-                reason = "已有明确的责任归属，推定或怀疑的不采用。" if asserted else "已有按 RFO 故障原因的推定，怀疑的不采用。"
+                reason = "已有明确的责任归属，推定或怀疑的不采用。" if asserted else "已有按 RFO 故障原因或割接通知的推定，怀疑的不采用。"
                 checks = [ConstraintCheck(element=name, candidate_id=k.candidate_id, outcome="pending",
                                           reason=reason, evidence_refs=k.evidence_refs)
                           if k.element == name and k.candidate_id in dropped else k for k in checks]
@@ -493,6 +503,8 @@ def evaluate(elements, spans, coverage, suggestions=(), layered=False):
                     note += "路径：" + PATH_LABELS[chosen.relation.decision_path] + "。"
                     if chosen.relation.decision_path == "rfo_cause":
                         note += RFO_CAUSE_NOTE
+                    if chosen.relation.decision_path == "cutover_notice":
+                        note += CUTOVER_NOTE
                     if chosen.relation.third_party:
                         note += "原文写明由第三方原因造成，按线路所属方记责。"
                     if chosen.relation.decision_path == "customer_self_check":

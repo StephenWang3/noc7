@@ -548,7 +548,7 @@ def test_closing_cause_field_marks_removed_duplicate_or_retired_tickets():
     assert facts.closing_not_fault(spans("市政道路施工挖断 24 芯光缆，已熔接恢复。")) is None
 
 
-def test_removed_line_in_closing_cause_needs_no_model_marker(server):
+def test_removed_line_in_closing_cause_needs_no_model_marker(server, tmp_path):
     # SYN-S10 的结单原因写“线路已拆机”：模型没摘 not_fault，本地规则也判为非故障，责任方、地点留空。
     party = {"type": "responsibility", "evidence_id": "M01/f:cause", "quote": "线路已拆机", "party": "客户",
              "source": "noc"}
@@ -557,6 +557,14 @@ def test_removed_line_in_closing_cause_needs_no_model_marker(server):
     assert (marker["kind"], marker["basis"], marker["quote"]) == ("已拆机", "closing_field", "线路已拆机")
     assert not result.elements.responsible_party.value and not list(result.elements.responsible_party.iter_candidates())
     assert any("本单按结单原因不是业务故障（已拆机）" in line for line in cell(result, "analysis"))
+    # 业务口径：非故障单的公司格式报告只出一行说明，不出表格；审核报告照常完整。
+    from docx import Document
+    from noc7.report import write_reports
+    write_reports(result, tmp_path)
+    html = (tmp_path / "company_report.html").read_text(encoding="utf-8")
+    assert "company-not-fault" in html and "不出故障报告" in html and "company-table" not in html
+    doc = Document(str(tmp_path / "company_report.docx"))
+    assert not doc.tables and any("不出故障报告" in p.text for p in doc.paragraphs)
 
 
 NO_CAUSE_WRITING = {**WRITING, "cause": None}
@@ -843,6 +851,35 @@ def test_rfo_cause_layer_is_used_only_without_explicit_party(server):
     result, _, _ = run_passes(server, [{"facts": facts}, WRITING], passes=1)
     el = result.elements.responsible_party
     assert el.value == "供应商" and "按供应商 RFO 所述本方网络故障原因推定" in el.note
+
+
+def test_cutover_notice_infers_vendor_unless_unicom_or_customer_did_it():
+    from noc7.providers import facts as F
+    text = "线路当前有割接，已给国际发过割接通知；维护人员回复客户线路升级割接"
+    spans = {"M02/log:5": type("S", (), {"id": "M02/log:5", "text": text,
+                                          "locator": type("L", (), {"type": "log_entry", "field_key": None})()})()}
+    cut = {"type": "cause", "evidence_id": "M02/log:5", "quote": "线路当前有割接，已给国际发过割接通知",
+           "source": "branch_log", "certainty": "asserted"}
+    node = next(n for n in F._party_nodes([cut], spans) if n["relation"]["decision_path"] == "cutover_notice")
+    assert node["relation"]["category"] == "供应商"
+    ours = {**cut, "quote": "维护人员回复客户线路升级割接，已通知"}
+    assert not any(n["relation"]["decision_path"] == "cutover_notice" for n in F._party_nodes([ours], spans))
+    rfo = {**cut, "source": "rfo"}  # 已有 RFO 原因推定的，不再重复推
+    assert [n["relation"]["decision_path"] for n in F._party_nodes([rfo], spans)] == ["rfo_cause"]
+    field = type("S", (), {"id": "M01/f:cause", "text": "已通知的割接 SYN-CHG-1",
+                           "locator": type("L", (), {"type": "field", "field_key": "cause"})()})()
+    node = next(n for n in F._party_nodes([], {field.id: field}) if n["relation"]["decision_path"] == "cutover_notice")
+    assert node["relation"]["source_tier"] == "system_field" and node["relation"]["speaker"] == "工单结单原因字段"
+
+
+def test_cutover_notice_layer_reaches_the_report(server, monkeypatch):
+    import re
+    monkeypatch.setattr(facts, "_CUTOVER", re.compile("施工挖断"))  # 合成工单没有割接，借施工原因走一遍
+    facts_ = [f for f in NO_RECOVERY["facts"] if f["type"] != "responsibility"]
+    result, _, _ = run_passes(server, [{"facts": facts_}, WRITING], passes=1)
+    el = result.elements.responsible_party
+    assert el.value == "供应商" and "按割接通知推定为供应商" in el.note and "已通知的割接" in el.note
+    assert AnalysisResult.model_validate_json(result.model_dump_json()) == result
 
 
 def test_address_field_is_the_last_location_layer(server, monkeypatch, tmp_path):

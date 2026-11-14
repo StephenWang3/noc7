@@ -112,6 +112,8 @@ class CompanyReport:
     generated: datetime | None
     synthetic: bool
     cells: dict[str, tuple[Line, ...]]
+    # 非故障单（咨询、拆机、重单、退网）：业务口径（2026-11-14）只出这一行说明，不出故障报告表格。
+    not_fault: Line | None = None
 
     def grid(self) -> list[GridCell]:
         return [
@@ -343,12 +345,15 @@ def build_company_report(result: AnalysisResult) -> CompanyReport:
          Part("；故障位置："), *business_parts(e.location)),
     )
     original = result.semantic_assessment.original if result.semantic_assessment else {}
+    not_fault = None
     if original.get("not_fault"):
         # 咨询、查询以往工单，已拆机、重单、退网说明：说明为什么责任方和地点留空。
         marker = original["not_fault"]
         kind = marker.get("kind") or "咨询或查询"
         basis = "结单原因" if marker.get("basis") == "closing_field" else "原文"
         analysis = (*analysis, (Part(f"本单按{basis}不是业务故障（{kind}），不判责任方和故障位置。"), Part("【待核实】", True)))
+        ticket_no = fields.get("ticket_no") or result.ticket_ref
+        not_fault = (Part(f"工单 {ticket_no}：本单按{basis}不是业务故障（{kind}），不出故障报告。"), Part("【待核实】", True))
     cells = {
         "customer": _text_lines(fields.get("customer")),
         "circuit_id": (circuit_line,),
@@ -369,6 +374,7 @@ def build_company_report(result: AnalysisResult) -> CompanyReport:
         generated=generated,
         synthetic=result.data_class == DataClass.SYNTHETIC,
         cells=cells,
+        not_fault=not_fault,
     )
 
 
@@ -487,6 +493,11 @@ def write_company_docx(
     date.alignment = WD_ALIGN_PARAGRAPH.RIGHT
     _font(date.add_run(report.report_date), Pt(10))
 
+    if report.not_fault:
+        _write_lines([doc.add_paragraph()], (report.not_fault,), Pt(10.5))
+        _finish_docx(doc, report, path)
+        return
+
     table = doc.add_table(rows=ROWS, cols=COLS)
     table.style = "Table Grid"
     table.alignment = WD_TABLE_ALIGNMENT.CENTER
@@ -508,7 +519,10 @@ def write_company_docx(
 
     for label in SIGNATURES:
         _font(doc.add_paragraph().add_run(label), Pt(9))
+    _finish_docx(doc, report, path)
 
+
+def _finish_docx(doc, report: CompanyReport, path: Path) -> None:
     props = doc.core_properties
     props.title, props.author, props.last_modified_by = "故障处理报告", "noc7", "noc7"
     props.revision = 1

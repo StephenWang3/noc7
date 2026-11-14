@@ -239,6 +239,9 @@ def _business(fact, tier):
 
 
 _CUSTOMER_SIDE = re.compile(r"客户|用户|终端|customer|client|end[- ]?user|CPE|subscriber|premises", re.I)
+# 已通知的割接：“割接”与“通知”同时出现；写明是联通、我方维护人员或客户侧割接的不算。
+_CUTOVER = re.compile(r"割接.*通知|通知.*割接|已通知的割接")
+_NOT_VENDOR_CUTOVER = re.compile(r"联通|我司|我方|本公司|维护人员|" + _CUSTOMER_SIDE.pattern, re.I)
 
 
 def _party_nodes(facts, spans):
@@ -281,6 +284,25 @@ def _party_nodes(facts, spans):
                       "relation": {**_business(rfo, "rfo"), **blank, "category": "供应商", "modality": "asserted",
                                    "decision_path": "rfo_cause", "customer_device_fault": False,
                                    "responsibility_quote": _q(rfo), "third_party": False}})
+    # 原文写明本次是已通知的割接（如“美分有给国际发过割接通知”、结单原因“已通知的割接”），但没写责任方：
+    # 业务口径（2026-11-14）推定为供应商，与 RFO 原因推定同一层；割接方写明是联通或客户侧的不推。
+    elif cutover := next((f for f in facts if f["type"] == "cause" and f.get("certainty", "asserted") == "asserted"
+                          and _CUTOVER.search(f["quote"]) and not _NOT_VENDOR_CUTOVER.search(f["quote"])), None):
+        nodes.append({**_base("P", len(nodes) + 1, cutover, spans), "party": cutover["quote"],
+                      "basis": "formal_determination",
+                      "relation": {**_business(cutover, _tier(cutover, spans)), **blank, "category": "供应商",
+                                   "modality": "asserted", "decision_path": "cutover_notice",
+                                   "customer_device_fault": False, "responsibility_quote": _q(cutover),
+                                   "third_party": False}})
+    elif field := next((s for s in spans.values() if s.locator.type == "field" and s.locator.field_key == CLOSING_FIELD
+                        and _CUTOVER.search(s.text) and not _NOT_VENDOR_CUTOVER.search(s.text)), None):
+        ref = {"evidence_id": field.id, "quote": field.text}
+        nodes.append({"id": f"P{len(nodes) + 1}", "evidence_refs": [field.id], "attribution": "system_field",
+                      "party": field.text, "basis": "formal_determination",
+                      "relation": {**SCOPE, "modality": "asserted", "context": [ref], "statement": field.text,
+                                   "source_tier": FALLBACK_TIER, "source_quote": ref, "speaker": "工单结单原因字段",
+                                   "contradicts": [], **blank, "category": "供应商", "decision_path": "cutover_notice",
+                                   "customer_device_fault": False, "responsibility_quote": ref, "third_party": False}})
     # 工单系统“故障区域”字段是结单人填的分类，不是原文依据；只在以上都没有结论时兜底。
     for span in spans.values():
         if span.locator.type == "field" and span.locator.field_key == AREA_FIELD and area_party(span.text):
