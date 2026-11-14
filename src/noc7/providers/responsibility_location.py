@@ -21,8 +21,9 @@ PATH_LABELS = {"explicit_responsibility": "明确责任归属", "customer_self_c
                "rfo_cause": "供应商 RFO 所述故障原因", "unknown": "依据未明"}
 RFO_CAUSE_NOTE = "原文没有直接写责任方，按供应商 RFO 所述本方网络故障原因推定为供应商，待核实。"
 # 工单系统“故障区域”字段到责任方的映射；映射不出的（如“局方检测正常自恢”）不兜底。
+# “用户”不映射：对照标注，字段写“用户”的 4 张责任方实为供应商（客户报障时多选“用户”，不代表责任方）。
 AREA_FIELD = "fault_area"
-AREA_PARTIES = (("运营商", "供应商"), ("用户", "客户"))
+AREA_PARTIES = (("运营商", "供应商"),)
 FALLBACK_TIER = "system_field"
 # 工单系统“故障地址”字段：国内单是客户所在城市，海外单只写“海外”。分层模式下作地点最低一层兜底。
 ADDRESS_FIELD = "fault_detail_address"

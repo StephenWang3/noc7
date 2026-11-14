@@ -124,7 +124,7 @@ def test_failed_second_pass_keeps_first_pass(server):
 def test_fault_area_field_is_a_labelled_last_resort(server):
     from noc7.providers.responsibility_location import area_party, evaluate
     from noc7.schema.elements import PartyCandidate
-    assert (area_party("海外-其他运营商-国际运营商"), area_party("省内-用户"), area_party("海外-局方检测正常自恢")) == ("供应商", "客户", None)
+    assert (area_party("海外-其他运营商-国际运营商"), area_party("省内-用户"), area_party("海外-局方检测正常自恢")) == ("供应商", None, None)
     party = {"type": "responsibility", "evidence_id": "M02/log:5", "quote": "市政道路施工挖断 24 芯光缆", "party": "联通",
              "source": "branch_log"}
     result, ctx, _ = run_passes(server, [{"facts": [*FACTS["facts"][:8], party]}, WRITING], passes=1)
@@ -590,7 +590,7 @@ def test_closing_cause_field_ignores_process_remarks():
         assert bool(facts.closing_cause({"M01/f:cause": N(text=text)})) is used, text
 
 
-def test_suspected_party_sits_between_explicit_party_and_fault_area_field(server):
+def test_suspected_party_sits_between_explicit_party_and_fault_area_field(server, monkeypatch):
     from noc7.providers.responsibility_location import evaluate
     from noc7.schema.elements import PartyCandidate
     party = {"type": "responsibility", "evidence_id": "M02/log:5", "quote": "市政道路施工挖断 24 芯光缆", "party": "联通",
@@ -602,6 +602,8 @@ def test_suspected_party_sits_between_explicit_party_and_fault_area_field(server
     checks = {c.candidate_id: c for c in result.semantic_assessment.checks if c.element == "responsible_party"}
     assert "怀疑的不采用" in checks["P2"].reason
 
+    from noc7.providers import responsibility_location as rl
+    monkeypatch.setattr(rl, "AREA_PARTIES", (("用户", "客户"),))  # 只为测层次，真实映射已不含“用户”
     base = next(s for s in ctx.evidence if s.id == "M01/f:description")
     area = base.model_copy(update={"id": "M01/f:fault_area", "text": "省内-用户",
                                    "locator": base.locator.model_copy(update={"field_key": "fault_area"})})
