@@ -81,6 +81,13 @@ def create_app(
             return JSONResponse(status_code=404, content={"status": "failed", "problems": ["没有这张工单"]})
         return body
 
+    @app.get("/api/tickets/{ref}/trace")
+    def ticket_trace(ref: str):
+        body = runner.trace(ref) if BUNDLE_ID.fullmatch(ref) else None
+        if body is None:
+            return _rejected(404, ["这次分析没有留下过程记录"])
+        return body
+
     @app.get("/api/tickets/{ref}/company-report.docx")
     def company_docx(ref: str):
         return _report(runner, ref, "company_report.docx", f"{ref}-company-report.docx", DOCX_TYPE)

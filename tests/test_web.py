@@ -201,6 +201,19 @@ def test_replay_saved_model_results(tmp_path: Path, fake_model):
         html = http.get("/api/tickets/SYN-P04/company-report.html")
         assert 'href="review-report.html"' in html.text
         assert http.get("/api/tickets/SYN-P04/review-report.html").status_code == 200
+
+        # 过程演示：用这次回放真实走过的数据（材料、发给模型的片段、两遍原始回复、事实、规则前后）。
+        trace = http.get("/api/tickets/SYN-P04/trace").json()
+        assert trace["mode"] == "replay" and trace["ticket"]["ticket_ref"] == "SYN-P04"
+        assert trace["materials"] and trace["spans"] == len(replayed.evidence)
+        model = trace["model"]
+        assert model["recorded"] and model["sent"] == len(model["evidence"]) > 0
+        assert len(model["passes"]) == 2 and model["facts_kept"]
+        assert all(f["evidence_id"] for f in model["facts_kept"])
+        assert [r["element"] for r in trace["rules"]][0] == "start_time"
+        cause = next(r for r in trace["rules"] if r["element"] == "cause")
+        assert cause["after"] == replayed.elements.cause.status.value and cause["before"]
+        assert http.get("/api/tickets/SYN-S09/trace").status_code == 404
     assert calls == ["facts", "facts", "writing"]  # 回放不联网
 
 

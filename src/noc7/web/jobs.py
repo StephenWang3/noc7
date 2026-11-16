@@ -17,6 +17,7 @@ import re
 import shutil
 import stat
 import threading
+import time
 import uuid
 import zipfile
 from dataclasses import dataclass, field
@@ -26,6 +27,7 @@ from pathlib import Path
 from ..bundle import BundleError, load_bundle, sha256_file
 from ..extract.pipeline import analyze_with_context
 from ..providers.gate import EgressBlocked
+from ..providers.text_audit import AuditStore
 from ..providers.text_config import TextProviderError, create_text_provider, load_model_config
 from ..providers.two_stage import TwoStageTextProvider
 from ..providers.two_stage_replay import TwoStageReplayProvider
@@ -35,6 +37,7 @@ from ..rules import ExtractionRejected
 from ..schema import ELEMENT_LABELS_ZH, AnalysisResult
 from .models import ModelSettings
 from .replays import ReplayIndex
+from .trace import build_trace, read_trace, write_trace
 
 MAX_ZIP_BYTES = 32 * 1024 * 1024
 MAX_UNPACKED_BYTES = 64 * 1024 * 1024
@@ -341,8 +344,14 @@ class JobRunner:
         try:
             if job.out_dir.exists():
                 shutil.rmtree(job.out_dir)
-            result = self._live(job) if job.mode == "live" else self._replay(job)
+            shutil.rmtree(job.home / "trace", ignore_errors=True)
+            began = time.monotonic()
+            result, record, fallback = self._live(job) if job.mode == "live" else self._replay(job)
+            elapsed = time.monotonic() - began
             write_reports(result, job.out_dir, report_type="closure")
+            write_trace(job.out_dir / "trace.json", build_trace(
+                result, record, mode=job.mode, model_label=job.model_label,
+                elapsed_seconds=elapsed, fallback=fallback))
             html_path = job.out_dir / "company_report.html"
             html_path.write_text(
                 html_path.read_text(encoding="utf-8").replace('href="report.html"', 'href="review-report.html"'),
@@ -366,7 +375,8 @@ class JobRunner:
         with self._lock:
             job.result, job.status, job.issues, job.problems = result, "ready", [], []
 
-    def _live(self, job: Job) -> AnalysisResult:
+    def _live(self, job: Job) -> tuple[AnalysisResult, dict | None, None]:
+        """返回结果和这次写下的模型诊断记录（过程演示用）。"""
         path = self.models.active_path()
         if path is None:
             raise TextProviderError("模型设置变了（密钥被清除或模型未配置），没有调用模型。")
@@ -377,21 +387,35 @@ class JobRunner:
         finally:
             for record in audit.glob("*.json") if audit.is_dir() else ():
                 self.replays.add(record)  # 以后不联网也能回放这次的模型结果
-        return result
+        return result, _newest_record(audit), None
 
-    def _replay(self, job: Job) -> AnalysisResult:
+    def _replay(self, job: Job) -> tuple[AnalysisResult, dict | None, dict]:
+        """回放也写一份诊断记录（放在 trace/，不进回放索引），过程演示用的是这次重走的数据。"""
         config = load_model_config(self.replay_config)
         for path in self.replays.candidates(job.sha, TwoStageTextProvider.prompt_version):
             record = self.replays.load(path)
             if record is None:
                 continue
+            trace_dir = job.home / "trace" / uuid.uuid4().hex
             try:
                 provider = TwoStageReplayProvider(config, record)
+                provider.audit = AuditStore(trace_dir)
                 result, _, _ = analyze_with_context(job.bundle_dir, provider)
             except TextProviderError:
                 continue
-            return result
+            return result, _newest_record(trace_dir), record
         raise TextProviderError(REPLAY_MISMATCH)
+
+    def trace(self, ref: str) -> dict | None:
+        with self._lock:
+            job = self.jobs.get(ref)
+            if job is None or job.status != "ready":
+                return None
+            path = job.out_dir / "trace.json"
+        body = read_trace(path)
+        if body is not None:
+            body["ticket"] = dict(job.summary)
+        return body
 
     def _finish(self, job: Job) -> None:
         """记下完成时刻并写进 meta.json，重启后分析记录里还能看到。"""
@@ -418,6 +442,18 @@ def _manifest(bundle_dir: Path) -> dict | None:
     except (OSError, json.JSONDecodeError):
         return None
     return data if isinstance(data, dict) else None
+
+
+def _newest_record(audit_dir: Path) -> dict | None:
+    files = sorted(audit_dir.glob("*.json"), key=lambda p: p.stat().st_mtime) if audit_dir.is_dir() else []
+    for path in reversed(files):
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            continue
+        if isinstance(data, dict):
+            return data
+    return None
 
 
 def _read_meta(home: Path) -> dict:

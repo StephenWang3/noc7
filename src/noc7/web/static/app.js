@@ -170,6 +170,7 @@
     machine: { bundles: [] }, batch: [], machineError: "",
     model: null, drawer: "workbench", modelError: "" };
   const embedded = window.parent !== window;
+  let proc = null;  // 分析过程演示（process.js），init 里拿到要素表后创建
 
   function extraOrigins() { return (state.workbenchOrigins || []).join(","); }
   function parentTarget() {
@@ -279,12 +280,6 @@
   }
   // 两种做法由人选：回放已保存的模型结果（不联网），或实时调用当前模型。
   function modelLive() { return !!(state.model && state.model.usable); }
-  function modelHint() {
-    const live = modelLive()
-      ? `<b>调用模型分析</b>：实时请求 <b>${esc(state.model.label)}</b>，每张约一两分钟，结果会存下来以后可回放。`
-      : `<b>调用模型分析</b>：还没有可用的模型，点右上角<b>模型设置</b>填 API key 或配置公司本地模型后可用。`;
-    return `<b>回放已有记录</b>：用这张单以前保存的模型结果，几秒出结果、不联网，只对标“有记录”的单有效。<br>${live}`;
-  }
   function machineBundles() { return state.machine.bundles || []; }
   function running(b) { return (jobOf(b.ticket_ref) || {}).status === "running"; }
   // 一张工单一个卡片：只给看的人需要的信息（标题、分类、分析结果），目录、内部代号等后台信息不上页面。
@@ -305,7 +300,8 @@
       ELEMENTS.forEach((n) => { if (c[job.element_status[n]] != null) c[job.element_status[n]]++; });
       body = `${miniDots(job)}
         <div class="t-sum">${c.confirmed + c.documented} 项有结论${c.unknown ? ` · ${c.unknown} 项未知` : ""}${c.conflicted ? ` · ${c.conflicted} 项矛盾` : ""} · 待核实 ${job.open_issues || 0}</div>
-        <div class="t-meta"><span>${esc(shortModel(job.model_label))} · ${esc(fmtTime(job.finished_at))}</span></div>`;
+        <div class="t-meta"><span>${esc(shortModel(job.model_label))} · ${esc(fmtTime(job.finished_at))}</span>
+          <button class="link-btn" data-proc="${ref}" type="button" title="按步骤演示这次分析：拆包、编号、请求模型、本地规则、出报告">▶ 看分析过程</button></div>`;
       actions = `<button class="btn primary" data-open="${ref}" type="button">查看结果</button><span class="spacer"></span>${replay}${live}`;
     } else if (job && job.status === "failed") {
       body = `<div class="t-sum problem">${esc((job.problems || []).join("；") || "分析失败")}</div>`;
@@ -358,7 +354,8 @@
         <td>${miniDots(t)}</td>
         <td>${t.status === "ready" ? `<span class="badge b-warn">待核实 ${t.open_issues || 0}</span>` : statusChip(t)}</td>
         <td class="actions">${t.status === "ready"
-          ? `<button class="btn" data-open="${esc(t.ticket_ref)}" type="button">七要素</button>
+          ? `<button class="btn" data-proc="${esc(t.ticket_ref)}" type="button">过程</button>
+             <button class="btn" data-open="${esc(t.ticket_ref)}" type="button">七要素</button>
              <button class="btn" data-open-report="${esc(t.ticket_ref)}" type="button">报告</button>
              <a class="btn" href="/api/tickets/${encodeURIComponent(t.ticket_ref)}/company-report.docx" download>Word</a>`
           : `<span class="problem">${esc((t.problems || []).join("；"))}</span>`}</td></tr>`).join("");
@@ -385,6 +382,7 @@
     state.listSig = listSignature(state.tickets);
     ensurePoll();
     render();
+    return state.batch;
   }
 
   function renderStep1() {
@@ -756,7 +754,13 @@ POST /api/tickets                          上传工单包 zip（模型摘录 + 
       if (await openTicket(ref, "local")) go(d.openReport ? 3 : 2);
       return;
     }
-    if (d.run) return runMachineBatch(d.run, [d.key]);
+    if (d.run) {  // 单张：边跑边打开过程演示；“全部回放”只在后台跑
+      const ref = machineBundles().find((b) => b.key === d.key)?.ticket_ref;
+      const accepted = await runMachineBatch(d.run, [d.key]);
+      if (proc && ref && accepted && accepted.includes(ref)) proc.open(ref, { waiting: true });
+      return;
+    }
+    if (d.proc) return proc && proc.open(d.proc);
     if (d.runAll) return runMachineBatch(d.runAll, machineBundles().filter((b) => b.has_replay && !running(b)).map((b) => b.key));
     if (d.batchClear) { state.batch = []; return render(); }
     if (d.el) { state.element = d.el; state.tab = "main"; return render(); }
@@ -885,6 +889,11 @@ POST /api/tickets                          上传工单包 zip（模型摘录 + 
     state.workbenchOrigins = catalog.workbench_origins || [];
     state.tickets = catalog.tickets;
     state.listSig = listSignature(state.tickets);
+    if (window.noc7Process) {
+      proc = window.noc7Process({ $, esc, LABEL, ELEMENTS, STATUS, valueText, jobOf,
+        fetchDetail: (ref) => source.get(ref),
+        onOpen: async (ref, step) => { if (await openTicket(ref, "local")) go(step); } });
+    }
     await Promise.all([refreshMachine(), refreshModel()]);
     ensurePoll();
     await applyLocation();
