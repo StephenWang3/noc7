@@ -885,6 +885,40 @@ def test_cutover_notice_layer_reaches_the_report(server, monkeypatch):
     assert AnalysisResult.model_validate_json(result.model_dump_json()) == result
 
 
+def test_party_evidence_must_fall_in_the_incident_window():
+    from datetime import datetime
+    from noc7.providers.responsibility_location import off_window
+    def cand(text):
+        q = type("Q", (), {"quote": text})()
+        return type("C", (), {"relation": type("R", (), {"responsibility_quote": q, "context": [q]})()})()
+    win = (datetime.fromisoformat("2026-10-10T10:14:00+08:00"), datetime.fromisoformat("2026-10-10T12:45:00+08:00"))
+    assert off_window(cand("供应商反馈底层电路在北京时间15:30左右发生了频繁波动"), win)
+    assert not off_window(cand("供应商反馈底层电路在北京时间11:30左右发生了频繁波动"), win)
+    assert not off_window(cand("供应商反馈北京时间13:20恢复"), win)  # 在前后 1 小时内
+    assert not off_window(cand("供应商反馈 15:30 发生波动"), win)  # 没标北京时间，可能是当地时间
+    assert not off_window(cand("供应商反馈 10月9日 北京时间15:30 发生波动"), win)  # 写了日期，不比
+    assert not off_window(cand("供应商反馈北京时间15:30发生波动"), None)  # 本次时段不全，不比
+    overnight = (datetime.fromisoformat("2026-10-10T23:10:00+08:00"), datetime.fromisoformat("2026-10-11T01:30:00+08:00"))
+    assert not off_window(cand("北京时间0点40分线路切换"), overnight)
+    assert not off_window(cand("UTC+8 23:50 线路切换"), overnight)
+
+
+def test_off_window_party_evidence_is_dropped_in_layered_mode(server, monkeypatch):
+    import re
+    from noc7.providers import responsibility_location as rl
+    party = {"type": "responsibility", "evidence_id": "M02/log:5", "quote": "市政道路施工挖断 24 芯光缆",
+             "party": "供应商", "source": "branch_log", "third_party": True}
+    replies = [{"facts": [*FACTS["facts"][:8], party]}, WRITING]
+    result, _, _ = run_passes(server, replies, passes=1)
+    assert result.elements.responsible_party.value == "供应商"
+    monkeypatch.setattr(rl, "_BJ_CLOCK", re.compile(r"(2)(4) 芯"))  # 合成原文没有北京时间，借“24 芯”当作 02:04
+    result, _, _ = run_passes(server, replies, passes=1)
+    el = result.elements.responsible_party
+    assert not el.selected
+    checks = [c for c in result.semantic_assessment.checks if c.element == "responsible_party" and c.reason == rl.OFF_WINDOW_NOTE]
+    assert checks and all(c.outcome == "pending" for c in checks)
+
+
 def test_address_field_is_the_last_location_layer(server, monkeypatch, tmp_path):
     """合成工单没有“故障地址”字段，借“故障类型”字段走一遍完整流程：原文没有地点时取地址字段的城市，标兜底待核实。"""
     from noc7.providers import place_names, responsibility_location as rl

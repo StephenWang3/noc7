@@ -36,6 +36,12 @@ ADDRESS_FIELD = "fault_detail_address"
 LOW_TIER = "unknown"
 CUSTOMER_SPEAKER = "客户"
 NEGATED_NOTE = "原文另有否定这一方故障的说法，怀疑不采用。"
+OFF_WINDOW_NOTE = "所述故障时刻与本次中断时段对不上（相差超过 1 小时），不作为本次的责任依据。"
+# 责任依据里写明北京时间的时刻（如“北京时间15:30左右发生了频繁波动”）。只认明确标了北京时间／UTC+8 的，
+# 写了日期的不比（可能是别的日子），没标时区的不比（可能是供应商本地时间）。
+_BJ_CLOCK = re.compile(r"(?:北京时间|UTC\s*\+\s*0?8|GMT\s*\+\s*0?8)\D{0,6}?([01]?\d|2[0-3])\s*[:：点]\s*([0-5]\d)")
+_HAS_DATE = re.compile(r"\d{4}[-/年]\d|\d{1,2}\s*月\s*\d{1,2}|\d{1,2}/\d{1,2}|昨天|前天|昨晚")
+_WINDOW_SLACK_MIN = 60
 LOW_NOTE = "来源层级最低（不属于 RFO、供应商反馈或分公司处理日志），待核实。"
 
 
@@ -255,6 +261,41 @@ def coverage_complete(coverage, spans):
     return True
 
 
+def _incident_window(elements):
+    """本次中断的起止（带偏移的 datetime）；任一端缺失或没有时区时返回 None，不做时段检查。"""
+    from datetime import datetime
+    ends = []
+    for el in (elements.start_time, elements.end_time):
+        iso = getattr(el.value, "iso", None) if el.value is not None else None
+        try:
+            t = datetime.fromisoformat(iso) if iso else None
+        except ValueError:
+            t = None
+        if t is None or t.utcoffset() is None:
+            return None
+        ends.append(t)
+    return tuple(ends) if ends[0] <= ends[1] else None
+
+
+def off_window(candidate, window):
+    """责任依据写明了北京时间的时刻、没写日期，且每个时刻都落在本次中断前后 1 小时之外时为 True。"""
+    from datetime import timedelta, timezone
+    r = candidate.relation
+    if window is None or r is None:
+        return False
+    text = " ".join(q.quote for q in ([r.responsibility_quote] if getattr(r, "responsibility_quote", None) else r.context))
+    clocks = [(int(h), int(m)) for h, m in _BJ_CLOCK.findall(text)]
+    if not clocks or _HAS_DATE.search(text):
+        return False
+    bj = timezone(timedelta(hours=8))
+    start, end = (t.astimezone(bj) for t in window)
+    slack = timedelta(minutes=_WINDOW_SLACK_MIN)
+    days = {(start - slack).date() + timedelta(days=i) for i in range(((end + slack).date() - (start - slack).date()).days + 1)}
+    from datetime import datetime
+    return not any(start - slack <= datetime(d.year, d.month, d.day, h, m, tzinfo=bj) <= end + slack
+                   for d in days for h, m in clocks)
+
+
 def formal_value(candidate, name):
     if candidate.relation:
         return candidate.relation.category if name == "responsible_party" else candidate.relation.city
@@ -421,6 +462,14 @@ def evaluate(elements, spans, coverage, suggestions=(), layered=False):
                       and grounded_assertion(o, name, spans)}
             vetoed = {c.id for c in eligible if (c.relation.modality == "suspected" or c.relation.decision_path in INFERRED_PATHS)
                       and formal_value(c, name) in denied}
+            # 责任依据所说的故障时刻与本次中断对不上的（如关联单里供应商说的另一次波动），不作为本次依据。
+            window = _incident_window(elements)
+            off = {c.id for c in eligible if c.id not in vetoed and off_window(c, window)}
+            if off:
+                checks = [ConstraintCheck(element=name, candidate_id=k.candidate_id, outcome="pending",
+                                          reason=OFF_WINDOW_NOTE, evidence_refs=k.evidence_refs)
+                          if k.element == name and k.candidate_id in off else k for k in checks]
+                eligible = [c for c in eligible if c.id not in off]
             if vetoed:
                 checks = [ConstraintCheck(element=name, candidate_id=k.candidate_id, outcome="pending",
                                           reason=NEGATED_NOTE, evidence_refs=k.evidence_refs)
