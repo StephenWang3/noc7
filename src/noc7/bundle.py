@@ -21,9 +21,11 @@ from .schema.evidence import ManifestMaterial, MaterialKind
 MANIFEST = "manifest.json"
 SYNTHETIC_PREFIX = "SYN-"
 
-# 源码仓库根目录（从源码运行时存在）。真实工单包不允许放在仓库里。
+# 源码仓库根目录（从 git 检出运行时存在）。真实工单包不允许放在仓库里，免得被提交。
+# 导出的交付包（没有 .git）不算仓库：它的 data/ 本来就放本机数据。
 _REPO_ROOT = Path(__file__).resolve().parents[2]
-_IS_SOURCE_CHECKOUT = (_REPO_ROOT / "pyproject.toml").exists() and (_REPO_ROOT / "src" / "noc7").is_dir()
+_IS_SOURCE_CHECKOUT = ((_REPO_ROOT / "pyproject.toml").exists() and (_REPO_ROOT / "src" / "noc7").is_dir()
+                       and (_REPO_ROOT / ".git").exists())
 
 ATTACHMENT_KINDS = {
     MaterialKind.IMAGE,

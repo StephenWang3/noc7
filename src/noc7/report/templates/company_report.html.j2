@@ -10,5 +10,5 @@
 {% else %}<table class="company-table"><colgroup><col class="c0"><col class="c1"><col class="c2"><col class="c3"></colgroup><tbody>
 {% for row in rows %}<tr>{% for cell in row %}{% if cell.label %}<th{% if cell.rowspan > 1 %} rowspan="{{ cell.rowspan }}"{% endif %}{% if cell.colspan > 1 %} colspan="{{ cell.colspan }}"{% endif %}{% if cell.col == 0 %} class="group"{% endif %}>{{ lines(cell) }}</th>{% else %}<td{% if cell.rowspan > 1 %} rowspan="{{ cell.rowspan }}"{% endif %}{% if cell.colspan > 1 %} colspan="{{ cell.colspan }}"{% endif %}>{{ lines(cell) }}</td>{% endif %}{% endfor %}</tr>
 {% endfor %}</tbody></table>
-{% endif %}<footer class="company-signatures">{% if not report.not_fault %}{% for label in signatures %}<p>{{ label }}</p>{% endfor %}{% endif %}<p class="muted">公司格式模板 {{ template_version }}；系统生成草稿，标记处待人工核实，证据与候选见 <a href="report.html">审核报告</a>。</p></footer>
+{% endif %}<footer class="company-signatures">{% if not report.not_fault %}{% for label in signatures %}<p>{{ label }}</p>{% endfor %}{% endif %}<p class="muted">公司格式模板 {{ template_version }}；系统生成，签字栏由审核人填写，证据与候选见 <a href="report.html">审核报告</a>。</p></footer>
 </main></body></html>

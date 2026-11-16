@@ -628,8 +628,7 @@
             <div class="dl">
             <a class="btn primary big" href="${esc(downloads.docx)}" download data-dl="docx">⬇ 下载 Word（.docx）</a>
             <div class="file">${esc(base)}.docx</div>
-            <a class="btn" href="${esc(downloads.html)}" download data-dl="html">⬇ 下载网页版（.html）</a></div>
-            <p class="small muted" style="margin:8px 0 0">示例文件由真实流水线从合成数据生成（<code>samples/</code>）。</p></section>
+            <a class="btn" href="${esc(downloads.html)}" download data-dl="html">⬇ 下载网页版（.html）</a></div></section>
           <section class="card"><b>下载前检查</b>
             ${linked.length ? `<p class="small muted" style="margin:2px 0 0">待核实共 ${linked.length} 处。下载的正式报告只填最终值、不带这些标记；请先点“→”回到对应要素核实。</p><ul class="checklist">${list}</ul>`
               : `<p class="small" style="margin:6px 0 0"><span class="badge s-confirmed">✓ 七要素里没有待核实项</span></p>`}

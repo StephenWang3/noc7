@@ -304,6 +304,8 @@ def build_parser() -> argparse.ArgumentParser:
         default=Path("config/models/deepseek.json"),
         help="DeepSeek 配置；公司本地模型在页面“模型设置”里配置",
     )
+    p.add_argument("--demo", type=Path, metavar="DIR",
+                   help="演示包数据目录：工单读 DIR/tickets，回放读 DIR/replays；分析结果写在包外的 ~/.noc7-demo，不读写 ~/.noc7")
     p.set_defaults(func=cmd_serve)
     return ap
 
@@ -329,6 +331,17 @@ def cmd_serve(args: argparse.Namespace) -> int:
 
     from .web.app import create_app, load_platform_config
 
+    if args.demo:
+        demo = args.demo.expanduser().resolve()
+        if not (demo / "tickets").is_dir():
+            print(f"{demo} 下没有 tickets 目录", file=sys.stderr)
+            return 2
+        work = Path("~/.noc7-demo").expanduser()  # 诊断记录不能写在代码目录里，放包外
+        app = create_app(inbox=work / "inbox", model_config=args.model_config, settings_dir=work / "models",
+                         local_roots=[demo / "tickets"], replay_patterns=[(demo / "replays", "*.json")])
+        print(f"演示模式：浏览器打开 http://{args.host}:{args.port}", flush=True)
+        uvicorn.run(app, host=args.host, port=args.port)
+        return 0
     platform = load_platform_config(args.platform_config)
     roots = args.local_root or [Path(p) for p in platform.get("local_roots") or ["~/.noc7/real"]]
     uvicorn.run(
