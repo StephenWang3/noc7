@@ -195,13 +195,13 @@ def test_report_alarm_duration_source_and_escaping(sample):
     result = result.model_copy(update={'service_identity':None})
     report=render(result)
     assert '<script>设备故障</script>' not in report and '&lt;script&gt;' in report
-    company=build_company_report(result)
+    company=build_company_report(result, draft=True)
     assert '供应商记载' in str(company.cells['analysis']) and '未经人工审核' in str(company.cells['analysis'])
     ctx,data=build(sample,kind='alarm_raised')
     extraction=decode(ctx,data)
     result=result.model_copy(update=dict(evidence=ctx.evidence,elements=extraction.elements,
         semantic_assessment=extraction.semantic_assessment,quote_checks=extraction.quote_checks))
-    assert '告警时刻' in str(build_company_report(result).cells['declared'])
+    assert '告警时刻' in str(build_company_report(result, draft=True).cells['declared'])
     assert final_duration(result) is None
 
 
@@ -295,7 +295,7 @@ def test_business_duration_uses_confirmation_not_action_time(sample):
     extraction=decode(ExtractionContext(ctx.bundle,[span]),data)
     result=result.model_copy(update=dict(elements=extraction.elements,semantic_assessment=extraction.semantic_assessment))
     assert final_duration(result) is None
-    assert '分钟' not in str(build_company_report(result).cells['duration'])
+    assert '分钟' not in str(build_company_report(result, draft=True).cells['duration'])
 
 
 def test_rfo_dotted_day_first_and_no_date_invention():
@@ -437,7 +437,7 @@ def test_mixed_refs_require_field_containing_raw(sample, field_matches, whitespa
         report_result = analyze(BUNDLES/'SYN-S01', registry=text_registry()).model_copy(update=dict(
             evidence=ctx.evidence, elements=result.elements, semantic_assessment=result.semantic_assessment,
             suggestions=[], events=[], quote_checks=result.quote_checks, issues=[], service_identity=None))
-        assert '时区按系统口径假设' in str(build_company_report(report_result).cells)
+        assert '时区按系统口径假设' in str(build_company_report(report_result, draft=True).cells)
 
 
 @pytest.mark.parametrize('anchor,expected', [(False, 'assumed'), (True, 'unknown')])

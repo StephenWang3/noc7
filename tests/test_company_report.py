@@ -113,7 +113,8 @@ def test_table_width_is_fixed_even_with_long_unbroken_text(results, tmp_path):
 
 
 def test_cells_follow_mapping_rules(results):
-    report = build_company_report(results["SYN-P04"])
+    # 草稿版：带标记，操作台据此列“下载前检查”
+    report = build_company_report(results["SYN-P04"], draft=True)
     assert text(report, "customer") == "示例客户壬（合成）"
     assert text(report, "circuit_id") == "SYN-CKT-1024"
     assert text(report, "ticket_no") == "SYN-P04"
@@ -131,26 +132,40 @@ def test_cells_follow_mapping_rules(results):
     assert report.report_date.endswith("日") and report.synthetic
 
 
-def test_unknown_conflicted_and_unconfirmed_cells_are_marked(results):
+def test_final_report_keeps_only_final_values(results):
+    # 正式版（交付的 Word/网页）：不带【…】标记和取值说明，取不到的格子留空，等人工核实后填写。
+    p04 = build_company_report(results["SYN-P04"])
+    assert all(not part.pending for lines in p04.cells.values() for line in lines for part in line)
+    assert "【" not in "".join(text(p04, k) for k in p04.cells)
+    assert text(p04, "declared") == "2026-10-10 15:42:00 (GMT+8)"
+    assert text(p04, "analysis").splitlines()[-1].startswith("责任方：责任认定：")
+    assert "故障位置" not in text(p04, "analysis")  # 冲突未定，不写空标签
+    assert text(p04, "improvement") == DEFAULT_IMPROVEMENT
     s10 = build_company_report(results["SYN-S10"])
+    assert text(s10, "declared") == "" and text(s10, "duration") == "" and text(s10, "analysis") == ""
+    assert text(build_company_report(results["SYN-S09"]), "duration") == "约 36 分钟"
+
+
+def test_unknown_conflicted_and_unconfirmed_cells_are_marked(results):
+    s10 = build_company_report(results["SYN-S10"], draft=True)
     assert text(s10, "declared") == "【待核实：时间有冲突】"
     assert text(s10, "duration") == PENDING
     assert text(s10, "analysis") == f"{PENDING}\n责任方：{PENDING}；故障位置：{PENDING}"
-    s05 = build_company_report(results["SYN-S05"])
+    s05 = build_company_report(results["SYN-S05"], draft=True)
     assert text(s05, "resumed") == PENDING and text(s05, "duration") == PENDING
     # 起止都有记载但恢复未确认：给出字段差，并标明不是最终历时。
-    s09 = build_company_report(results["SYN-S09"])
+    s09 = build_company_report(results["SYN-S09"], draft=True)
     assert text(s09, "duration") == "约 36 分钟【待核实：恢复未确认】"
     assert s09.cells["duration"][0][1].pending
 
 
-def test_pending_parts_are_highlighted_in_word(results, tmp_path):
+def test_word_report_has_no_review_marks(results, tmp_path):
     path = tmp_path / "r.docx"
     write_company_docx(results["SYN-S10"], path)
-    runs = [run for p in Document(str(path)).tables[0].cell(9, 1).paragraphs for run in p.runs]
-    marked = {run.text for run in runs if run.font.highlight_color == WD_COLOR_INDEX.YELLOW}
-    assert marked == {PENDING}
-    assert all(run.font.highlight_color is None for run in runs if run.text.startswith("责任方"))
+    table = Document(str(path)).tables[0]
+    runs = [run for row in table.rows for cell in row.cells for p in cell.paragraphs for run in p.runs]
+    assert all(run.font.highlight_color != WD_COLOR_INDEX.YELLOW for run in runs)
+    assert PENDING not in "\n".join(cell.text for row in table.rows for cell in row.cells)
 
 
 def test_duplicates_skipped_and_circuit_renumbering_shown(results):
@@ -185,7 +200,7 @@ def test_html_preview_escapes_material_text(results):
     assert soup.find("script") is None and soup.find("img") is None
     assert payload in soup.get_text()
     assert [len(tr.find_all(["th", "td"])) for tr in soup.select("table tr")][:5] == [3, 2, 2, 2, 3]
-    assert soup.find("th", rowspan="7") is not None and soup.find("mark") is not None
+    assert soup.find("th", rowspan="7") is not None and soup.find("mark") is None
 
 
 def test_header_profile_is_loaded_from_outside_repository(results, tmp_path):
@@ -245,7 +260,7 @@ def test_company_outputs_exclude_ai_suggestions(results, tmp_path):
     assert "SYN-AI-ONLY-LOCATION" not in text and "AI 建议" not in text
 
 
-def test_automatic_business_values_are_marked_in_html_and_word(results, tmp_path):
+def test_automatic_business_notes_stay_out_of_final_report(results, tmp_path):
     from noc7.schema import PartyCandidate, ResponsiblePartyElement
     from noc7.schema.relations import PartyRelation
     r = results['SYN-P04'].model_copy(deep=True)
@@ -258,9 +273,9 @@ def test_automatic_business_values_are_marked_in_html_and_word(results, tmp_path
     r.elements.responsible_party = ResponsiblePartyElement(status='documented', value='供应商', selected='C1',
         candidates=[c], evidence_refs=c.evidence_refs, note='RFO；有记录，未经人工审核。')
     html = render_company_html(r)
-    assert '供应商' in html and 'RFO；有记录，未经人工审核。' in html
+    assert '责任方：供应商' in html and '未经人工审核' not in html
     path = tmp_path / 'business.docx'
     write_company_docx(r, path)
     doc = Document(path)
     content = '\n'.join(cell.text for row in doc.tables[0].rows for cell in row.cells)
-    assert '供应商' in content and 'RFO；有记录，未经人工审核。' in content
+    assert '责任方：供应商' in content and '未经人工审核' not in content

@@ -10,6 +10,7 @@ import json
 import os
 from pathlib import Path
 
+from ..providers import facts as fact_prompt
 from ..schema import ELEMENT_LABELS_ZH, AnalysisResult
 
 MAX_EVIDENCE = 300
@@ -47,7 +48,19 @@ def build_trace(result: AnalysisResult, record: dict | None, *, mode: str, model
         "spans": len(data["evidence"]),
         "model": _model_part(record or {}, fallback or {}, kinds),
         "rules": _rules_part(record or {}, data),
+        # 当前版本的提示词（回放时若记录用的是旧提示词，prompt_changed 为真）
+        "prompt": {
+            "instruction": fact_prompt.INSTRUCTION,
+            "recheck": fact_prompt.RECHECK_PROMPT[len(fact_prompt.SYSTEM_PROMPT):].strip(),
+            # 回放时新记录写的是当前版本，要看原记录当时用的版本
+            "changed": (fallback or record or {}).get("prompt_version") not in (None, _current_prompt_version()),
+        },
     }
+
+
+def _current_prompt_version() -> str:
+    from ..providers.two_stage import TwoStageTextProvider
+    return TwoStageTextProvider.prompt_version
 
 
 def _model_part(record: dict, fallback: dict, kinds: dict[str, str]) -> dict:

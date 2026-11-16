@@ -96,6 +96,11 @@ def create_app(
     def company_html(ref: str):
         return _report(runner, ref, "company_report.html", f"{ref}-company-report.html", "text/html; charset=utf-8")
 
+    @app.get("/api/tickets/{ref}/report.css")
+    def report_css(ref: str):
+        # 两份网页报告都用相对路径引用同目录的 report.css；内嵌预览时按这个地址取
+        return _report(runner, ref, "report.css", "report.css", "text/css; charset=utf-8")
+
     @app.get("/api/tickets/{ref}/review-report.html")
     def review_html(ref: str):
         return _report(runner, ref, "report.html", f"{ref}-review-report.html", "text/html; charset=utf-8")

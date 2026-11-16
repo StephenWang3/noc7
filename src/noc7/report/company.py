@@ -1,7 +1,11 @@
 """公司格式故障报告（对齐公司「故障处理报告 Failure Report」模板，见 ADR 0007）。
 
 只消费校验后的 AnalysisResult，不调用模型。证据、候选和待核实清单仍在审核报告
-（report.md / report.html）里；这里把结论填进公司模板，拿不准的格子标【待核实】。
+（report.md / report.html）里；这里把结论填进公司模板。
+
+交付的是正式版：只填最终取值，不带【待核实】等标记和“客户报告起点：”这类取值说明，
+取不到的格子留空——核实由人在核对报告和工作台里完成（业务口径 2026-11-16）。
+draft=True 得到带标记的草稿，只给操作台列“下载前检查”清单用，不写成文件。
 页眉的公司名和 logo 出自真实样例，只从仓库外的本机配置读取。
 """
 
@@ -199,13 +203,13 @@ def _element_lines(el) -> tuple[Line, ...]:
     return _text_lines(el.value)
 
 
-def _time_lines(el, *, semantic=False) -> tuple[Line, ...]:
+def _time_lines(el, *, semantic=False, draft=True) -> tuple[Line, ...]:
     if el.status == ElementStatus.CONFLICTED:
         return ((Part("【待核实：时间有冲突】", True),),)
     if not el.value:
         return (PENDING_LINE,)
     line = company_time(el.value)
-    if semantic:
+    if semantic and draft:
         from ..providers.semantic_constraints import TIME_LABELS
         c = next((c for c in el.candidates if c.id == el.selected), None)
         if c:
@@ -220,10 +224,10 @@ def _time_lines(el, *, semantic=False) -> tuple[Line, ...]:
     return (line,)
 
 
-def _recovery_lines(result: AnalysisResult) -> tuple[Line, ...]:
-    lines = _time_lines(result.elements.end_time, semantic=result.semantic_assessment is not None)
+def _recovery_lines(result: AnalysisResult, *, draft=True) -> tuple[Line, ...]:
+    lines = _time_lines(result.elements.end_time, semantic=result.semantic_assessment is not None, draft=draft)
     record = result.semantic_assessment.recovery_selection if result.semantic_assessment else None
-    if record is not None:
+    if record is not None and draft:
         from ..providers.recovery_policy import selection_text
         lines = (*lines, (Part(selection_text(record)),), *_unadopted_recovery(result, record))
     return lines
@@ -308,7 +312,17 @@ def _report_date(generated: datetime | None, raw: str) -> str:
     return f"{local.year}年 {local.month} 月 {local.day} 日"
 
 
-def build_company_report(result: AnalysisResult) -> CompanyReport:
+def _final_line(line: Line) -> Line:
+    return tuple(p for p in line if not p.pending and p.text)
+
+
+def _final_cell(lines: tuple[Line, ...]) -> tuple[Line, ...]:
+    """正式版：去掉标记，空行不留；整格没有内容就留空，等人工填写。"""
+    kept = tuple(x for x in (_final_line(line) for line in lines) if "".join(p.text for p in x).strip())
+    return kept or ((Part(""),),)
+
+
+def build_company_report(result: AnalysisResult, *, draft: bool = False) -> CompanyReport:
     e = result.elements
     fields = _ticket_fields(result)
     circuit = [v for v in (fields.get("circuit_id_new"), fields.get("circuit_id")) if v]
@@ -328,7 +342,7 @@ def build_company_report(result: AnalysisResult) -> CompanyReport:
     if e.cause.value:
         text = narrative.cause if narrative and narrative.cause else " ".join(e.cause.value.split())
         cause_lines = ((Part(mask_contacts(text)),),)
-    if result.semantic_assessment and e.cause.value:
+    if result.semantic_assessment and e.cause.value and draft:
         c = next(c for c in e.cause.candidates if c.id == e.cause.selected)
         cause_lines = ((Part(f"{_speaker(c.relation.speaker)}记载："), *cause_lines[0],
                         Part("【" + (e.cause.note or "有记录，未经人工审核") + "】", True)), *cause_lines[1:])
@@ -339,11 +353,19 @@ def build_company_report(result: AnalysisResult) -> CompanyReport:
             parts = (*parts, Part("【" + (el.note or "有记录，未经人工审核") + "】", True))
         return parts
 
-    analysis = (
-        *cause_lines,
-        (Part("责任方："), *business_parts(e.responsible_party),
-         Part("；故障位置："), *business_parts(e.location)),
-    )
+    if draft:
+        analysis = (
+            *cause_lines,
+            (Part("责任方："), *business_parts(e.responsible_party),
+             Part("；故障位置："), *business_parts(e.location)),
+        )
+    else:
+        # 正式版：只写取到的责任方和故障位置，没取到的不写空标签
+        found = [(label, " ".join(str(el.value).split())) for label, el in
+                 (("责任方：", e.responsible_party), ("故障位置：", e.location))
+                 if el.value and el.status != ElementStatus.CONFLICTED]
+        tail = tuple(Part(("；" if i else "") + label + value) for i, (label, value) in enumerate(found))
+        analysis = (*cause_lines, *((tail,) if tail else ()))
     original = result.semantic_assessment.original if result.semantic_assessment else {}
     not_fault = None
     if original.get("not_fault"):
@@ -359,8 +381,8 @@ def build_company_report(result: AnalysisResult) -> CompanyReport:
         "circuit_id": (circuit_line,),
         "ticket_no": ((Part(fields.get("ticket_no") or result.ticket_ref),),),
         "service": _text_lines(service),
-        "declared": _time_lines(e.start_time, semantic=result.semantic_assessment is not None),
-        "resumed": _recovery_lines(result),
+        "declared": _time_lines(e.start_time, semantic=result.semantic_assessment is not None, draft=draft),
+        "resumed": _recovery_lines(result, draft=draft),
         "duration": _duration_lines(result),
         "phenomenon": (((Part(mask_contacts(narrative.phenomenon)),),) if narrative and narrative.phenomenon
                        else _element_lines(e.phenomenon)),
@@ -368,6 +390,9 @@ def build_company_report(result: AnalysisResult) -> CompanyReport:
         "analysis": analysis,
         "improvement": ((Part(DEFAULT_IMPROVEMENT), Part(IMPROVEMENT_NOTE, True)),),
     }
+    if not draft:
+        cells = {k: _final_cell(v) for k, v in cells.items()}
+        not_fault = _final_line(not_fault) if not_fault else None
     return CompanyReport(
         ticket_ref=result.ticket_ref,
         report_date=_report_date(generated, raw),

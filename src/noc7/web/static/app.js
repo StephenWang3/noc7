@@ -584,6 +584,14 @@
   function renderStep3() {
     const { companyReport: cr, downloads, ticket } = state.data;
     const pend = [];
+    // 预览的是正式版（不带标记）；待核实清单从草稿版里收集
+    (cr.draft_cells || []).forEach((c) => c.lines.forEach((line, li) => {
+      let before = "";
+      line.forEach((p) => {
+        if (p.pending) pend.push({ row: c.row, text: p.text, target: pendingTarget(c.row, li, before), col: c.col });
+        before += p.text;
+      });
+    }));
     const rows = Array.from({ length: 11 }, () => []);
     cr.cells.forEach((c) => rows[c.row].push(c));
     const html = rows.map((r) => `<tr>${r.sort((x, y) => x.col - y.col).map((c) => {
@@ -623,9 +631,9 @@
             <a class="btn" href="${esc(downloads.html)}" download data-dl="html">⬇ 下载网页版（.html）</a></div>
             <p class="small muted" style="margin:8px 0 0">示例文件由真实流水线从合成数据生成（<code>samples/</code>）。</p></section>
           <section class="card"><b>下载前检查</b>
-            ${linked.length ? `<p class="small muted" style="margin:2px 0 0"><mark style="background:#fff176">黄色【待核实】</mark>共 ${linked.length} 处，Word 里同样高亮。点“查看”回到对应要素。</p><ul class="checklist">${list}</ul>`
+            ${linked.length ? `<p class="small muted" style="margin:2px 0 0">待核实共 ${linked.length} 处。下载的正式报告只填最终值、不带这些标记；请先点“→”回到对应要素核实。</p><ul class="checklist">${list}</ul>`
               : `<p class="small" style="margin:6px 0 0"><span class="badge s-confirmed">✓ 七要素里没有待核实项</span></p>`}
-            ${boiler ? `<p class="small muted" style="margin:6px 0 0">另有 ${boiler} 处高亮无法对应到某个要素（例如系统默认的“改进措施”表述），审核时一并确认。</p>` : ""}</section>
+            ${boiler ? `<p class="small muted" style="margin:6px 0 0">另有 ${boiler} 处无法对应到某个要素（例如系统默认的“改进措施”表述），审核时一并确认。</p>` : ""}</section>
           <section class="card"><button class="btn" id="review-req" type="button" style="width:100%">在 NOC 工作台中审核 ↗</button>
             <p class="small muted" style="margin:8px 0 0">审核、改写、签字都在工作台里做。本页只负责把预处理结果交出去。</p></section>
           <div class="screen-foot" style="justify-content:space-between"><button class="btn" data-step="2">← 回到七要素</button><button class="btn" data-step="1">换一张工单</button></div>
@@ -890,7 +898,7 @@ POST /api/tickets                          上传工单包 zip（模型摘录 + 
     state.tickets = catalog.tickets;
     state.listSig = listSignature(state.tickets);
     if (window.noc7Process) {
-      proc = window.noc7Process({ $, esc, LABEL, ELEMENTS, STATUS, valueText, jobOf,
+      proc = window.noc7Process({ $, esc, LABEL, ELEMENTS, STATUS, ATTR, valueText, candText, candKind, spanLabel, highlight, jobOf,
         fetchDetail: (ref) => source.get(ref),
         onOpen: async (ref, step) => { if (await openTicket(ref, "local")) go(step); } });
     }

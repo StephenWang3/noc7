@@ -186,7 +186,7 @@ def test_report_explains_selection_and_threshold(sample):
         suggestions=[], events=[], quote_checks=extraction.quote_checks, issues=[], service_identity=None))
     assert '待业务方确认' in render(result)
     assert '恢复时间业务取值' in render(result, format='md') and '待业务方确认' in render(result, format='md')
-    text = str(build_company_report(result).cells['resumed'])
+    text = str(build_company_report(result, draft=True).cells['resumed'])
     assert '供应商 RFO' in text and '待业务方确认' in text
 
 

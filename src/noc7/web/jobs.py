@@ -544,26 +544,32 @@ def _summary(bundle_dir: Path, ref: str) -> dict:
 
 
 def _company_payload(result: AnalysisResult) -> dict:
+    """cells 是正式版（与下载的 Word 一致）；draft_cells 带【待核实】等标记，只用来列“下载前检查”。"""
     report = build_company_report(result)
     return {
         "ticket_ref": report.ticket_ref,
         "report_date": report.report_date,
         "synthetic": report.synthetic,
-        "cells": [
-            {
-                "row": cell.row,
-                "col": cell.col,
-                "rowspan": cell.rowspan,
-                "colspan": cell.colspan,
-                "label": cell.label,
-                "lines": [
-                    [{"text": part.text, "pending": part.pending} for part in line]
-                    for line in cell.lines
-                ],
-            }
-            for cell in report.grid()
-        ],
+        "cells": _cells_json(report),
+        "draft_cells": _cells_json(build_company_report(result, draft=True)),
     }
+
+
+def _cells_json(report) -> list[dict]:
+    return [
+        {
+            "row": cell.row,
+            "col": cell.col,
+            "rowspan": cell.rowspan,
+            "colspan": cell.colspan,
+            "label": cell.label,
+            "lines": [
+                [{"text": part.text, "pending": part.pending} for part in line]
+                for line in cell.lines
+            ],
+        }
+        for cell in report.grid()
+    ]
 
 
 def _extract_zip(data: bytes, dest: Path) -> Path:

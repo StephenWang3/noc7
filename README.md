@@ -6,7 +6,7 @@
 
 > 仓库里的工单全部是**合成数据**（编号以 `SYN-` 开头）。真实工单及分析产物只存放在仓库外的本机目录，不提交。用户已批准开发期向官方 DeepSeek 发送真实文本和本地 OCR 文字；原始截图不外发，其他外部服务不因此获准。批准范围见 [模型接入决策](docs/decisions/llm-text-providers.md)。
 
-定位依据见 [当前 PRD](docs/PRD.md) 与 [定位 ADR](docs/decisions/completed-ticket-report-positioning.md)。其他状态仅保留兼容和反例验证，不作为阶段报告主场景。责任方、地点按原文依据一层层取值写进公司报告，取自较低层的标“待核实”。
+定位依据见 [当前 PRD](docs/PRD.md) 与 [定位 ADR](docs/decisions/completed-ticket-report-positioning.md)。其他状态仅保留兼容和反例验证，不作为阶段报告主场景。责任方、地点按原文依据一层层取值写进公司报告，取自较低层的在核对报告里标“待核实”；公司报告只填最终值。
 
 **使用者请看 [使用说明](docs/USAGE.md)**：从 NOC 导出工单、生成报告、按标记核实，一步一条命令。
 

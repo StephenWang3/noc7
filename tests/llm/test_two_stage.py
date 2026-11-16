@@ -48,7 +48,7 @@ def run(server, replies, bundle="SYN-P04"):
 
 
 def cell(result, key):
-    return ["".join(p.text for p in line) for line in build_company_report(result).cells[key]]
+    return ["".join(p.text for p in line) for line in build_company_report(result, draft=True).cells[key]]
 
 
 def test_two_requests_and_item_level_drop(server):

@@ -73,10 +73,13 @@ def test_standardized_party_is_derived_from_relation_not_substring_or_model_sele
     assert data.suggestions[0].original == payload['elements']['responsible_party']
     result = saved_result(sample, ctx, data)
     assert AnalysisResult.model_validate_json(result.model_dump_json()) == result
-    for text in (render(result, format='md'), render(result, format='html'), render_company_html(result)):
+    for text in (render(result, format='md'), render(result, format='html')):
         assert '联通' in text and '未经人工审核' in text
+    # 正式的公司报告只填最终值，“未经人工审核”只留在核对报告和草稿清单里
+    company = render_company_html(result)
+    assert '责任方：联通' in company and '未经人工审核' not in company
     assert not any(r['label'] == '故障责任方' for r in __import__('noc7.report', fromlist=['_suggestion_rows'])._suggestion_rows(result))
-    cells = build_company_report(result).cells['analysis']
+    cells = build_company_report(result, draft=True).cells['analysis']
     assert any('未经人工审核' in p.text for line in cells for p in line)
 
 
@@ -534,7 +537,8 @@ def test_base_merge_preserves_both_recovery_and_business_assessments(sample, mon
         report = render(result, format=fmt)
         assert ('恢复时间业务取值' in report) is not legacy_recovery
         assert '明确责任归属' in report
-    assert '有记录，未经人工审核' in render_company_html(result)
+    assert '有记录，未经人工审核' not in render_company_html(result)
+    assert any('有记录，未经人工审核' in p.text for line in build_company_report(result, draft=True).cells['analysis'] for p in line)
 
 
 def test_same_place_spellings_merge_only_when_layered(sample):
