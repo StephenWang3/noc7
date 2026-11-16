@@ -121,10 +121,13 @@ def test_failed_second_pass_keeps_first_pass(server):
     assert any("第 2 遍" in d["reason"] for d in result.semantic_assessment.original["facts_dropped"])
 
 
-def test_fault_area_field_is_a_labelled_last_resort(server):
+def test_fault_area_field_is_a_labelled_last_resort(server, monkeypatch):
+    from noc7.providers import responsibility_location as rl
     from noc7.providers.responsibility_location import area_party, evaluate
     from noc7.schema.elements import PartyCandidate
-    assert (area_party("海外-其他运营商-国际运营商"), area_party("省内-用户"), area_party("海外-局方检测正常自恢")) == ("供应商", None, None)
+    # 业务口径：故障区域字段已全部停用，不再兜底。
+    assert (area_party("海外-其他运营商-国际运营商"), area_party("省内-用户"), area_party("海外-局方检测正常自恢")) == (None, None, None)
+    monkeypatch.setattr(rl, "AREA_PARTIES", (("运营商", "供应商"),))  # 以下只测兜底机制本身
     party = {"type": "responsibility", "evidence_id": "M02/log:5", "quote": "市政道路施工挖断 24 芯光缆", "party": "联通",
              "source": "branch_log"}
     result, ctx, _ = run_passes(server, [{"facts": [*FACTS["facts"][:8], party]}, WRITING], passes=1)
