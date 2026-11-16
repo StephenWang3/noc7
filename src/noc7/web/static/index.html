@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>NOC 完结工单报告 · 演示</title>
+<title>NOC 故障报告操作台</title>
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -13,6 +13,7 @@
     <nav class="stepper" id="stepper" aria-label="步骤"></nav>
     <div class="top-right">
       <span class="source-chip" id="source-chip"></span>
+      <button class="btn ghost model-chip" id="model-chip" type="button">模型设置</button>
       <button class="btn ghost" id="open-drawer" type="button">接入 NOC 工作台 ⇢</button>
     </div>
   </header>
@@ -20,8 +21,8 @@
   <main class="screen" id="screen" tabindex="-1"></main>
 </div>
 
-<aside class="drawer" id="drawer" aria-hidden="true" aria-label="接入 NOC 工作台">
-  <div class="drawer-head"><b>怎么接进 NOC 工作台</b><button class="btn ghost" id="close-drawer" type="button">关闭 ✕</button></div>
+<aside class="drawer" id="drawer" aria-hidden="true" aria-labelledby="drawer-title">
+  <div class="drawer-head"><b id="drawer-title">怎么接进 NOC 工作台</b><button class="btn ghost" id="close-drawer" type="button">关闭 ✕</button></div>
   <div class="drawer-body" id="drawer-body"></div>
 </aside>
 <div class="scrim" id="scrim"></div>

@@ -11,14 +11,22 @@
     async list() { return (await this.catalog()).tickets; },
     async machine() {
       const res = await fetch("/api/local-bundles");
-      if (!res.ok) return { available: false, root: null, bundles: [] };
+      if (!res.ok) return { available: false, groups: [] };
       return res.json();
     },
-    async analyzeMachine(dirs, provider) {
-      const res = await fetch("/api/local-bundles/analyze", {
-        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ dirs, provider }),
+    // 改动类请求都带 X-NOC7-Request 头，服务端据此拒绝别的网站跨站调用。
+    async post(url, data) {
+      const res = await fetch(url, {
+        method: "POST", headers: { "Content-Type": "application/json", "X-NOC7-Request": "1" }, body: JSON.stringify(data || {}),
       });
-      return { ok: res.ok, body: await res.json() };
+      let body = {};
+      try { body = await res.json(); } catch (_) { /* 空响应 */ }
+      return { ok: res.ok, body };
+    },
+    analyzeMachine(keys) { return this.post("/api/local-bundles/analyze", { keys }); },
+    async model() {
+      const res = await fetch("/api/model");
+      return res.ok ? res.json() : null;
     },
     async get(ref) {
       const res = await fetch("/api/tickets/" + encodeURIComponent(ref));
@@ -158,8 +166,9 @@
   }
 
   // ───────────────────────── 状态与事件 ─────────────────────────
-  const state = { step: 1, entryTab: "local", tickets: [], pick: null, ref: null, data: null, entry: "local", element: "start_time", tab: "main", legend: true, log: [], workbenchOrigins: [], importError: "", importProvider: "rules", poll: null, listSig: "",
-    machine: { available: false, root: null, bundles: [] }, selected: new Set(), machineProvider: "rules", batch: [], machineError: "" };
+  const state = { step: 1, entryTab: "demo", tickets: [], pick: null, ref: null, data: null, entry: "local", element: "start_time", tab: "main", legend: true, log: [], workbenchOrigins: [], importError: "", poll: null, listSig: "",
+    machine: { available: false, groups: [] }, selected: new Set(), batch: [], machineError: "",
+    model: null, drawer: "workbench", modelError: "" };
   const embedded = window.parent !== window;
 
   function extraOrigins() { return (state.workbenchOrigins || []).join(","); }
@@ -226,22 +235,27 @@
     }).join("");
     const from = { local: "来源：本地工单包", workbench: `来源：NOC 工作台传入${state.ref ? " · " + state.ref : ""}`, link: `来源：链接传入${state.ref ? " · " + state.ref : ""}` };
     $("#source-chip").textContent = from[state.entry];
+    const m = state.model;
+    const chip = $("#model-chip");
+    chip.textContent = m ? `模型：${m.usable ? m.label : "未配置"}` : "模型设置";
+    chip.title = m && m.usable ? "分析时实时调用这个模型；点开可更换" : "没有可用的模型，只能回放已保存的模型结果；点开填写 API key 或配置公司本地模型";
+    chip.classList.toggle("off", !(m && m.usable));
     // 只在当前打开的那张是合成数据时提示。列表上不把导入的工单说成 fixtures。
     const bar = $(".synthetic-bar");
     const opened = state.data && state.data.analysis && state.data.analysis.data_class === "synthetic";
     bar.hidden = !opened;
     if (opened) {
       const ref = (state.data.ticket && state.data.ticket.ticket_ref) || state.ref || "";
-      const prepared = ["SYN-P04", "SYN-S09", "SYN-P01", "SYN-S06", "SYN-S02"];
-      bar.textContent = prepared.indexOf(ref) >= 0
-        ? "合成演示数据（来自仓库 fixtures/），不是真实工单，也不代表真实模型质量。"
-        : "合成数据，不是真实工单，也不代表真实模型质量。";
+      const job = jobOf(ref);
+      bar.textContent = job && job.source === "demo"
+        ? "合成演示数据（来自仓库 fixtures/），不是真实工单。模型结果是事先保存的，这里回放。"
+        : "合成数据，不是真实工单。";
     }
   }
 
   // ───────────────────────── 画面 1：选择工单 ─────────────────────────
-  function ticketCards() {
-    return state.tickets.map((t) => {
+  function ticketCards(list) {
+    return (list || state.tickets).map((t) => {
       const selected = state.pick === t.ticket_ref;
       if (t.status !== "ready" || !t.element_status) {
         const failed = t.status === "failed";
@@ -264,8 +278,8 @@
   }
   function patchStep1List() {
     const box = document.querySelector("#screen .tickets");
-    if (!box || state.step !== 1 || state.entryTab !== "local") return false;
-    box.innerHTML = ticketCards();
+    if (!box || state.step !== 1 || state.entryTab !== "demo") return false;
+    box.innerHTML = ticketCards(state.tickets.filter((t) => t.source === "demo"));
     const picked = pickedTicket();
     const hint = document.querySelector("#screen .screen-foot .hint");
     const next = document.getElementById("next1");
@@ -277,8 +291,7 @@
     if (next) next.disabled = !(picked && picked.status === "ready");
     return true;
   }
-  const SOURCE_LABEL = { prepared: "合成演示", local: "本机导出", upload: "上传" };
-  const PROVIDER_LABEL = { rules: "规则", llm: "模型" };
+  const SOURCE_LABEL = { demo: "演示", local: "本机导出", upload: "上传" };
   function jobOf(ref) { return state.tickets.find((t) => t.ticket_ref === ref) || null; }
   function fmtTime(iso) {
     if (!iso) return "";
@@ -308,41 +321,70 @@
         ${finished ? `<button class="btn ghost" data-batch-clear="1" type="button">收起</button>` : ""}</div>
       <div class="bar"><span style="width:${pct}%"></span></div></div>`;
   }
+  // 当前模型能不能实时调用；不能时有保存结果的单子回放，没有的分析不了。
+  function modelLive() { return !!(state.model && state.model.usable); }
+  function modelHint() {
+    if (modelLive()) return `分析时实时调用 <b>${esc(state.model.label)}</b>（模型摘录事实 + 本地规则裁决），每张约一两分钟。`;
+    return `还没有可用的模型：只能分析<b>有已保存模型结果</b>的单子（回放，不联网）。点右上角<b>模型设置</b>填 API key 或配置公司本地模型后可实时分析任何单子。`;
+  }
+  function machineBundles() { return state.machine.groups.flatMap((g) => g.bundles); }
+  function selectable(b) { return !b.demo && (jobOf(b.ticket_ref) || {}).status !== "running" && (modelLive() || b.has_replay); }
   function machinePane() {
     const m = state.machine;
     if (!m.available) {
-      return `<div class="wb-note">没有找到本机工单目录${m.root ? ` <code>${esc(m.root)}</code>` : ""}。先按使用说明从 NOC 导出工单，或启动时用 <code>--local-root</code> 指定目录。</div>`;
+      return `<div class="wb-note">没有找到本机工单目录。先按使用说明从 NOC 导出工单，或启动时用 <code>--local-root</code> 指定目录。</div>`;
     }
-    if (!m.bundles.length) return `<div class="wb-note">目录 <code>${esc(m.root)}</code> 里还没有工单包。</div>`;
-    const busy = (ref) => (jobOf(ref) || {}).status === "running";
-    const rows = m.bundles.map((b) => {
-      const job = jobOf(b.ticket_ref);
-      const checked = state.selected.has(b.dir) ? " checked" : "";
-      const disabled = busy(b.ticket_ref) ? " disabled" : "";
-      return `<tr class="${state.selected.has(b.dir) ? "sel" : ""}">
-        <td><input type="checkbox" data-sel="${esc(b.dir)}" aria-label="选择 ${esc(b.ticket_ref)}"${checked}${disabled}></td>
-        <td class="mono">${esc(b.ticket_ref)}</td>
-        <td class="title-cell">${esc(b.title || "")}</td>
-        <td>${esc(b.category || "")}</td>
-        <td>${statusChip(job)}${job && job.provider ? ` <span class="small muted">${PROVIDER_LABEL[job.provider] || ""}</span>` : ""}</td>
-        <td>${miniDots(job)}</td>
-        <td>${job && job.status === "ready" ? `<button class="btn" data-open="${esc(b.ticket_ref)}" type="button">查看</button>` : ""}</td></tr>`;
-    }).join("");
+    const all = machineBundles().filter(selectable);
     const n = state.selected.size;
-    const all = m.bundles.filter((b) => !busy(b.ticket_ref)).length;
-    const chosen = state.machineProvider === "llm" ? "llm" : "rules";
+    const groups = m.groups.map((g) => {
+      if (!g.bundles.length) return `<h3 class="group-head"><code>${esc(g.root)}</code> <span class="small muted">没有工单包</span></h3>`;
+      const rows = g.bundles.map((b) => {
+        const job = jobOf(b.ticket_ref);
+        const ok = selectable(b);
+        const sel = state.selected.has(b.key);
+        const why = b.demo ? "演示单在“演示单”标签里查看" : ok ? "" : (job || {}).status === "running" ? "正在分析" : "没有已保存的模型结果，配置模型后才能分析";
+        const tags = [b.has_replay ? `<span class="badge b-info" title="有已保存的模型结果，可以不联网回放">有记录</span>` : "",
+          b.demo ? `<span class="badge s-documented">演示</span>` : ""].join(" ");
+        return `<tr class="${sel ? "sel" : ""}">
+          <td><input type="checkbox" data-sel="${esc(b.key)}" aria-label="选择 ${esc(b.ticket_ref)}"${sel ? " checked" : ""}${ok ? "" : ` disabled title="${esc(why)}"`}></td>
+          <td class="mono">${esc(b.ticket_ref)}</td>
+          <td class="title-cell">${esc(b.title || "")}</td>
+          <td>${esc(b.category || "")}</td>
+          <td>${tags}</td>
+          <td>${statusChip(job)}</td>
+          <td>${miniDots(job)}</td>
+          <td>${job && job.status === "ready" ? `<button class="btn" data-open="${esc(b.ticket_ref)}" type="button">查看</button>` : ""}</td></tr>`;
+      }).join("");
+      return `<h3 class="group-head"><code>${esc(g.root)}</code> <span class="small muted">${g.bundles.length} 张</span></h3>
+        <table class="grid-table"><thead><tr><th></th><th>工单</th><th>标题</th><th>分类</th><th>标记</th><th>状态</th><th>七要素</th><th></th></tr></thead>
+        <tbody>${rows}</tbody></table>`;
+    }).join("");
     return `<div class="machine-bar">
-        <label><input type="checkbox" data-sel-all="1"${n && n === all ? " checked" : ""}> 全选</label>
-        <span class="small muted">目录 <code>${esc(m.root)}</code>，共 ${m.bundles.length} 张</span>
+        <label><input type="checkbox" data-sel-all="1"${n && n === all.length ? " checked" : ""}${all.length ? "" : " disabled"}> 全选可分析的</label>
+        <span class="small muted">共 ${machineBundles().length} 张，可分析 ${all.length} 张</span>
         <span class="spacer"></span>
-        <label><input type="radio" name="machine-provider" value="rules"${chosen === "rules" ? " checked" : ""}> 规则</label>
-        <label><input type="radio" name="machine-provider" value="llm"${chosen === "llm" ? " checked" : ""}> 用模型分析</label>
         <button class="btn primary" id="machine-run" type="button"${n ? "" : " disabled"}>分析选中的 ${n} 张</button></div>
+      <p class="small muted model-hint">${modelHint()}</p>
       <p class="err" ${state.machineError ? "" : "hidden"}>${esc(state.machineError)}</p>
       ${batchProgress()}
-      <table class="grid-table"><thead><tr><th></th><th>工单</th><th>标题</th><th>分类</th><th>状态</th><th>七要素</th><th></th></tr></thead>
-      <tbody>${rows}</tbody></table>
-      <p class="small muted">用模型分析每张约一两分钟，按顺序逐张进行；可以先看已完成的单子。</p>`;
+      ${groups}`;
+  }
+  function demoPane() {
+    const demos = state.tickets.filter((t) => t.source === "demo");
+    const importer = `<form id="import-form" class="wb-form import-row">
+        <input id="import-file" type="file" accept=".zip,application/zip" aria-label="工单包 zip" required>
+        <button class="btn primary" type="submit">导入并分析</button></form>
+      <p class="err" id="import-err" ${state.importError ? "" : "hidden"}>${esc(state.importError || "")}</p>`;
+    return `<p class="small muted">演示单回放已保存的模型结果，再经本地规则裁决，结果和实时调用一致，不联网、不花钱。</p>
+      <div class="tickets">${demos.length ? ticketCards(demos) : `<div class="wb-note">没有演示单。</div>`}</div>
+      <h3 class="group-head">导入一个工单包</h3>
+      ${importer}
+      <p class="small muted">${modelHint()}</p>`;
+  }
+  function shortModel(label) {
+    if (!label) return "";
+    if (label.startsWith("实时调用 ")) return "实时 · " + label.slice(5);
+    return label === "回放已保存的模型结果" ? "回放" : label;
   }
   function historyRows() {
     return state.tickets.filter((t) => t.status !== "running" || state.batch.includes(t.ticket_ref))
@@ -350,35 +392,36 @@
   }
   function historyPane() {
     const rows = historyRows().map((t) => `<tr>
-        <td class="mono">${esc(t.ticket_ref)}</td>
-        <td class="title-cell">${esc(t.title || "")}</td>
+        <td class="ref-cell"><div class="mono">${esc(t.ticket_ref)}</div><div class="small muted" title="${esc(t.title || "")}">${esc(t.title || "")}</div></td>
         <td>${SOURCE_LABEL[t.source] || ""}</td>
-        <td>${PROVIDER_LABEL[t.provider] || ""}</td>
+        <td title="${esc(t.model_label || "")}">${esc(shortModel(t.model_label))}</td>
         <td>${esc(fmtTime(t.finished_at))}</td>
         <td>${miniDots(t)}</td>
         <td>${t.status === "ready" ? `<span class="badge b-warn">待核实 ${t.open_issues || 0}</span>` : statusChip(t)}</td>
         <td class="actions">${t.status === "ready"
           ? `<button class="btn" data-open="${esc(t.ticket_ref)}" type="button">七要素</button>
-             <button class="btn" data-open-report="${esc(t.ticket_ref)}" type="button">公司报告</button>
+             <button class="btn" data-open-report="${esc(t.ticket_ref)}" type="button">报告</button>
              <a class="btn" href="/api/tickets/${encodeURIComponent(t.ticket_ref)}/company-report.docx" download>Word</a>`
-          : esc((t.problems || []).join("；"))}</td></tr>`).join("");
+          : `<span class="problem">${esc((t.problems || []).join("；"))}</span>`}</td></tr>`).join("");
     if (!rows) return `<div class="wb-note">还没有分析记录。</div>`;
-    return `<table class="grid-table"><thead><tr><th>工单</th><th>标题</th><th>来源</th><th>方式</th><th>完成时间</th><th>七要素</th><th>待核实</th><th></th></tr></thead>
+    return `<table class="grid-table"><thead><tr><th>工单</th><th>来源</th><th>模型</th><th>完成时间</th><th>七要素</th><th>待核实</th><th></th></tr></thead>
       <tbody>${rows}</tbody></table>
-      <p class="small muted">按完成时间倒序。用模型分析过的结果在重启后保留；合成演示单每次启动用规则重算。</p>`;
+      <p class="small muted">按完成时间倒序，重启后保留。“模型”一栏写明是实时调用的哪个模型，还是回放已保存的模型结果。</p>`;
   }
   async function refreshMachine() {
     try { state.machine = await source.machine(); } catch (err) { /* 保留上一次 */ }
   }
+  async function refreshModel() {
+    try { state.model = await source.model(); } catch (err) { /* 保留上一次 */ }
+  }
   async function runMachineBatch() {
-    const dirs = [...state.selected];
-    if (!dirs.length) return;
-    const provider = state.machineProvider === "llm" ? "llm" : "rules";
+    const keys = [...state.selected];
+    if (!keys.length) return;
     let res;
-    try { res = await source.analyzeMachine(dirs, provider); } catch (err) { state.machineError = "请求没有完成"; return render(); }
+    try { res = await source.analyzeMachine(keys); } catch (err) { state.machineError = "请求没有完成"; return render(); }
     if (!res.ok) { state.machineError = (res.body.problems || ["没有开始分析"]).join("；"); return render(); }
     const rejected = res.body.rejected || [];
-    state.machineError = rejected.map((r) => `${r.dir}：${(r.problems || []).join("；")}`).join("\n");
+    state.machineError = rejected.map((r) => `${r.key.split("/").pop()}：${(r.problems || []).join("；")}`).join("\n");
     state.batch = res.body.accepted || [];
     state.selected.clear();
     state.tickets = await source.list();
@@ -390,43 +433,34 @@
   function renderStep1() {
     const flow = `<div class="flow" aria-label="整体流程">
       <div class="node"><b>① 已结单工单</b>完整导出材料 · 含结案说明与附件</div><span class="arrow">→</span>
-      <div class="node"><b>② 大模型预处理</b>只读带编号的原文片段，不能凭空下结论</div><span class="arrow">→</span>
-      <div class="node"><b>③ 七要素 + 原文出处</b>每条结论点得回原文；拿不准就留空或标待核实</div><span class="arrow">→</span>
+      <div class="node"><b>② 模型摘录事实</b>只读带编号的原文片段，每条事实带原文引文</div><span class="arrow">→</span>
+      <div class="node"><b>③ 本地规则裁决</b>核对引文、按依据强弱逐层取值；拿不准就留空或标待核实</div><span class="arrow">→</span>
       <div class="node"><b>④ 标准化公司报告</b>可下载 Word</div><span class="arrow">→</span>
       <div class="node out-of-scope"><b>人工审核</b>在 NOC 工作台完成，不在本页</div></div>`;
-    const local = ticketCards();
-    const chosen = state.importProvider === "llm" ? "llm" : "rules";
-    const importer = `<form id="import-form" class="wb-form import-row">
-        <input id="import-file" type="file" accept=".zip,application/zip" aria-label="工单包 zip" required>
-        <label><input type="radio" name="provider" value="rules"${chosen === "rules" ? " checked" : ""}> 规则</label>
-        <label><input type="radio" name="provider" value="llm"${chosen === "llm" ? " checked" : ""}> 用模型分析</label>
-        <button class="btn primary" type="submit">导入</button></form>
-      <p class="err" id="import-err" ${state.importError ? "" : "hidden"}>${esc(state.importError || "")}</p>
-      <p class="job-note small muted">预先放好的五张合成单用规则计算。导入标准工单包时，可以选规则，或用当前模型配置现场分析。模型通常要等一两分钟，卡片会停在「分析中」。</p>`;
     const wb = `<div class="wb-note"><b>工作台只需要传入「工单号」</b>，本页自己向接口取分析结果，不要求工作台懂七要素的格式。</div>
       <div class="wb-form"><input id="wb-ref" placeholder="工单号，例如 SYN-S09" value="${esc(state.wbRef || "")}" aria-label="工单号"><button class="btn primary" id="wb-load" type="button">载入</button></div>
       <p class="err" id="wb-err" ${state.wbError ? "" : "hidden"}>${esc(state.wbError || "")}</p>
       <p class="small muted">等价于工作台打开：<code>index.html?ticket=SYN-S09</code>，或向本页 iframe 发送 <code>postMessage({type:"noc7.open", ticket_ref:"SYN-S09"})</code>。点右上角“接入 NOC 工作台”可看完整约定和实时事件。</p>`;
+    const panes = { machine: machinePane, demo: demoPane, history: historyPane, workbench: () => wb };
+    const demoCount = state.tickets.filter((t) => t.source === "demo").length;
+    const tab = (id, name, count) => `<button class="tab ${state.entryTab === id ? "active" : ""}" data-etab="${id}" role="tab">${name}${count != null ? `<span class="count">${count}</span>` : ""}</button>`;
     $("#screen").innerHTML = `
-      <div class="screen-head"><h1>选择一张工单</h1><p>预先放好五张合成工单。也可以导入一张从没见过的标准工单包，算完再看。</p></div>
+      <div class="screen-head"><h1>选择一张工单</h1><p>分析固定是“模型摘录 + 本地规则裁决”。本机导出的工单勾选后批量分析；演示单回放已保存的模型结果。</p></div>
       ${flow}
       <div class="entry">
         <section class="card entry-main" style="padding:0 14px 0">
           <div class="tabs" role="tablist">
-            <button class="tab ${state.entryTab === "machine" ? "active" : ""}" data-etab="machine" role="tab">本机工单<span class="count">${state.machine.bundles.length}</span></button>
-            <button class="tab ${state.entryTab === "local" ? "active" : ""}" data-etab="local" role="tab">演示单与导入</button>
-            <button class="tab ${state.entryTab === "history" ? "active" : ""}" data-etab="history" role="tab">分析记录<span class="count">${historyRows().length}</span></button>
-            <button class="tab ${state.entryTab === "workbench" ? "active" : ""}" data-etab="workbench" role="tab">由 NOC 工作台传入</button></div>
-          <div class="tab-body">${{ machine: machinePane, history: historyPane }[state.entryTab]?.() ?? (state.entryTab === "local" ? `${importer}<div class="tickets">${local}</div>` : wb)}</div>
+            ${tab("machine", "本机工单", machineBundles().length)}${tab("demo", "演示单", demoCount)}${tab("history", "分析记录", historyRows().length)}${tab("workbench", "由 NOC 工作台传入")}</div>
+          <div class="tab-body">${(panes[state.entryTab] || demoPane)()}</div>
         </section>
         <aside class="card entry-side">
           <h2>这一步在做什么</h2>
           <ul>
             <li><b>本机工单</b>：从 NOC 导出到本机的工单，勾选后批量分析，进度实时刷新。</li>
-            <li><b>分析记录</b>：做过的分析都在这里，重启后用模型分析过的结果仍保留。</li>
-            <li>五张合成单在打开页面时用<b>规则</b>计算。导入的包可以改选<b>用模型分析</b>，没算完会停在「分析中」，失败会写出原因。</li>
-            <li>下一页看<b>七要素</b>，每条结论都能点回<b>原文出处</b>。</li>
-            <li>再下一页是<b>公司格式报告</b>，可下载 Word。</li>
+            <li><b>演示单</b>：合成单和几张真实单，回放保存好的模型结果，不联网。也可以导入 zip 工单包。</li>
+            <li><b>分析记录</b>：做过的分析都在这里，重启后保留。</li>
+            <li>右上角<b>模型设置</b>：填 DeepSeek API key，或配置公司本地模型，就能实时分析新工单。</li>
+            <li>下一页看<b>七要素</b>，每条结论都能点回<b>原文出处</b>；再下一页是<b>公司报告</b>，可下载 Word。</li>
           </ul>
           <h2 style="margin-top:14px">卡片上的色条</h2>
           <p class="small muted" style="margin:0 0 6px">7 格依次是：${ELEMENTS.map((n) => LABEL[n]).join("、")}。</p>
@@ -659,6 +693,8 @@
     box.scrollTop = box.scrollHeight;
   }
   function renderDrawer() {
+    $("#drawer-title").textContent = state.drawer === "model" ? "模型设置" : "怎么接进 NOC 工作台";
+    if (state.drawer === "model") return renderModelDrawer();
     $("#drawer-body").innerHTML = `
       <h3>原则：页面不关心工单从哪来</h3>
       <p class="small">所有入口最后都只调用一个函数 <code>openTicket(工单号)</code>；页面再向 <code>TicketSource</code> 取数据。工作台不需要懂七要素的内部格式。</p>
@@ -672,7 +708,7 @@
 GET /api/tickets/{ref}                     分析结果（未完成时只有状态）
 GET /api/tickets/{ref}/company-report.docx 公司报告 Word
 GET /api/tickets/{ref}/company-report.html 公司报告网页版
-POST /api/tickets                          上传工单包 zip，provider=rules 或 llm</pre>
+POST /api/tickets                          上传工单包 zip（模型摘录 + 本地规则）</pre>
       <p class="small">页面只吃一种数据：<code>AnalysisResult</code>（<code>schemas/analysis-result.schema.json</code>）。公司报告表格来自同一份结果。工作台只传工单号；新工单用上面的上传接口送进标准工单包。</p>
       <h3>③ 出口（本页 → 工作台）</h3>
       <table><tr><th>事件</th><th>何时发出</th></tr>
@@ -686,7 +722,56 @@ POST /api/tickets                          上传工单包 zip，provider=rules 
       <p class="small">不做审核（通过 / 改写 / 清空）、不改工单、不回写 NOC。那些属于 NOC 工作台。</p>`;
     refreshLog();
   }
-  function setDrawer(open) {
+  function renderModelDrawer() {
+    const m = state.model;
+    if (!m) { $("#drawer-body").innerHTML = `<p class="err">读不到模型设置。</p>`; return; }
+    const d = m.deepseek, l = m.local;
+    const radio = (id, name, ok, note) => `<label class="profile ${m.active === id ? "on" : ""}">
+        <input type="radio" name="active-model" value="${id}"${m.active === id ? " checked" : ""}${ok ? "" : " disabled"}>
+        <span><b>${name}</b><small>${note}</small></span></label>`;
+    const keyState = (set) => set ? `<span class="badge s-confirmed">已设置</span>` : `<span class="badge b-warn">未设置</span>`;
+    $("#drawer-body").innerHTML = `
+      <p class="small">分析固定是“模型摘录事实 + 本地规则裁决”。这里只选用哪个模型。当前：<b>${m.usable ? esc(m.label) + "，可以实时分析" : "没有可用的模型，只能回放已保存的结果"}</b>。</p>
+      <p class="err" ${state.modelError ? "" : "hidden"}>${esc(state.modelError)}</p>
+      <h3>使用哪个模型</h3>
+      <div class="profiles">
+        ${radio("deepseek", "DeepSeek", d.configured, d.configured ? `官方接口 · ${esc(d.model || "")}` : "缺少 config/models/deepseek.json")}
+        ${radio("local", "公司本地模型", l.configured, l.configured ? `${esc(l.model)} · ${esc(l.base_url)}` : "先在下面填写并保存")}
+      </div>
+      <h3>DeepSeek API key ${keyState(d.key_set)}</h3>
+      <form id="key-form" class="wb-form" data-profile="deepseek" autocomplete="off">
+        <input id="key-deepseek" type="password" placeholder="${d.key_set ? "已设置；重新填写可替换" : "sk-…"}" aria-label="DeepSeek API key" autocomplete="off" spellcheck="false">
+        <button class="btn primary" type="submit">保存</button>
+        ${d.key_set ? `<button class="btn ghost" type="button" data-key-clear="deepseek">清除</button>` : ""}</form>
+      <p class="small muted">key 只保存在本机这个服务进程的内存里：不写文件、不回显、不进日志，停止服务后失效。也可以启动前设环境变量 <code>DEEPSEEK_API_KEY</code>。</p>
+      <h3>公司本地模型</h3>
+      <form id="local-form" class="model-form" autocomplete="off">
+        <label>服务地址<input name="base_url" value="${esc(l.base_url)}" placeholder="http://10.x.x.x:8000/v1" spellcheck="false"></label>
+        <label>模型名<input name="model" value="${esc(l.model)}" placeholder="qwen2.5-72b-instruct" spellcheck="false"></label>
+        <label>单次请求上限（KB）<input name="max_request_kb" type="number" min="1" value="${l.max_request_kb}"></label>
+        <label>输出上限（token）<input name="max_tokens" type="number" min="1" value="${l.max_tokens}"></label>
+        <label class="check"><input name="json_mode" type="checkbox"${l.json_mode ? " checked" : ""}> 服务支持 JSON 模式（response_format）</label>
+        <label class="check"><input name="needs_key" type="checkbox"${l.needs_key ? " checked" : ""}> 需要 API key</label>
+        <button class="btn primary" type="submit">保存配置</button></form>
+      ${l.needs_key ? `<form id="key-form-local" class="wb-form" data-profile="local" autocomplete="off">
+        <input id="key-local" type="password" placeholder="${l.key_set ? "已设置；重新填写可替换" : "本地模型的 key"}" aria-label="本地模型 API key" autocomplete="off" spellcheck="false">
+        <button class="btn primary" type="submit">保存 key</button> ${keyState(l.key_set)}
+        ${l.key_set ? `<button class="btn ghost" type="button" data-key-clear="local">清除</button>` : ""}</form>` : ""}
+      <p class="small muted">内网 OpenAI 兼容接口（如 vLLM 部署的 Qwen），地址写到 <code>/v1</code>，不含 <code>/chat/completions</code>。配置保存在本机 <code>~/.noc7/models/local.json</code>，不含 key；真实工单只发给这里配置的内网地址。</p>`;
+  }
+  async function modelAction(url, data, done) {
+    let res;
+    try { res = await source.post(url, data); } catch (err) { res = { ok: false, body: { problems: ["请求没有完成"] } }; }
+    if (!res.ok) { state.modelError = (res.body.problems || ["没有保存"]).join("；"); renderDrawer(); return; }
+    state.model = res.body;
+    state.modelError = "";
+    toast(done);
+    renderDrawer();
+    renderTop();
+    if (state.step === 1) render();
+  }
+  function setDrawer(open, kind) {
+    if (open && kind) { state.drawer = kind; state.modelError = ""; }
     $("#drawer").classList.toggle("show", open); $("#scrim").classList.toggle("show", open);
     $("#drawer").setAttribute("aria-hidden", String(!open));
     if (open) renderDrawer();
@@ -706,7 +791,7 @@ POST /api/tickets                          上传工单包 zip，provider=rules 
     if (d.step) return go(+d.step);
     if (d.etab) {
       state.entryTab = d.etab;
-      if (d.etab === "machine") await refreshMachine();
+      if (d.etab === "machine") await Promise.all([refreshMachine(), refreshModel()]);
       return render();
     }
     if (d.open || d.openReport) {
@@ -735,7 +820,9 @@ POST /api/tickets                          上传工单包 zip，provider=rules 
     if (d.jump) { state.element = d.jump; state.tab = "main"; return go(2); }
     if (d.dl) { emit("noc7.report.downloaded", { ticket_ref: state.ref, format: d.dl }); toast("已开始下载公司报告"); return; }
     if (t.id === "review-req") { emit("noc7.review.requested", { ticket_ref: state.ref }); toast(embedded ? "已通知 NOC 工作台打开审核界面" : "独立运行：已发出 noc7.review.requested（当前没有工作台接收）"); return; }
-    if (t.id === "open-drawer") return setDrawer(true);
+    if (t.id === "open-drawer") return setDrawer(true, "workbench");
+    if (t.id === "model-chip") { await refreshModel(); return setDrawer(true, "model"); }
+    if (d.keyClear) return modelAction("/api/model/key/clear", { profile: d.keyClear }, "已清除 key");
     if (t.id === "close-drawer") return setDrawer(false);
     if (t.id === "sim-wb") { window.postMessage({ type: "noc7.open", ticket_ref: "SYN-S06" }, location.origin); return; }
   });
@@ -783,31 +870,42 @@ POST /api/tickets                          上传工单包 zip，provider=rules 
     if (box && box.dataset && (box.dataset.sel || box.dataset.selAll)) {
       if (box.dataset.selAll) {
         state.selected.clear();
-        if (box.checked) state.machine.bundles.forEach((b) => { if ((jobOf(b.ticket_ref) || {}).status !== "running") state.selected.add(b.dir); });
+        if (box.checked) machineBundles().filter(selectable).forEach((b) => state.selected.add(b.key));
       } else if (box.checked) state.selected.add(box.dataset.sel);
       else state.selected.delete(box.dataset.sel);
       return render();
     }
-    if (box && box.name === "machine-provider") { state.machineProvider = box.value === "llm" ? "llm" : "rules"; return; }
-    const input = e.target;
-    if (!input || input.name !== "provider" || !input.form || input.form.id !== "import-form") return;
-    state.importProvider = input.value === "llm" ? "llm" : "rules";
+    if (box && box.name === "active-model") modelAction("/api/model/active", { profile: box.value }, "已切换模型");
   });
 
   document.addEventListener("submit", async (e) => {
     const form = e.target;
+    if (form && form.dataset && form.dataset.profile) {
+      e.preventDefault();
+      const input = form.querySelector("input[type=password]");
+      const key = input.value;
+      input.value = "";  // 不在页面上留着
+      if (!key.trim()) { state.modelError = "请填写 key"; return renderDrawer(); }
+      return modelAction("/api/model/key", { profile: form.dataset.profile, key }, "key 已保存在服务内存里");
+    }
+    if (form && form.id === "local-form") {
+      e.preventDefault();
+      const f = form.elements;
+      return modelAction("/api/model/local", {
+        base_url: f.base_url.value, model: f.model.value, max_request_kb: f.max_request_kb.value,
+        max_tokens: f.max_tokens.value, json_mode: f.json_mode.checked, needs_key: f.needs_key.checked,
+      }, "本地模型配置已保存");
+    }
     if (!form || form.id !== "import-form") return;
     e.preventDefault();
     const file = form.querySelector("#import-file").files[0];
     if (!file) { state.importError = "请选择一个 zip 工单包"; render(); return; }
-    const provider = state.importProvider === "llm" ? "llm" : "rules";
     const body = new FormData();
     body.append("bundle", file, file.name);
-    body.append("provider", provider);
     let payload = {};
     let res;
     try {
-      res = await fetch("/api/tickets", { method: "POST", body });
+      res = await fetch("/api/tickets", { method: "POST", headers: { "X-NOC7-Request": "1" }, body });
       payload = await res.json();
     } catch (err) {
       state.importError = "导入请求没有完成";
@@ -822,6 +920,8 @@ POST /api/tickets                          上传工单包 zip，provider=rules 
     state.importError = "";
     state.pick = payload.ticket_ref;
     state.pendingNote = "";
+    state.batch = [payload.ticket_ref];
+    state.entryTab = "history";
     state.tickets = await source.list();
     state.listSig = listSignature(state.tickets);
     ensurePoll();
@@ -850,8 +950,8 @@ POST /api/tickets                          上传工单包 zip，provider=rules 
     state.workbenchOrigins = catalog.workbench_origins || [];
     state.tickets = catalog.tickets;
     state.listSig = listSignature(state.tickets);
-    await refreshMachine();
-    if (state.machine.bundles.length) state.entryTab = "machine";
+    await Promise.all([refreshMachine(), refreshModel()]);
+    if (machineBundles().length) state.entryTab = "machine";
     ensurePoll();
     await applyLocation();
     window.addEventListener("hashchange", applyLocation);

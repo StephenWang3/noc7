@@ -1,4 +1,8 @@
-"""进程内一次只分析一张工单。预先放好的五张用规则；导入的包和本机导出的工单可选规则或模型。"""
+"""操作台的分析队列。一律“模型 + 规则”：配好模型就实时调用，没配但保存过这张单的模型结果就回放，
+两样都没有就请人先配置模型。进程内一次只分析一张。
+
+演示单（仓库里的合成单、本机挑出的几张真实单）一律回放保存的模型结果，不联网、不花钱。
+"""
 
 from __future__ import annotations
 
@@ -16,14 +20,18 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
 
-from ..bundle import BundleError, load_bundle
-from ..extract.pipeline import analyze, analyze_with_context
+from ..bundle import BundleError, load_bundle, sha256_file
+from ..extract.pipeline import analyze_with_context
 from ..providers.gate import EgressBlocked
-from ..providers.text_config import TextProviderError, create_text_provider
+from ..providers.text_config import TextProviderError, create_text_provider, load_model_config
+from ..providers.two_stage import TwoStageTextProvider
+from ..providers.two_stage_replay import TwoStageReplayProvider
 from ..report import write_reports
-from ..report.company import ReportProfile, build_company_report
+from ..report.company import build_company_report
 from ..rules import ExtractionRejected
 from ..schema import ELEMENT_LABELS_ZH, AnalysisResult
+from .models import ModelSettings
+from .replays import ReplayIndex
 
 PREPARED = ("SYN-P04", "SYN-S09", "SYN-P01", "SYN-S06", "SYN-S02")
 MAX_ZIP_BYTES = 32 * 1024 * 1024
@@ -31,7 +39,11 @@ MAX_UNPACKED_BYTES = 64 * 1024 * 1024
 MAX_FILES = 200
 MAX_BATCH = 50
 BUNDLE_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$")
-NO_PROFILE = ReportProfile()
+REPLAY_LABEL = "回放已保存的模型结果"
+LEGACY_LABELS = {"rules": "仅规则（旧版结果）", "llm": "实时调用 DeepSeek"}
+NO_MODEL = ("还没有可用的模型：请点右上角“模型设置”填写密钥，或配置公司本地模型。"
+            "这张单也没有保存过的模型结果可以回放。")
+REPLAY_MISMATCH = "保存的模型结果和这张单现在的材料对不上，不能回放；请在“模型设置”里配置模型后重新分析。"
 
 
 class UploadRejected(Exception):
@@ -44,14 +56,15 @@ class UploadRejected(Exception):
 @dataclass
 class Job:
     ref: str
-    provider: str
     bundle_dir: Path
     home: Path
     out_dir: Path
     summary: dict
     data_class: str
-    prepared: bool
-    source: str = "upload"
+    sha: str
+    source: str  # demo / local / upload
+    mode: str  # live / replay
+    model_label: str
     status: str = "running"
     finished_at: str | None = None
     result: AnalysisResult | None = None
@@ -60,39 +73,68 @@ class Job:
 
 
 class JobRunner:
-    def __init__(self, inbox: Path, bundles: Path, model_config: Path, local_root: Path | None = None):
+    def __init__(self, inbox: Path, bundles: Path, models: ModelSettings, replays: ReplayIndex, *,
+                 replay_config: Path, local_roots: list[Path] = (), demos: list[Path] = ()):
         self.inbox = inbox.expanduser().resolve()
-        self.local_root = local_root.expanduser() if local_root is not None else None
         self.bundles = bundles
-        self.model_config = model_config
+        self.models = models
+        self.replays = replays
+        self.replay_config = replay_config
+        self.local_roots = [r.expanduser() for r in local_roots]
+        self.demo_dirs = [*(bundles / ref for ref in PREPARED), *(d.expanduser() for d in demos)]
         self.jobs: dict[str, Job] = {}
         self.order: list[str] = []
+        self.demo_refs: set[str] = set()
         self._queue: queue.Queue[str | None] = queue.Queue()
         self._lock = threading.Lock()
         self._thread: threading.Thread | None = None
         self._started = False
 
+    # ── 启停 ──
     def start(self) -> None:
         with self._lock:
             if self._started:
                 return
             self._started = True
-            self.inbox.mkdir(parents=True, mode=0o700, exist_ok=True)
-            for ref in PREPARED:
-                bundle = self.bundles / ref
-                home = self.inbox / "prepared" / ref
-                home.mkdir(parents=True, mode=0o700, exist_ok=True)
-                self._add(self._make(ref, "rules", bundle, home, prepared=True))
-                self._queue.put(ref)
-            self._restore_uploads()
-            self._thread = threading.Thread(target=self._loop, name="noc7-demo", daemon=True)
-            self._thread.start()
+        self.inbox.mkdir(parents=True, mode=0o700, exist_ok=True)
+        self.replays.scan()
+        for bundle_dir in self.demo_dirs:
+            self._load_demo(bundle_dir)
+        self._restore_uploads()
+        self._thread = threading.Thread(target=self._loop, name="noc7-platform", daemon=True)
+        self._thread.start()
 
     def stop(self) -> None:
         self._queue.put(None)
         if self._thread is not None:
             self._thread.join(timeout=5)
 
+    def _load_demo(self, bundle_dir: Path) -> None:
+        manifest = _manifest(bundle_dir)
+        if manifest is None:
+            return
+        ref = manifest.get("bundle_id")
+        if not isinstance(ref, str) or not BUNDLE_ID.fullmatch(ref) or ref in self.jobs:
+            return
+        home = self.inbox / "demo" / ref
+        home.mkdir(parents=True, mode=0o700, exist_ok=True)
+        job = self._make(ref, bundle_dir, home, source="demo", mode="replay", label=REPLAY_LABEL)
+        meta = _read_meta(home)
+        job.finished_at = meta.get("finished_at") if isinstance(meta.get("finished_at"), str) else None
+        with self._lock:
+            self.demo_refs.add(ref)
+            self._add(job)
+        ready = _load_ready(job.out_dir / "analysis.json", job.sha)
+        if ready is not None:  # 演示单只恢复成功的结果；失败的每次启动重试（可能已补了记录）
+            job.result, job.status = ready, "ready"
+            return
+        if not self.replays.has(job.sha):
+            self._fail(job, problems=["这张演示单还没有保存的模型结果。合成演示单请按使用说明运行 "
+                                      "scripts/record_demo_replays.py 生成一次。"])
+            return
+        self._queue.put(ref)
+
+    # ── 查询 ──
     def list_tickets(self) -> list[dict]:
         with self._lock:
             return [self._public(self.jobs[ref]) for ref in self.order if ref in self.jobs]
@@ -129,65 +171,65 @@ class JobRunner:
             return None
         return path
 
-    def accept_upload(self, data: bytes, provider: str) -> str:
-        if provider not in {"rules", "llm"}:
-            raise UploadRejected(400, ["provider 只能是 rules 或 llm"])
+    def list_local(self) -> dict:
+        """本机导出目录下的工单包，按目录分组；只读清单和工单字段，分析时才完整校验。"""
+        groups, seen = [], set()
+        for i, root in enumerate(self.local_roots):
+            if not root.is_dir():
+                continue
+            items = []
+            for path in sorted(p for p in root.iterdir() if p.is_dir() and not p.name.startswith(".")):
+                manifest = _manifest(path)
+                ref = manifest.get("bundle_id") if manifest else None
+                if not isinstance(ref, str) or not BUNDLE_ID.fullmatch(ref) or not BUNDLE_ID.fullmatch(path.name):
+                    continue
+                if ref in seen:
+                    continue
+                seen.add(ref)
+                item = _summary(path, ref) | {"key": f"{i}/{path.name}", "captured_at": manifest.get("captured_at"),
+                                              "has_replay": self.replays.has(sha256_file(path / "manifest.json")),
+                                              "demo": ref in self.demo_refs}
+                with self._lock:
+                    job = self.jobs.get(ref)
+                    item["status"] = job.status if job else "new"
+                items.append(item)
+            groups.append({"root": _display(root), "bundles": items})
+        return {"available": bool(groups), "groups": groups}
+
+    # ── 入队 ──
+    def accept_upload(self, data: bytes) -> str:
         if len(data) > MAX_ZIP_BYTES:
             raise UploadRejected(400, ["压缩包超过 32 MiB"])
         tmp = self.inbox / "tmp" / uuid.uuid4().hex
         try:
-            return self._accept(_extract_zip(data, tmp), provider, "upload")
+            return self._accept(_extract_zip(data, tmp), "upload")
         finally:
             shutil.rmtree(tmp, ignore_errors=True)
 
-    def list_local(self) -> dict:
-        """本机导出目录下的工单包，只读清单和工单字段，不校验哈希（分析时才完整校验）。"""
-        root = self.local_root
-        if root is None or not root.is_dir():
-            return {"root": _display(root) if root else None, "available": False, "bundles": []}
-        items = []
-        for path in sorted(p for p in root.iterdir() if p.is_dir() and not p.name.startswith(".")):
-            if not (path / "manifest.json").is_file() or not BUNDLE_ID.fullmatch(path.name):
-                continue
-            try:
-                manifest = json.loads((path / "manifest.json").read_text(encoding="utf-8"))
-            except (OSError, json.JSONDecodeError):
-                continue
-            ref = manifest.get("bundle_id") if isinstance(manifest, dict) else None
-            if not isinstance(ref, str) or not BUNDLE_ID.fullmatch(ref):
-                continue
-            item = _summary(path, ref) | {"dir": path.name, "captured_at": manifest.get("captured_at")}
-            with self._lock:
-                job = self.jobs.get(ref)
-                if job is not None:
-                    item |= {"status": job.status, "provider": job.provider, "finished_at": job.finished_at}
-                else:
-                    item["status"] = "new"
-            items.append(item)
-        return {"root": _display(root), "available": True, "bundles": items}
-
-    def accept_local(self, dirs: list[str], provider: str) -> dict:
-        """按目录名把本机导出的工单包排进队列。逐张返回结果，一张出错不影响其他。"""
-        if provider not in {"rules", "llm"}:
-            raise UploadRejected(400, ["provider 只能是 rules 或 llm"])
-        if self.local_root is None or not self.local_root.is_dir():
+    def accept_local(self, keys: list[str]) -> dict:
+        """按“目录序号/目录名”把本机工单排进队列。逐张返回结果，一张出错不影响其他。"""
+        if not self.local_roots:
             raise UploadRejected(400, ["没有配置本机工单目录"])
-        if not dirs or len(dirs) > MAX_BATCH or not all(isinstance(d, str) for d in dirs):
+        if not keys or len(keys) > MAX_BATCH or not all(isinstance(k, str) for k in keys):
             raise UploadRejected(400, [f"一次选 1 到 {MAX_BATCH} 张工单"])
-        root = self.local_root.resolve()
         accepted, rejected = [], []
-        for name in dict.fromkeys(dirs):
-            path = (root / name).resolve() if BUNDLE_ID.fullmatch(name) else None
-            if path is None or path.parent != root or not path.is_dir():
-                rejected.append({"dir": name, "problems": ["本机工单目录里没有这张工单"]})
+        for key in dict.fromkeys(keys):
+            index, _, name = key.partition("/")
+            path = None
+            if index.isdigit() and int(index) < len(self.local_roots) and BUNDLE_ID.fullmatch(name):
+                root = self.local_roots[int(index)].resolve()
+                candidate = (root / name).resolve()
+                path = candidate if candidate.parent == root and candidate.is_dir() else None
+            if path is None:
+                rejected.append({"key": key, "problems": ["本机工单目录里没有这张工单"]})
                 continue
             try:
-                accepted.append(self._accept(path, provider, "local"))
+                accepted.append(self._accept(path, "local"))
             except UploadRejected as e:
-                rejected.append({"dir": name, "problems": e.problems})
+                rejected.append({"key": key, "problems": e.problems})
         return {"accepted": accepted, "rejected": rejected}
 
-    def _accept(self, root: Path, provider: str, source: str) -> str:
+    def _accept(self, root: Path, source: str) -> str:
         try:
             bundle = load_bundle(root)
         except BundleError as e:
@@ -195,21 +237,25 @@ class JobRunner:
         ref = bundle.manifest.bundle_id
         if not BUNDLE_ID.fullmatch(ref):
             raise UploadRejected(400, ["工单包编号只能包含字母、数字、点、下划线和连字符，且不超过 64 个字符"])
-        if ref in PREPARED:
-            raise UploadRejected(409, ["这个编号是预先放好的合成单，不能覆盖"])
         with self._lock:
+            if ref in self.demo_refs:
+                raise UploadRejected(409, ["这是演示单，直接在“演示单”里查看"])
             current = self.jobs.get(ref)
             if current is not None and current.status == "running":
                 raise UploadRejected(409, ["这张工单正在分析"])
-        if provider == "llm":
-            self._preflight(bundle.manifest.data_class)
+        mode, label = self._choose(bundle.manifest_sha256, bundle.manifest.data_class)
         home = self.inbox / "upload" / ref
-        if home.exists():
-            shutil.rmtree(home)
-        home.mkdir(parents=True, mode=0o700)
+        home.mkdir(parents=True, mode=0o700, exist_ok=True)
+        for old in home.iterdir():  # 清掉上次的包和报告；audit/ 是以前的模型结果，留着以后回放
+            if old.name == "audit":
+                continue
+            if old.is_dir() and not old.is_symlink():
+                shutil.rmtree(old)
+            else:
+                old.unlink()
         shutil.copytree(root, home / "bundle")
-        _write_meta(home, {"provider": provider, "source": source})
-        job = self._make(ref, provider, home / "bundle", home, prepared=False, source=source)
+        _write_meta(home, {"source": source, "mode": mode, "model_label": label})
+        job = self._make(ref, home / "bundle", home, source=source, mode=mode, label=label)
         with self._lock:
             if ref in self.order:
                 self.order.remove(ref)
@@ -217,11 +263,18 @@ class JobRunner:
             self._queue.put(ref)
         return ref
 
-    def _preflight(self, data_class) -> None:
-        try:
-            create_text_provider(self.model_config).preflight(data_class)
-        except (EgressBlocked, TextProviderError) as e:
-            raise UploadRejected(400, [str(e)]) from None
+    def _choose(self, sha: str, data_class) -> tuple[str, str]:
+        """配好模型就实时调用；否则有保存的模型结果就回放；都没有就拒绝。"""
+        path = self.models.active_path()
+        if path is not None:
+            try:
+                create_text_provider(path).preflight(data_class)
+            except (EgressBlocked, TextProviderError) as e:
+                raise UploadRejected(400, [str(e)]) from None
+            return "live", f"实时调用 {self.models.label()}"
+        if self.replays.has(sha):
+            return "replay", REPLAY_LABEL
+        raise UploadRejected(400, [NO_MODEL])
 
     def _restore_uploads(self) -> None:
         root = self.inbox / "upload"
@@ -229,75 +282,51 @@ class JobRunner:
             return
         for home in sorted(p for p in root.iterdir() if p.is_dir()):
             bundle_dir = home / "bundle"
-            meta_path = home / "meta.json"
-            if not (bundle_dir / "manifest.json").is_file() or not meta_path.is_file():
+            manifest = _manifest(bundle_dir)
+            meta = _read_meta(home)
+            ref = manifest.get("bundle_id") if manifest else None
+            if not isinstance(ref, str) or not BUNDLE_ID.fullmatch(ref) or ref in self.jobs:
                 continue
-            try:
-                meta = json.loads(meta_path.read_text(encoding="utf-8"))
-                provider = meta.get("provider") if meta.get("provider") in {"rules", "llm"} else "rules"
-                source = meta.get("source") if meta.get("source") in {"upload", "local"} else "upload"
-                bundle = load_bundle(bundle_dir)
-            except (OSError, json.JSONDecodeError, BundleError, ValueError):
-                continue
-            ref = bundle.manifest.bundle_id
-            if ref in PREPARED or ref in self.jobs or not BUNDLE_ID.fullmatch(ref):
-                continue
-            job = self._make(ref, provider, bundle_dir, home, prepared=False, source=source)
+            mode = meta.get("mode") if meta.get("mode") in {"live", "replay"} else "replay"
+            source = meta.get("source") if meta.get("source") in {"local", "upload"} else "upload"
+            label = meta.get("model_label") if isinstance(meta.get("model_label"), str) else REPLAY_LABEL
+            if "mode" not in meta and meta.get("provider") in LEGACY_LABELS:  # 旧版操作台留下的结果
+                label = LEGACY_LABELS[meta["provider"]]
+            job = self._make(ref, bundle_dir, home, source=source, mode=mode, label=label)
             job.finished_at = meta.get("finished_at") if isinstance(meta.get("finished_at"), str) else None
-            if self._restore_terminal(job, bundle.manifest_sha256):
+            with self._lock:
                 self._add(job)
+            if self._restore_terminal(job):
                 continue
-            if provider == "llm":
-                try:
-                    self._preflight(bundle.manifest.data_class)
-                except UploadRejected as e:
-                    job.status = "failed"
-                    job.problems = list(e.problems)
-                    self._add(job)
-                    continue
-            self._add(job)
+            try:  # 上次没算完：按现在的模型设置重新决定实时还是回放
+                job.mode, job.model_label = self._choose(job.sha, job.data_class)
+            except UploadRejected as e:
+                self._fail(job, problems=e.problems)
+                continue
             self._queue.put(ref)
 
-    def _restore_terminal(self, job: Job, sha: str) -> bool:
-        """模型单已有终态就装回来。没有终态（请求中途退出）返回 False，由调用方重新入队。"""
-        if job.provider != "llm":
-            return False
-        ready = _load_ready(job.out_dir / "analysis.json", sha)
+    def _restore_terminal(self, job: Job) -> bool:
+        ready = _load_ready(job.out_dir / "analysis.json", job.sha)
         if ready is not None:
-            job.result = ready
-            job.status = "ready"
-            job.issues = []
-            job.problems = []
+            job.result, job.status, job.issues, job.problems = ready, "ready", [], []
             return True
         failed = _load_failure(job.home / "failure.json")
         if failed is None:
             return False
-        job.result = None
-        job.status = "failed"
+        job.result, job.status = None, "failed"
         job.issues = failed["issues"]
         job.problems = failed["problems"] or [item["message"] for item in failed["issues"]]
         return True
 
-    def _make(self, ref: str, provider: str, bundle_dir: Path, home: Path, *, prepared: bool,
-              source: str = "upload") -> Job:
-        summary = _summary(bundle_dir, ref)
-        data_class = "synthetic"
+    def _make(self, ref: str, bundle_dir: Path, home: Path, *, source: str, mode: str, label: str) -> Job:
+        manifest = _manifest(bundle_dir) or {}
         try:
-            manifest = json.loads((bundle_dir / "manifest.json").read_text(encoding="utf-8"))
-            data_class = manifest.get("data_class") or data_class
-        except (OSError, json.JSONDecodeError):
-            pass
-        return Job(
-            ref=ref,
-            provider=provider,
-            bundle_dir=bundle_dir,
-            home=home,
-            out_dir=home / "out",
-            summary=summary,
-            data_class=data_class,
-            prepared=prepared,
-            source="prepared" if prepared else source,
-        )
+            sha = sha256_file(bundle_dir / "manifest.json")
+        except OSError:
+            sha = ""
+        return Job(ref=ref, bundle_dir=bundle_dir, home=home, out_dir=home / "out",
+                   summary=_summary(bundle_dir, ref), data_class=manifest.get("data_class") or "synthetic",
+                   sha=sha, source=source, mode=mode, model_label=label)
 
     def _add(self, job: Job) -> None:
         self.jobs[job.ref] = job
@@ -306,11 +335,8 @@ class JobRunner:
 
     def _public(self, job: Job) -> dict:
         item = dict(job.summary)
-        item["status"] = job.status
-        item["data_class"] = job.data_class
-        item["provider"] = job.provider
-        item["source"] = job.source
-        item["finished_at"] = job.finished_at
+        item.update(status=job.status, data_class=job.data_class, source=job.source, mode=job.mode,
+                    model_label=job.model_label, finished_at=job.finished_at)
         if job.status == "ready" and job.result is not None:
             elements = job.result.model_dump(mode="json")["elements"]
             item["element_status"] = {
@@ -322,6 +348,7 @@ class JobRunner:
             item["issues"] = list(job.issues)
         return item
 
+    # ── 执行 ──
     def _loop(self) -> None:
         while True:
             ref = self._queue.get()
@@ -337,18 +364,11 @@ class JobRunner:
         try:
             if job.out_dir.exists():
                 shutil.rmtree(job.out_dir)
-            if job.provider == "llm":
-                audit = job.home / "audit" / uuid.uuid4().hex
-                provider = create_text_provider(self.model_config, audit_dir=audit)
-                result, _, _ = analyze_with_context(job.bundle_dir, provider)
-            else:
-                result = analyze(job.bundle_dir)
-            write_reports(result, job.out_dir, profile=NO_PROFILE)
+            result = self._live(job) if job.mode == "live" else self._replay(job)
+            write_reports(result, job.out_dir, report_type="closure")
             html_path = job.out_dir / "company_report.html"
             html_path.write_text(
-                html_path.read_text(encoding="utf-8").replace(
-                    'href="report.html"', 'href="review-report.html"'
-                ),
+                html_path.read_text(encoding="utf-8").replace('href="report.html"', 'href="review-report.html"'),
                 encoding="utf-8",
             )
             _clear_failure(job.home / "failure.json")
@@ -367,37 +387,68 @@ class JobRunner:
             return
         self._finish(job)
         with self._lock:
-            job.result = result
-            job.status = "ready"
-            job.issues = []
-            job.problems = []
+            job.result, job.status, job.issues, job.problems = result, "ready", [], []
+
+    def _live(self, job: Job) -> AnalysisResult:
+        path = self.models.active_path()
+        if path is None:
+            raise TextProviderError("模型设置变了（密钥被清除或模型未配置），没有调用模型。")
+        audit = job.home / "audit" / uuid.uuid4().hex
+        provider = create_text_provider(path, audit_dir=audit)
+        try:
+            result, _, _ = analyze_with_context(job.bundle_dir, provider)
+        finally:
+            for record in audit.glob("*.json") if audit.is_dir() else ():
+                self.replays.add(record)  # 以后不联网也能回放这次的模型结果
+        return result
+
+    def _replay(self, job: Job) -> AnalysisResult:
+        config = load_model_config(self.replay_config)
+        for path in self.replays.candidates(job.sha, TwoStageTextProvider.prompt_version):
+            record = self.replays.load(path)
+            if record is None:
+                continue
+            try:
+                provider = TwoStageReplayProvider(config, record)
+                result, _, _ = analyze_with_context(job.bundle_dir, provider)
+            except TextProviderError:
+                continue
+            return result
+        raise TextProviderError(REPLAY_MISMATCH)
 
     def _finish(self, job: Job) -> None:
-        """记下完成时刻；导入的单写进 meta.json，重启后历史记录里还能看到。"""
+        """记下完成时刻并写进 meta.json，重启后分析记录里还能看到。"""
         job.finished_at = datetime.now(timezone.utc).astimezone().isoformat(timespec="seconds")
-        meta_path = job.home / "meta.json"
-        if job.prepared or not meta_path.is_file():
-            return
-        try:
-            meta = json.loads(meta_path.read_text(encoding="utf-8"))
-        except (OSError, json.JSONDecodeError):
-            return
-        if isinstance(meta, dict):
-            _write_meta(job.home, meta | {"finished_at": job.finished_at})
+        meta = _read_meta(job.home)
+        _write_meta(job.home, meta | {"finished_at": job.finished_at})
 
     def _fail(self, job: Job, *, issues: list[dict] | None = None, problems: list[str] | None = None) -> None:
         recorded_issues = issues or []
         recorded_problems = problems or [i["message"] for i in recorded_issues]
         if job.out_dir.exists():
             shutil.rmtree(job.out_dir, ignore_errors=True)
-        if job.provider == "llm":
-            _write_failure(job.home / "failure.json", recorded_issues, recorded_problems)
+        job.home.mkdir(parents=True, mode=0o700, exist_ok=True)
+        _write_failure(job.home / "failure.json", recorded_issues, recorded_problems)
         self._finish(job)
         with self._lock:
-            job.result = None
-            job.status = "failed"
-            job.issues = recorded_issues
-            job.problems = recorded_problems
+            job.result, job.status = None, "failed"
+            job.issues, job.problems = recorded_issues, recorded_problems
+
+
+def _manifest(bundle_dir: Path) -> dict | None:
+    try:
+        data = json.loads((bundle_dir / "manifest.json").read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return None
+    return data if isinstance(data, dict) else None
+
+
+def _read_meta(home: Path) -> dict:
+    try:
+        data = json.loads((home / "meta.json").read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {}
+    return data if isinstance(data, dict) else {}
 
 
 def _display(path: Path) -> str:
