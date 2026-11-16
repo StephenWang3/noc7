@@ -6,7 +6,7 @@ import os
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI, File, Form, UploadFile
+from fastapi import Body, FastAPI, File, Form, UploadFile
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
@@ -22,6 +22,7 @@ def create_app(
     inbox: Path | None = None,
     bundles: Path | None = None,
     model_config: Path | None = None,
+    local_root: Path | None = None,
     workbench_origins: str | None = None,
 ) -> FastAPI:
     inbox = inbox or Path(os.environ.get("NOC7_DEMO_INBOX", "~/.noc7/demo-inbox"))
@@ -30,7 +31,9 @@ def create_app(
     origins = workbench_origins
     if origins is None:
         origins = os.environ.get("NOC7_WORKBENCH_ORIGINS", "")
-    runner = JobRunner(inbox, bundles, model_config)
+    if local_root is None and os.environ.get("NOC7_LOCAL_ROOT"):
+        local_root = Path(os.environ["NOC7_LOCAL_ROOT"])
+    runner = JobRunner(inbox, bundles, model_config, local_root)
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
@@ -83,6 +86,18 @@ def create_app(
                 content={"status": "failed", "problems": e.problems},
             )
         return JSONResponse(status_code=202, content={"status": "running", "ticket_ref": ref})
+
+    @app.get("/api/local-bundles")
+    def local_bundles():
+        return runner.list_local()
+
+    @app.post("/api/local-bundles/analyze")
+    def analyze_local(body: dict = Body(...)):
+        try:
+            result = runner.accept_local(body.get("dirs") or [], body.get("provider") or "rules")
+        except UploadRejected as e:
+            return JSONResponse(status_code=e.status_code, content={"status": "failed", "problems": e.problems})
+        return JSONResponse(status_code=202, content=result)
 
     app.mount("/", StaticFiles(directory=STATIC, html=True), name="demo")
     return app

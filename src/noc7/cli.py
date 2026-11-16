@@ -290,11 +290,13 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--bundles", type=Path, default=DEFAULT_BUNDLES)
     p.set_defaults(func=cmd_gold_check)
 
-    p = sub.add_parser("serve", help="启动本机演示页：五张合成单，以及上传的工单包")
+    p = sub.add_parser("serve", help="启动本机操作台：合成演示单、本机导出的工单、上传的工单包")
     p.add_argument("--host", default="127.0.0.1")
     p.add_argument("--port", type=int, default=8765)
     p.add_argument("--inbox", type=Path, default=Path("~/.noc7/demo-inbox"))
     p.add_argument("--bundles", type=Path, default=DEFAULT_BUNDLES)
+    p.add_argument("--local-root", type=Path, default=Path("~/.noc7/real"),
+                   help="本机导出的工单包目录，页面上可勾选分析（默认 ~/.noc7/real）")
     p.add_argument(
         "--model-config",
         type=Path,
@@ -327,7 +329,8 @@ def cmd_serve(args: argparse.Namespace) -> int:
     from .web.app import create_app
 
     uvicorn.run(
-        create_app(inbox=args.inbox, bundles=args.bundles, model_config=args.model_config),
+        create_app(inbox=args.inbox, bundles=args.bundles, model_config=args.model_config,
+                   local_root=args.local_root),
         host=args.host,
         port=args.port,
     )

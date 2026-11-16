@@ -9,6 +9,17 @@
       return res.json();
     },
     async list() { return (await this.catalog()).tickets; },
+    async machine() {
+      const res = await fetch("/api/local-bundles");
+      if (!res.ok) return { available: false, root: null, bundles: [] };
+      return res.json();
+    },
+    async analyzeMachine(dirs, provider) {
+      const res = await fetch("/api/local-bundles/analyze", {
+        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ dirs, provider }),
+      });
+      return { ok: res.ok, body: await res.json() };
+    },
     async get(ref) {
       const res = await fetch("/api/tickets/" + encodeURIComponent(ref));
       if (!res.ok) return null;
@@ -147,7 +158,8 @@
   }
 
   // ───────────────────────── 状态与事件 ─────────────────────────
-  const state = { step: 1, entryTab: "local", tickets: [], pick: null, ref: null, data: null, entry: "local", element: "start_time", tab: "main", legend: true, log: [], workbenchOrigins: [], importError: "", importProvider: "rules", poll: null, listSig: "" };
+  const state = { step: 1, entryTab: "local", tickets: [], pick: null, ref: null, data: null, entry: "local", element: "start_time", tab: "main", legend: true, log: [], workbenchOrigins: [], importError: "", importProvider: "rules", poll: null, listSig: "",
+    machine: { available: false, root: null, bundles: [] }, selected: new Set(), machineProvider: "rules", batch: [], machineError: "" };
   const embedded = window.parent !== window;
 
   function extraOrigins() { return (state.workbenchOrigins || []).join(","); }
@@ -265,6 +277,116 @@
     if (next) next.disabled = !(picked && picked.status === "ready");
     return true;
   }
+  const SOURCE_LABEL = { prepared: "合成演示", local: "本机导出", upload: "上传" };
+  const PROVIDER_LABEL = { rules: "规则", llm: "模型" };
+  function jobOf(ref) { return state.tickets.find((t) => t.ticket_ref === ref) || null; }
+  function fmtTime(iso) {
+    if (!iso) return "";
+    const m = String(iso).match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/);
+    return m ? `${m[2]}-${m[3]} ${m[4]}:${m[5]}` : String(iso);
+  }
+  function statusChip(job) {
+    if (!job) return `<span class="badge b-info">未分析</span>`;
+    if (job.status === "running") return `<span class="badge b-info">分析中…</span>`;
+    if (job.status === "failed") return `<span class="badge b-warn" title="${esc((job.problems || []).join("；"))}">失败</span>`;
+    return `<span class="badge s-confirmed">已完成</span>`;
+  }
+  function miniDots(job) {
+    if (!job || !job.element_status) return "";
+    return `<div class="dots">${ELEMENTS.map((n) => `<span class="dot ${esc(job.element_status[n] || "")}" title="${esc(LABEL[n])}"></span>`).join("")}</div>`;
+  }
+  function batchProgress() {
+    if (!state.batch.length) return "";
+    const jobs = state.batch.map(jobOf);
+    const done = jobs.filter((j) => j && j.status === "ready").length;
+    const failed = jobs.filter((j) => j && j.status === "failed").length;
+    const total = state.batch.length;
+    const pct = Math.round(((done + failed) / total) * 100);
+    const finished = done + failed === total;
+    return `<div class="batch ${finished ? "done" : ""}" role="status">
+      <div class="batch-text"><b>${finished ? "本批完成" : "正在分析"}</b>：共 ${total} 张 · 完成 ${done} · 失败 ${failed} · 剩余 ${total - done - failed}
+        ${finished ? `<button class="btn ghost" data-batch-clear="1" type="button">收起</button>` : ""}</div>
+      <div class="bar"><span style="width:${pct}%"></span></div></div>`;
+  }
+  function machinePane() {
+    const m = state.machine;
+    if (!m.available) {
+      return `<div class="wb-note">没有找到本机工单目录${m.root ? ` <code>${esc(m.root)}</code>` : ""}。先按使用说明从 NOC 导出工单，或启动时用 <code>--local-root</code> 指定目录。</div>`;
+    }
+    if (!m.bundles.length) return `<div class="wb-note">目录 <code>${esc(m.root)}</code> 里还没有工单包。</div>`;
+    const busy = (ref) => (jobOf(ref) || {}).status === "running";
+    const rows = m.bundles.map((b) => {
+      const job = jobOf(b.ticket_ref);
+      const checked = state.selected.has(b.dir) ? " checked" : "";
+      const disabled = busy(b.ticket_ref) ? " disabled" : "";
+      return `<tr class="${state.selected.has(b.dir) ? "sel" : ""}">
+        <td><input type="checkbox" data-sel="${esc(b.dir)}" aria-label="选择 ${esc(b.ticket_ref)}"${checked}${disabled}></td>
+        <td class="mono">${esc(b.ticket_ref)}</td>
+        <td class="title-cell">${esc(b.title || "")}</td>
+        <td>${esc(b.category || "")}</td>
+        <td>${statusChip(job)}${job && job.provider ? ` <span class="small muted">${PROVIDER_LABEL[job.provider] || ""}</span>` : ""}</td>
+        <td>${miniDots(job)}</td>
+        <td>${job && job.status === "ready" ? `<button class="btn" data-open="${esc(b.ticket_ref)}" type="button">查看</button>` : ""}</td></tr>`;
+    }).join("");
+    const n = state.selected.size;
+    const all = m.bundles.filter((b) => !busy(b.ticket_ref)).length;
+    const chosen = state.machineProvider === "llm" ? "llm" : "rules";
+    return `<div class="machine-bar">
+        <label><input type="checkbox" data-sel-all="1"${n && n === all ? " checked" : ""}> 全选</label>
+        <span class="small muted">目录 <code>${esc(m.root)}</code>，共 ${m.bundles.length} 张</span>
+        <span class="spacer"></span>
+        <label><input type="radio" name="machine-provider" value="rules"${chosen === "rules" ? " checked" : ""}> 规则</label>
+        <label><input type="radio" name="machine-provider" value="llm"${chosen === "llm" ? " checked" : ""}> 用模型分析</label>
+        <button class="btn primary" id="machine-run" type="button"${n ? "" : " disabled"}>分析选中的 ${n} 张</button></div>
+      <p class="err" ${state.machineError ? "" : "hidden"}>${esc(state.machineError)}</p>
+      ${batchProgress()}
+      <table class="grid-table"><thead><tr><th></th><th>工单</th><th>标题</th><th>分类</th><th>状态</th><th>七要素</th><th></th></tr></thead>
+      <tbody>${rows}</tbody></table>
+      <p class="small muted">用模型分析每张约一两分钟，按顺序逐张进行；可以先看已完成的单子。</p>`;
+  }
+  function historyRows() {
+    return state.tickets.filter((t) => t.status !== "running" || state.batch.includes(t.ticket_ref))
+      .slice().sort((a, b) => String(b.finished_at || "").localeCompare(String(a.finished_at || "")));
+  }
+  function historyPane() {
+    const rows = historyRows().map((t) => `<tr>
+        <td class="mono">${esc(t.ticket_ref)}</td>
+        <td class="title-cell">${esc(t.title || "")}</td>
+        <td>${SOURCE_LABEL[t.source] || ""}</td>
+        <td>${PROVIDER_LABEL[t.provider] || ""}</td>
+        <td>${esc(fmtTime(t.finished_at))}</td>
+        <td>${miniDots(t)}</td>
+        <td>${t.status === "ready" ? `<span class="badge b-warn">待核实 ${t.open_issues || 0}</span>` : statusChip(t)}</td>
+        <td class="actions">${t.status === "ready"
+          ? `<button class="btn" data-open="${esc(t.ticket_ref)}" type="button">七要素</button>
+             <button class="btn" data-open-report="${esc(t.ticket_ref)}" type="button">公司报告</button>
+             <a class="btn" href="/api/tickets/${encodeURIComponent(t.ticket_ref)}/company-report.docx" download>Word</a>`
+          : esc((t.problems || []).join("；"))}</td></tr>`).join("");
+    if (!rows) return `<div class="wb-note">还没有分析记录。</div>`;
+    return `<table class="grid-table"><thead><tr><th>工单</th><th>标题</th><th>来源</th><th>方式</th><th>完成时间</th><th>七要素</th><th>待核实</th><th></th></tr></thead>
+      <tbody>${rows}</tbody></table>
+      <p class="small muted">按完成时间倒序。用模型分析过的结果在重启后保留；合成演示单每次启动用规则重算。</p>`;
+  }
+  async function refreshMachine() {
+    try { state.machine = await source.machine(); } catch (err) { /* 保留上一次 */ }
+  }
+  async function runMachineBatch() {
+    const dirs = [...state.selected];
+    if (!dirs.length) return;
+    const provider = state.machineProvider === "llm" ? "llm" : "rules";
+    let res;
+    try { res = await source.analyzeMachine(dirs, provider); } catch (err) { state.machineError = "请求没有完成"; return render(); }
+    if (!res.ok) { state.machineError = (res.body.problems || ["没有开始分析"]).join("；"); return render(); }
+    const rejected = res.body.rejected || [];
+    state.machineError = rejected.map((r) => `${r.dir}：${(r.problems || []).join("；")}`).join("\n");
+    state.batch = res.body.accepted || [];
+    state.selected.clear();
+    state.tickets = await source.list();
+    state.listSig = listSignature(state.tickets);
+    ensurePoll();
+    render();
+  }
+
   function renderStep1() {
     const flow = `<div class="flow" aria-label="整体流程">
       <div class="node"><b>① 已结单工单</b>完整导出材料 · 含结案说明与附件</div><span class="arrow">→</span>
@@ -291,13 +413,17 @@
       <div class="entry">
         <section class="card entry-main" style="padding:0 14px 0">
           <div class="tabs" role="tablist">
-            <button class="tab ${state.entryTab === "local" ? "active" : ""}" data-etab="local" role="tab">本地工单包</button>
+            <button class="tab ${state.entryTab === "machine" ? "active" : ""}" data-etab="machine" role="tab">本机工单<span class="count">${state.machine.bundles.length}</span></button>
+            <button class="tab ${state.entryTab === "local" ? "active" : ""}" data-etab="local" role="tab">演示单与导入</button>
+            <button class="tab ${state.entryTab === "history" ? "active" : ""}" data-etab="history" role="tab">分析记录<span class="count">${historyRows().length}</span></button>
             <button class="tab ${state.entryTab === "workbench" ? "active" : ""}" data-etab="workbench" role="tab">由 NOC 工作台传入</button></div>
-          <div class="tab-body">${state.entryTab === "local" ? `${importer}<div class="tickets">${local}</div>` : wb}</div>
+          <div class="tab-body">${{ machine: machinePane, history: historyPane }[state.entryTab]?.() ?? (state.entryTab === "local" ? `${importer}<div class="tickets">${local}</div>` : wb)}</div>
         </section>
         <aside class="card entry-side">
           <h2>这一步在做什么</h2>
           <ul>
+            <li><b>本机工单</b>：从 NOC 导出到本机的工单，勾选后批量分析，进度实时刷新。</li>
+            <li><b>分析记录</b>：做过的分析都在这里，重启后用模型分析过的结果仍保留。</li>
             <li>五张合成单在打开页面时用<b>规则</b>计算。导入的包可以改选<b>用模型分析</b>，没算完会停在「分析中」，失败会写出原因。</li>
             <li>下一页看<b>七要素</b>，每条结论都能点回<b>原文出处</b>。</li>
             <li>再下一页是<b>公司格式报告</b>，可下载 Word。</li>
@@ -578,7 +704,18 @@ POST /api/tickets                          上传工单包 zip，provider=rules 
     if (!t) return;
     const d = t.dataset;
     if (d.step) return go(+d.step);
-    if (d.etab) { state.entryTab = d.etab; return render(); }
+    if (d.etab) {
+      state.entryTab = d.etab;
+      if (d.etab === "machine") await refreshMachine();
+      return render();
+    }
+    if (d.open || d.openReport) {
+      const ref = d.open || d.openReport;
+      if (await openTicket(ref, "local")) go(d.openReport ? 3 : 2);
+      return;
+    }
+    if (t.id === "machine-run") return runMachineBatch();
+    if (d.batchClear) { state.batch = []; return render(); }
     if (d.pick) {
       state.pick = d.pick;
       if (patchStep1List()) return;
@@ -642,6 +779,16 @@ POST /api/tickets                          上传工单包 zip，provider=rules 
   }
 
   document.addEventListener("change", (e) => {
+    const box = e.target;
+    if (box && box.dataset && (box.dataset.sel || box.dataset.selAll)) {
+      if (box.dataset.selAll) {
+        state.selected.clear();
+        if (box.checked) state.machine.bundles.forEach((b) => { if ((jobOf(b.ticket_ref) || {}).status !== "running") state.selected.add(b.dir); });
+      } else if (box.checked) state.selected.add(box.dataset.sel);
+      else state.selected.delete(box.dataset.sel);
+      return render();
+    }
+    if (box && box.name === "machine-provider") { state.machineProvider = box.value === "llm" ? "llm" : "rules"; return; }
     const input = e.target;
     if (!input || input.name !== "provider" || !input.form || input.form.id !== "import-form") return;
     state.importProvider = input.value === "llm" ? "llm" : "rules";
@@ -703,6 +850,8 @@ POST /api/tickets                          上传工单包 zip，provider=rules 
     state.workbenchOrigins = catalog.workbench_origins || [];
     state.tickets = catalog.tickets;
     state.listSig = listSignature(state.tickets);
+    await refreshMachine();
+    if (state.machine.bundles.length) state.entryTab = "machine";
     ensurePoll();
     await applyLocation();
     window.addEventListener("hashchange", applyLocation);

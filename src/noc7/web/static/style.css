@@ -222,3 +222,21 @@ a.btn.primary { color: #fff; }
 .job-note { margin: 0 14px 8px; }
 
 @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
+
+/* 本机工单与分析记录 */
+.machine-bar { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin: 4px 0 10px; }
+.machine-bar .spacer { flex: 1; }
+.grid-table { width: 100%; border-collapse: collapse; font-size: .88rem; }
+.grid-table th { text-align: left; color: var(--muted); font-weight: 600; padding: 6px 8px; border-bottom: 1px solid var(--line); position: sticky; top: 0; background: var(--paper); }
+.grid-table td { padding: 7px 8px; border-bottom: 1px solid var(--line); vertical-align: middle; }
+.grid-table tr.sel td { background: var(--brand-bg); }
+.grid-table .title-cell { max-width: 360px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.grid-table .actions { white-space: nowrap; display: flex; gap: 6px; }
+.grid-table .btn { padding: 3px 10px; font-size: .82rem; }
+.grid-table .dot { width: 14px; }
+.batch { border: 1px solid var(--line); background: var(--soft); border-radius: 8px; padding: 8px 12px; margin-bottom: 10px; }
+.batch-text { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; }
+.batch .bar { height: 6px; border-radius: 99px; background: var(--unk-bg); overflow: hidden; }
+.batch .bar span { display: block; height: 100%; background: var(--brand); transition: width .4s; }
+.batch.done .bar span { background: var(--ok); }
+.err { white-space: pre-line; }

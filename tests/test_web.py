@@ -212,3 +212,44 @@ def test_second_runner_does_not_recall_llm(tmp_path: Path, monkeypatch: pytest.M
         assert (ready_home / "out" / "analysis.json").is_file()
     finally:
         second.stop()
+
+
+def test_local_bundles_list_and_batch_analysis(tmp_path: Path):
+    local = tmp_path / "real"
+    local.mkdir()
+    for ref in ("SYN-S01", "SYN-S03"):
+        shutil.copytree(BUNDLES / ref, local / ref)
+    (local / "not-a-bundle").mkdir()
+    app = create_app(inbox=tmp_path / "inbox", bundles=BUNDLES, model_config=tmp_path / "none.json",
+                     local_root=local, workbench_origins="")
+    with TestClient(app) as http:
+        listing = http.get("/api/local-bundles").json()
+        assert listing["available"] and [b["dir"] for b in listing["bundles"]] == ["SYN-S01", "SYN-S03"]
+        assert all(b["status"] == "new" for b in listing["bundles"])
+        assert str(tmp_path) not in listing["root"]
+
+        bad = http.post("/api/local-bundles/analyze", json={"dirs": [], "provider": "rules"})
+        assert bad.status_code == 400
+        res = http.post("/api/local-bundles/analyze",
+                        json={"dirs": ["SYN-S01", "SYN-S03", "../SYN-S01", "missing"], "provider": "rules"})
+        assert res.status_code == 202
+        body = res.json()
+        assert body["accepted"] == ["SYN-S01", "SYN-S03"]
+        assert [r["dir"] for r in body["rejected"]] == ["../SYN-S01", "missing"]
+        for ref in body["accepted"]:
+            assert _wait(http, ref)["status"] == "ready"
+        tickets = {t["ticket_ref"]: t for t in http.get("/api/tickets").json()["tickets"]}
+        assert tickets["SYN-S01"]["source"] == "local" and tickets["SYN-S01"]["finished_at"]
+        assert tickets["SYN-P04"]["source"] == "prepared"
+        statuses = {b["dir"]: b["status"] for b in http.get("/api/local-bundles").json()["bundles"]}
+        assert statuses == {"SYN-S01": "ready", "SYN-S03": "ready"}
+        meta = json.loads((tmp_path / "inbox" / "upload" / "SYN-S01" / "meta.json").read_text(encoding="utf-8"))
+        assert meta["source"] == "local" and meta["finished_at"]
+
+
+def test_local_bundles_absent_root(tmp_path: Path):
+    app = create_app(inbox=tmp_path / "inbox", bundles=BUNDLES, model_config=tmp_path / "none.json",
+                     local_root=tmp_path / "nowhere", workbench_origins="")
+    with TestClient(app) as http:
+        assert http.get("/api/local-bundles").json()["available"] is False
+        assert http.post("/api/local-bundles/analyze", json={"dirs": ["x"], "provider": "rules"}).status_code == 400
