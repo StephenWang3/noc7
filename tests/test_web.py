@@ -25,7 +25,7 @@ from noc7.providers.text_config import create_text_provider
 from noc7.report import write_reports
 from noc7.schema import AnalysisResult
 from noc7.web.app import create_app
-from noc7.web.jobs import PREPARED, REPLAY_LABEL, JobRunner
+from noc7.web.jobs import REPLAY_LABEL, JobRunner
 from noc7.web.models import LOCAL_KEY_ENV, ModelSettings
 from noc7.web.replays import ReplayIndex
 from tests.llm.test_two_stage import FACTS, WRITING
@@ -123,7 +123,7 @@ def _local_fields(base_url: str, **extra) -> dict:
 
 def _app(tmp_path: Path, **kwargs):
     kwargs.setdefault("replay_patterns", [])
-    return create_app(inbox=tmp_path / "inbox", bundles=BUNDLES, model_config=DEEPSEEK,
+    return create_app(inbox=tmp_path / "inbox", model_config=DEEPSEEK,
                       settings_dir=tmp_path / "models", workbench_origins="", **kwargs)
 
 
@@ -157,9 +157,9 @@ def test_writes_need_the_page_header(tmp_path: Path):
         assert http.get("/api/model").status_code == 200
 
 
-def test_demos_replay_saved_model_results(tmp_path: Path, fake_model):
+def test_replay_saved_model_results(tmp_path: Path, fake_model):
     base_url, calls = fake_model
-    # 先真实调用一次（假模型），把 SYN-P04 的诊断记录存下来，当作仓库里的演示记录。
+    # 先真实调用一次（假模型），把 SYN-P04 的诊断记录存下来，当作以前分析留下的记录。
     config = tmp_path / "qwen.json"
     config.write_text(json.dumps({"name": "qwen", "base_url": base_url, "model": "qwen-test", "external": False,
                                   "allowed_data": ["synthetic"], "max_request_bytes": 524288, "max_tokens": 4096,
@@ -168,26 +168,34 @@ def test_demos_replay_saved_model_results(tmp_path: Path, fake_model):
     live, _, _ = analyze_with_context(BUNDLES / "SYN-P04", create_text_provider(config, audit_dir=records))
     assert calls == ["facts", "facts", "writing"]
 
-    with TestClient(_app(tmp_path, replay_patterns=[(records, "*.json")])) as http:
+    roots = [BUNDLES / "SYN-P04", BUNDLES / "SYN-S09"]  # 每项可以直接是一个工单包
+    with TestClient(_app(tmp_path, replay_patterns=[(records, "*.json")], local_roots=roots)) as http:
         listed = http.get("/api/tickets").json()
-        assert [t["ticket_ref"] for t in listed["tickets"]] == list(PREPARED)
-        assert {t["source"] for t in listed["tickets"]} == {"demo"}
+        assert listed["tickets"] == []  # 启动时不自动分析任何单
         assert listed["element_labels"]["location"] == "故障地点"
-        demo = _wait(http, "SYN-P04")
-        assert demo["status"] == "ready"
-        replayed = AnalysisResult.model_validate(demo["analysis"])
+        bundles = http.get("/api/local-bundles").json()["bundles"]
+        assert [(b["key"], b["has_replay"]) for b in bundles] == [("0/SYN-P04", True), ("1/SYN-S09", False)]
+        assert all(str(BUNDLES) not in json.dumps(b) for b in bundles)
+
+        # 没有模型：不能选“调用模型”；没有记录的单不能回放；有记录的回放成功。
+        live_refused = http.post("/api/local-bundles/analyze", headers=HEADERS,
+                                 json={"keys": ["0/SYN-P04"], "mode": "live"})
+        assert live_refused.status_code == 400 and "模型设置" in live_refused.json()["problems"][0]
+        assert http.post("/api/local-bundles/analyze", headers=HEADERS,
+                         json={"keys": ["0/SYN-P04"], "mode": "nope"}).status_code == 400
+        res = http.post("/api/local-bundles/analyze", headers=HEADERS,
+                        json={"keys": ["0/SYN-P04", "1/SYN-S09", "0/SYN-P02"], "mode": "replay"}).json()
+        assert res["accepted"] == ["SYN-P04"]
+        assert [r["key"] for r in res["rejected"]] == ["1/SYN-S09", "0/SYN-P02"]
+        assert "不能回放" in res["rejected"][0]["problems"][0]
+        done = _wait(http, "SYN-P04")
+        assert done["status"] == "ready"
+        replayed = AnalysisResult.model_validate(done["analysis"])
         assert replayed.elements.cause.value == live.elements.cause.value == "市政道路施工挖断 24 芯光缆"
         assert replayed.run.provider.startswith("replay:")
         ticket = next(t for t in http.get("/api/tickets").json()["tickets"] if t["ticket_ref"] == "SYN-P04")
+        assert ticket["source"] == "local"
         assert ticket["mode"] == "replay" and ticket["model_label"] == REPLAY_LABEL and ticket["finished_at"]
-        # 没有保存记录的演示单：失败并说明怎么补，不会退回纯规则。
-        missing = _wait(http, "SYN-S09")
-        assert missing["status"] == "failed"
-        assert "record_demo_replays.py" in missing["problems"][0]
-        # 演示单不能再上传覆盖。
-        again = http.post("/api/tickets", headers=HEADERS,
-                          files={"bundle": ("SYN-P04.zip", _zip_dir(BUNDLES / "SYN-P04"), "application/zip")})
-        assert again.status_code == 409
         docx = http.get("/api/tickets/SYN-P04/company-report.docx")
         assert docx.status_code == 200 and docx.content.startswith(b"PK")
         html = http.get("/api/tickets/SYN-P04/company-report.html")
@@ -269,7 +277,7 @@ def test_real_ticket_is_not_sent_to_a_model_that_does_not_allow_it(tmp_path: Pat
     config.write_text(json.dumps(data), encoding="utf-8")
     monkeypatch.setenv("DEEPSEEK_API_KEY", "sk-test-not-used")
     real = _copy_as("SYN-S01", "REAL01", tmp_path / "src", data_class="real")
-    app = create_app(inbox=tmp_path / "inbox", bundles=BUNDLES, model_config=config, settings_dir=tmp_path / "models",
+    app = create_app(inbox=tmp_path / "inbox", model_config=config, settings_dir=tmp_path / "models",
                      replay_patterns=[], workbench_origins="")
     with TestClient(app) as http:
         blocked = http.post("/api/tickets", headers=HEADERS,
@@ -302,7 +310,7 @@ def test_restart_restores_results_without_calling_the_model(tmp_path: Path, monk
         ensure_ascii=False), encoding="utf-8")
 
     def run_once() -> JobRunner:
-        runner = JobRunner(inbox, tmp_path / "no-demos", ModelSettings(DEEPSEEK, tmp_path / "models"),
+        runner = JobRunner(inbox, ModelSettings(DEEPSEEK, tmp_path / "models"),
                            ReplayIndex([]), replay_config=DEEPSEEK)
         runner.start()
         return runner
@@ -320,7 +328,7 @@ def test_restart_restores_results_without_calling_the_model(tmp_path: Path, monk
         second.stop()
 
 
-def test_local_bundles_grouped_by_root(tmp_path: Path, fake_model):
+def test_local_bundles_listed_in_order(tmp_path: Path, fake_model):
     base_url, calls = fake_model
     first, second = tmp_path / "real", tmp_path / "batch2"
     _copy_as("SYN-P04", "SYN-X04", first)
@@ -328,34 +336,41 @@ def test_local_bundles_grouped_by_root(tmp_path: Path, fake_model):
     (first / "not-a-bundle").mkdir()
     _copy_as("SYN-P04", "SYN-X04", second)  # 同一编号在后面的目录里重复：只列一次
     _copy_as("SYN-P04", "SYN-Z04", second)
-    demo = _copy_as("SYN-P04", "SYN-D04", tmp_path / "demos")
-    app = _app(tmp_path, local_roots=[first, second, tmp_path / "nowhere"], demos=[demo])
+    app = _app(tmp_path, local_roots=[first, second, tmp_path / "nowhere"])
     with TestClient(app) as http:
         listing = http.get("/api/local-bundles").json()
-        assert listing["available"] is True
-        assert [[b["key"] for b in g["bundles"]] for g in listing["groups"]] == [
-            ["0/SYN-X04", "0/SYN-Y04"], ["1/SYN-Z04"]]
-        assert all(str(tmp_path) not in g["root"] for g in listing["groups"])
-        assert not any(b["has_replay"] or b["demo"] for g in listing["groups"] for b in g["bundles"])
-        assert _wait(http, "SYN-D04")["status"] == "failed"  # 本机演示单没有记录：同样不退回纯规则
+        assert [b["key"] for b in listing["bundles"]] == ["0/SYN-X04", "0/SYN-Y04", "1/SYN-Z04"]
+        assert str(tmp_path) not in json.dumps(listing)
+        assert not any(b["has_replay"] for b in listing["bundles"])
 
-        assert http.post("/api/local-bundles/analyze", headers=HEADERS, json={"keys": []}).status_code == 400
-        none = http.post("/api/local-bundles/analyze", headers=HEADERS, json={"keys": ["0/SYN-X04"]}).json()
-        assert none["accepted"] == [] and "模型设置" in none["rejected"][0]["problems"][0]
+        assert http.post("/api/local-bundles/analyze", headers=HEADERS, json={"keys": [], "mode": "live"}).status_code == 400
+        none = http.post("/api/local-bundles/analyze", headers=HEADERS, json={"keys": ["0/SYN-X04"], "mode": "replay"}).json()
+        assert none["accepted"] == [] and "不能回放" in none["rejected"][0]["problems"][0]
 
         http.post("/api/model/local", headers=HEADERS, json=_local_fields(base_url))
         http.post("/api/model/active", headers=HEADERS, json={"profile": "local"})
         res = http.post("/api/local-bundles/analyze", headers=HEADERS,
-                        json={"keys": ["0/SYN-X04", "1/SYN-Z04", "0/../SYN-X04", "9/SYN-X04", "0/missing"]})
+                        json={"keys": ["0/SYN-X04", "1/SYN-Z04", "0/../SYN-X04", "9/SYN-X04", "0/missing", "2/SYN-X04"],
+                              "mode": "live"})
         assert res.status_code == 202
         body = res.json()
         assert body["accepted"] == ["SYN-X04", "SYN-Z04"]
-        assert [r["key"] for r in body["rejected"]] == ["0/../SYN-X04", "9/SYN-X04", "0/missing"]
+        assert [r["key"] for r in body["rejected"]] == ["0/../SYN-X04", "9/SYN-X04", "0/missing", "2/SYN-X04"]
         for ref in body["accepted"]:
             assert _wait(http, ref)["status"] == "ready"
         tickets = {t["ticket_ref"]: t for t in http.get("/api/tickets").json()["tickets"]}
-        assert tickets["SYN-X04"]["source"] == "local" and tickets["SYN-X04"]["finished_at"]
-        groups = http.get("/api/local-bundles").json()["groups"]
-        status = {b["key"]: (b["status"], b["has_replay"]) for g in groups for b in g["bundles"]}
+        assert tickets["SYN-X04"]["source"] == "local" and tickets["SYN-X04"]["mode"] == "live"
+        status = {b["key"]: (b["status"], b["has_replay"]) for b in http.get("/api/local-bundles").json()["bundles"]}
         assert status == {"0/SYN-X04": ("ready", True), "0/SYN-Y04": ("new", False), "1/SYN-Z04": ("ready", True)}
-    assert calls.count("writing") == 2
+        assert calls.count("writing") == 2
+
+        # 模型还配着，也可以选回放：用刚存下的结果，不再调用模型；选实时则再调用一次。
+        again = http.post("/api/local-bundles/analyze", headers=HEADERS, json={"keys": ["0/SYN-X04"], "mode": "replay"})
+        assert again.json()["accepted"] == ["SYN-X04"]
+        assert _wait(http, "SYN-X04")["status"] == "ready"
+        ticket = next(t for t in http.get("/api/tickets").json()["tickets"] if t["ticket_ref"] == "SYN-X04")
+        assert ticket["mode"] == "replay" and ticket["model_label"] == REPLAY_LABEL
+        assert calls.count("writing") == 2
+        http.post("/api/local-bundles/analyze", headers=HEADERS, json={"keys": ["0/SYN-X04"], "mode": "live"})
+        assert _wait(http, "SYN-X04")["status"] == "ready"
+    assert calls.count("writing") == 3

@@ -290,15 +290,14 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--bundles", type=Path, default=DEFAULT_BUNDLES)
     p.set_defaults(func=cmd_gold_check)
 
-    p = sub.add_parser("serve", help="启动本机操作台：模型 + 规则分析本机导出的工单，含演示单与模型设置")
+    p = sub.add_parser("serve", help="启动本机操作台：模型 + 规则分析本机导出的工单，网页里配置模型")
     p.add_argument("--host", default="127.0.0.1")
     p.add_argument("--port", type=int, default=8765)
     p.add_argument("--inbox", type=Path, default=Path("~/.noc7/demo-inbox"))
-    p.add_argument("--bundles", type=Path, default=DEFAULT_BUNDLES)
     p.add_argument("--local-root", type=Path, action="append",
-                   help="本机导出的工单包目录，可写多次；不写时读 --platform-config 里的 local_roots，再没有就用 ~/.noc7/real")
+                   help="工单包目录或放工单包的目录，可写多次；不写时读 --platform-config 里的 local_roots，再没有就用 ~/.noc7/real")
     p.add_argument("--platform-config", type=Path, default=Path("~/.noc7/platform.json"),
-                   help="仓库外的操作台配置：local_roots（本机工单目录）、demos（作演示的真实工单包）")
+                   help="仓库外的操作台配置：local_roots（列出的工单包，或放工单包的目录）")
     p.add_argument(
         "--model-config",
         type=Path,
@@ -332,10 +331,8 @@ def cmd_serve(args: argparse.Namespace) -> int:
 
     platform = load_platform_config(args.platform_config)
     roots = args.local_root or [Path(p) for p in platform.get("local_roots") or ["~/.noc7/real"]]
-    demos = [Path(p) for p in platform.get("demos") or []]
     uvicorn.run(
-        create_app(inbox=args.inbox, bundles=args.bundles, model_config=args.model_config,
-                   local_roots=roots, demos=demos),
+        create_app(inbox=args.inbox, model_config=args.model_config, local_roots=roots),
         host=args.host,
         port=args.port,
     )

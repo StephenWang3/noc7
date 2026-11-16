@@ -17,13 +17,12 @@ from .models import ModelSettings, SettingsRejected
 from .replays import ReplayIndex
 
 STATIC = Path(__file__).resolve().parent / "static"
-DEMO_REPLAYS = Path(__file__).resolve().parents[3] / "fixtures" / "demo-replays"
 DOCX_TYPE = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
 WRITE_HEADER = "x-noc7-request"
 
 
 def load_platform_config(path: Path) -> dict:
-    """~/.noc7/platform.json：本机工单目录和真实演示单，只放在仓库外。"""
+    """~/.noc7/platform.json：操作台列出的工单包（local_roots），只放在仓库外。"""
     try:
         data = json.loads(path.expanduser().read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError):
@@ -34,25 +33,20 @@ def load_platform_config(path: Path) -> dict:
 def create_app(
     *,
     inbox: Path | None = None,
-    bundles: Path | None = None,
     model_config: Path | None = None,
     settings_dir: Path | None = None,
     local_roots: list[Path] | None = None,
-    demos: list[Path] | None = None,
     replay_patterns: list[tuple[Path, str]] | None = None,
     workbench_origins: str | None = None,
 ) -> FastAPI:
     inbox = (inbox or Path(os.environ.get("NOC7_DEMO_INBOX", "~/.noc7/demo-inbox"))).expanduser()
-    bundles = bundles or Path("fixtures/bundles")
     model_config = model_config or Path("config/models/deepseek.json")
     models = ModelSettings(model_config, settings_dir or Path("~/.noc7/models"))
     if replay_patterns is None:
         replay_patterns = [(Path("~/.noc7"), "two-stage-trial-*/*/audit/*.json"),  # 以前的试跑
-                           (Path("~/.noc7"), "audit-*/*.json"),  # 命令行 --model-audit-dir ~/.noc7/audit-<日期>
-                           (DEMO_REPLAYS, "*.json")]
+                           (Path("~/.noc7"), "audit-*/*.json")]  # 命令行 --model-audit-dir ~/.noc7/audit-<日期>
     replays = ReplayIndex([*replay_patterns, (inbox, "upload/*/audit/*/*.json")])
-    runner = JobRunner(inbox, bundles, models, replays, replay_config=model_config,
-                       local_roots=list(local_roots or ()), demos=list(demos or ()))
+    runner = JobRunner(inbox, models, replays, replay_config=model_config, local_roots=list(local_roots or ()))
     origins = workbench_origins if workbench_origins is not None else os.environ.get("NOC7_WORKBENCH_ORIGINS", "")
 
     @asynccontextmanager
@@ -115,7 +109,7 @@ def create_app(
     @app.post("/api/local-bundles/analyze")
     def analyze_local(body: dict = Body(...)):
         try:
-            result = runner.accept_local(body.get("keys") or [])
+            result = runner.accept_local(body.get("keys") or [], str(body.get("mode") or ""))
         except UploadRejected as e:
             return _rejected(e.status_code, e.problems)
         return JSONResponse(status_code=202, content=result)

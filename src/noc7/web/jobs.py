@@ -1,7 +1,10 @@
-"""操作台的分析队列。一律“模型 + 规则”：配好模型就实时调用，没配但保存过这张单的模型结果就回放，
-两样都没有就请人先配置模型。进程内一次只分析一张。
+"""操作台的分析队列。一律“模型 + 规则”，模型这一步有两种做法，由操作的人选：
 
-演示单（仓库里的合成单、本机挑出的几张真实单）一律回放保存的模型结果，不联网、不花钱。
+- 回放：用这张单保存过的模型结果（材料没变才行），不联网、不花钱；
+- 实时：调用当前配好的模型（DeepSeek 或公司本地模型），并把这次结果存下来以后回放。
+
+工单列表来自 platform.json 的 local_roots：每项可以是一个工单包目录，也可以是放工单包的目录。
+进程内一次只分析一张。
 """
 
 from __future__ import annotations
@@ -33,7 +36,6 @@ from ..schema import ELEMENT_LABELS_ZH, AnalysisResult
 from .models import ModelSettings
 from .replays import ReplayIndex
 
-PREPARED = ("SYN-P04", "SYN-S09", "SYN-P01", "SYN-S06", "SYN-S02")
 MAX_ZIP_BYTES = 32 * 1024 * 1024
 MAX_UNPACKED_BYTES = 64 * 1024 * 1024
 MAX_FILES = 200
@@ -43,6 +45,9 @@ REPLAY_LABEL = "回放已保存的模型结果"
 LEGACY_LABELS = {"rules": "仅规则（旧版结果）", "llm": "实时调用 DeepSeek"}
 NO_MODEL = ("还没有可用的模型：请点右上角“模型设置”填写密钥，或配置公司本地模型。"
             "这张单也没有保存过的模型结果可以回放。")
+NO_LIVE = "还没有可用的模型：请点右上角“模型设置”填写密钥，或配置公司本地模型。"
+NO_RECORD = "这张单没有保存过的模型结果，不能回放；请用“调用模型分析”。"
+MODES = ("replay", "live")
 REPLAY_MISMATCH = "保存的模型结果和这张单现在的材料对不上，不能回放；请在“模型设置”里配置模型后重新分析。"
 
 
@@ -62,7 +67,7 @@ class Job:
     summary: dict
     data_class: str
     sha: str
-    source: str  # demo / local / upload
+    source: str  # local / upload
     mode: str  # live / replay
     model_label: str
     status: str = "running"
@@ -73,18 +78,16 @@ class Job:
 
 
 class JobRunner:
-    def __init__(self, inbox: Path, bundles: Path, models: ModelSettings, replays: ReplayIndex, *,
-                 replay_config: Path, local_roots: list[Path] = (), demos: list[Path] = ()):
+    def __init__(self, inbox: Path, models: ModelSettings, replays: ReplayIndex, *,
+                 replay_config: Path, local_roots: list[Path] = ()):
         self.inbox = inbox.expanduser().resolve()
-        self.bundles = bundles
         self.models = models
         self.replays = replays
         self.replay_config = replay_config
-        self.local_roots = [r.expanduser() for r in local_roots]
-        self.demo_dirs = [*(bundles / ref for ref in PREPARED), *(d.expanduser() for d in demos)]
+        # 每项是一个工单包目录，或放工单包的目录；页面用“序号/目录名”指一张单
+        self.roots = [r.expanduser() for r in local_roots]
         self.jobs: dict[str, Job] = {}
         self.order: list[str] = []
-        self.demo_refs: set[str] = set()
         self._queue: queue.Queue[str | None] = queue.Queue()
         self._lock = threading.Lock()
         self._thread: threading.Thread | None = None
@@ -98,8 +101,6 @@ class JobRunner:
             self._started = True
         self.inbox.mkdir(parents=True, mode=0o700, exist_ok=True)
         self.replays.scan()
-        for bundle_dir in self.demo_dirs:
-            self._load_demo(bundle_dir)
         self._restore_uploads()
         self._thread = threading.Thread(target=self._loop, name="noc7-platform", daemon=True)
         self._thread.start()
@@ -108,31 +109,6 @@ class JobRunner:
         self._queue.put(None)
         if self._thread is not None:
             self._thread.join(timeout=5)
-
-    def _load_demo(self, bundle_dir: Path) -> None:
-        manifest = _manifest(bundle_dir)
-        if manifest is None:
-            return
-        ref = manifest.get("bundle_id")
-        if not isinstance(ref, str) or not BUNDLE_ID.fullmatch(ref) or ref in self.jobs:
-            return
-        home = self.inbox / "demo" / ref
-        home.mkdir(parents=True, mode=0o700, exist_ok=True)
-        job = self._make(ref, bundle_dir, home, source="demo", mode="replay", label=REPLAY_LABEL)
-        meta = _read_meta(home)
-        job.finished_at = meta.get("finished_at") if isinstance(meta.get("finished_at"), str) else None
-        with self._lock:
-            self.demo_refs.add(ref)
-            self._add(job)
-        ready = _load_ready(job.out_dir / "analysis.json", job.sha)
-        if ready is not None:  # 演示单只恢复成功的结果；失败的每次启动重试（可能已补了记录）
-            job.result, job.status = ready, "ready"
-            return
-        if not self.replays.has(job.sha):
-            self._fail(job, problems=["这张演示单还没有保存的模型结果。合成演示单请按使用说明运行 "
-                                      "scripts/record_demo_replays.py 生成一次。"])
-            return
-        self._queue.put(ref)
 
     # ── 查询 ──
     def list_tickets(self) -> list[dict]:
@@ -172,13 +148,10 @@ class JobRunner:
         return path
 
     def list_local(self) -> dict:
-        """本机导出目录下的工单包，按目录分组；只读清单和工单字段，分析时才完整校验。"""
-        groups, seen = [], set()
-        for i, root in enumerate(self.local_roots):
-            if not root.is_dir():
-                continue
-            items = []
-            for path in sorted(p for p in root.iterdir() if p.is_dir() and not p.name.startswith(".")):
+        """配置里的工单包，按顺序列出；只读清单和工单字段，分析时才完整校验。"""
+        items, seen = [], set()
+        for i, root in enumerate(self.roots):
+            for path in _bundle_dirs(root):
                 manifest = _manifest(path)
                 ref = manifest.get("bundle_id") if manifest else None
                 if not isinstance(ref, str) or not BUNDLE_ID.fullmatch(ref) or not BUNDLE_ID.fullmatch(path.name):
@@ -187,14 +160,12 @@ class JobRunner:
                     continue
                 seen.add(ref)
                 item = _summary(path, ref) | {"key": f"{i}/{path.name}", "captured_at": manifest.get("captured_at"),
-                                              "has_replay": self.replays.has(sha256_file(path / "manifest.json")),
-                                              "demo": ref in self.demo_refs}
+                                              "has_replay": self.replays.has(sha256_file(path / "manifest.json"))}
                 with self._lock:
                     job = self.jobs.get(ref)
                     item["status"] = job.status if job else "new"
                 items.append(item)
-            groups.append({"root": _display(root), "bundles": items})
-        return {"available": bool(groups), "groups": groups}
+        return {"bundles": items}
 
     # ── 入队 ──
     def accept_upload(self, data: bytes) -> str:
@@ -206,30 +177,31 @@ class JobRunner:
         finally:
             shutil.rmtree(tmp, ignore_errors=True)
 
-    def accept_local(self, keys: list[str]) -> dict:
-        """按“目录序号/目录名”把本机工单排进队列。逐张返回结果，一张出错不影响其他。"""
-        if not self.local_roots:
-            raise UploadRejected(400, ["没有配置本机工单目录"])
+    def accept_local(self, keys: list[str], mode: str) -> dict:
+        """按“组序号/目录名”把工单排进队列，mode 是 replay（回放）或 live（实时调用模型）。
+        逐张返回结果，一张出错不影响其他。"""
+        if mode not in MODES:
+            raise UploadRejected(400, ["请选择回放还是调用模型"])
         if not keys or len(keys) > MAX_BATCH or not all(isinstance(k, str) for k in keys):
             raise UploadRejected(400, [f"一次选 1 到 {MAX_BATCH} 张工单"])
+        if mode == "live" and self.models.active_path() is None:
+            raise UploadRejected(400, [NO_LIVE])
         accepted, rejected = [], []
         for key in dict.fromkeys(keys):
             index, _, name = key.partition("/")
             path = None
-            if index.isdigit() and int(index) < len(self.local_roots) and BUNDLE_ID.fullmatch(name):
-                root = self.local_roots[int(index)].resolve()
-                candidate = (root / name).resolve()
-                path = candidate if candidate.parent == root and candidate.is_dir() else None
+            if index.isdigit() and int(index) < len(self.roots) and BUNDLE_ID.fullmatch(name):
+                path = next((p for p in _bundle_dirs(self.roots[int(index)]) if p.name == name), None)
             if path is None:
-                rejected.append({"key": key, "problems": ["本机工单目录里没有这张工单"]})
+                rejected.append({"key": key, "problems": ["工单目录里没有这张工单"]})
                 continue
             try:
-                accepted.append(self._accept(path, "local"))
+                accepted.append(self._accept(path, "local", mode))
             except UploadRejected as e:
                 rejected.append({"key": key, "problems": e.problems})
         return {"accepted": accepted, "rejected": rejected}
 
-    def _accept(self, root: Path, source: str) -> str:
+    def _accept(self, root: Path, source: str, mode: str | None = None) -> str:
         try:
             bundle = load_bundle(root)
         except BundleError as e:
@@ -238,12 +210,10 @@ class JobRunner:
         if not BUNDLE_ID.fullmatch(ref):
             raise UploadRejected(400, ["工单包编号只能包含字母、数字、点、下划线和连字符，且不超过 64 个字符"])
         with self._lock:
-            if ref in self.demo_refs:
-                raise UploadRejected(409, ["这是演示单，直接在“演示单”里查看"])
             current = self.jobs.get(ref)
             if current is not None and current.status == "running":
                 raise UploadRejected(409, ["这张工单正在分析"])
-        mode, label = self._choose(bundle.manifest_sha256, bundle.manifest.data_class)
+        mode, label = self._choose(bundle.manifest_sha256, bundle.manifest.data_class, mode)
         home = self.inbox / "upload" / ref
         home.mkdir(parents=True, mode=0o700, exist_ok=True)
         for old in home.iterdir():  # 清掉上次的包和报告；audit/ 是以前的模型结果，留着以后回放
@@ -263,9 +233,16 @@ class JobRunner:
             self._queue.put(ref)
         return ref
 
-    def _choose(self, sha: str, data_class) -> tuple[str, str]:
-        """配好模型就实时调用；否则有保存的模型结果就回放；都没有就拒绝。"""
+    def _choose(self, sha: str, data_class, want: str | None = None) -> tuple[str, str]:
+        """want 指定了就照办（做不到就拒绝）；没指定（导入 zip、重启续算）时配好模型就实时调用，
+        否则有保存的模型结果就回放，都没有就拒绝。"""
+        if want == "replay":
+            if not self.replays.has(sha):
+                raise UploadRejected(400, [NO_RECORD])
+            return "replay", REPLAY_LABEL
         path = self.models.active_path()
+        if want == "live" and path is None:
+            raise UploadRejected(400, [NO_LIVE])
         if path is not None:
             try:
                 create_text_provider(path).preflight(data_class)
@@ -451,12 +428,14 @@ def _read_meta(home: Path) -> dict:
     return data if isinstance(data, dict) else {}
 
 
-def _display(path: Path) -> str:
-    """页面上显示的目录：家目录写成 ~，不把用户名放到页面上。"""
-    try:
-        return "~/" + path.resolve().relative_to(Path.home().resolve()).as_posix()
-    except ValueError:
-        return path.name
+def _bundle_dirs(root: Path) -> list[Path]:
+    """root 本身是工单包就只有它；否则是它下面的工单包目录。"""
+    if not root.is_dir():
+        return []
+    if (root / "manifest.json").is_file():
+        return [root]
+    return sorted(p for p in root.iterdir() if p.is_dir() and not p.name.startswith(".")
+                  and (p / "manifest.json").is_file())
 
 
 def _write_meta(home: Path, meta: dict) -> None:

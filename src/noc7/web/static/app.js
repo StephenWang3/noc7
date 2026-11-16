@@ -11,7 +11,7 @@
     async list() { return (await this.catalog()).tickets; },
     async machine() {
       const res = await fetch("/api/local-bundles");
-      if (!res.ok) return { available: false, groups: [] };
+      if (!res.ok) return { bundles: [] };
       return res.json();
     },
     // 改动类请求都带 X-NOC7-Request 头，服务端据此拒绝别的网站跨站调用。
@@ -23,7 +23,7 @@
       try { body = await res.json(); } catch (_) { /* 空响应 */ }
       return { ok: res.ok, body };
     },
-    analyzeMachine(keys) { return this.post("/api/local-bundles/analyze", { keys }); },
+    analyzeMachine(keys, mode) { return this.post("/api/local-bundles/analyze", { keys, mode }); },
     async model() {
       const res = await fetch("/api/model");
       return res.ok ? res.json() : null;
@@ -166,8 +166,8 @@
   }
 
   // ───────────────────────── 状态与事件 ─────────────────────────
-  const state = { step: 1, entryTab: "demo", tickets: [], pick: null, ref: null, data: null, entry: "local", element: "start_time", tab: "main", legend: true, log: [], workbenchOrigins: [], importError: "", poll: null, listSig: "",
-    machine: { available: false, groups: [] }, selected: new Set(), batch: [], machineError: "",
+  const state = { step: 1, entryTab: "tickets", tickets: [], pick: null, ref: null, data: null, entry: "local", element: "start_time", tab: "main", legend: true, log: [], workbenchOrigins: [], importError: "", poll: null, listSig: "",
+    machine: { bundles: [] }, batch: [], machineError: "",
     model: null, drawer: "workbench", modelError: "" };
   const embedded = window.parent !== window;
 
@@ -244,54 +244,10 @@
     const bar = $(".synthetic-bar");
     const opened = state.data && state.data.analysis && state.data.analysis.data_class === "synthetic";
     bar.hidden = !opened;
-    if (opened) {
-      const ref = (state.data.ticket && state.data.ticket.ticket_ref) || state.ref || "";
-      const job = jobOf(ref);
-      bar.textContent = job && job.source === "demo"
-        ? "合成演示数据（来自仓库 fixtures/），不是真实工单。模型结果是事先保存的，这里回放。"
-        : "合成数据，不是真实工单。";
-    }
+    if (opened) bar.textContent = "合成数据，不是真实工单。";
   }
 
   // ───────────────────────── 画面 1：选择工单 ─────────────────────────
-  function ticketCards(list) {
-    return (list || state.tickets).map((t) => {
-      const selected = state.pick === t.ticket_ref;
-      if (t.status !== "ready" || !t.element_status) {
-        const failed = t.status === "failed";
-        return `<button class="ticket ${selected ? "selected" : ""}" data-pick="${esc(t.ticket_ref)}" aria-pressed="${selected}">
-          <div class="t-top"><span class="t-ref">${esc(t.ticket_ref)}</span><span class="badge ${failed ? "b-warn" : "b-info"}">${failed ? "失败" : "分析中"}</span></div>
-          <div class="t-title">${esc(t.title || "")}</div>
-          <div class="t-sum">${failed ? esc((t.problems || []).join("；") || "分析失败，没有生成报告") : "正在计算，完成后才能查看七要素。"}</div>
-          <div class="t-meta"><span>${esc(t.category || "")}</span></div></button>`;
-      }
-      const c = { confirmed: 0, documented: 0, unknown: 0, conflicted: 0 };
-      ELEMENTS.forEach((n) => { if (c[t.element_status[n]] != null) c[t.element_status[n]]++; });
-      const open = t.open_issues || 0;
-      return `<button class="ticket ${selected ? "selected" : ""}" data-pick="${esc(t.ticket_ref)}" aria-pressed="${selected}">
-        <div class="t-top"><span class="t-ref">${esc(t.ticket_ref)}</span><span class="badge b-info">${esc(t.list_status)}</span></div>
-        <div class="t-title">${esc(t.title)}</div>
-        <div class="dots" title="按顺序：${ELEMENTS.map((n) => LABEL[n] + "=" + (STATUS[t.element_status[n]] || {}).label).join("；")}">${ELEMENTS.map((n) => `<span class="dot ${esc(t.element_status[n] || "")}"></span>`).join("")}</div>
-        <div class="t-sum">${c.confirmed + c.documented} 个有结论 · ${c.unknown} 个未知${c.conflicted ? ` · <b style="color:var(--conf)">${c.conflicted} 个矛盾</b>` : ""} · <span class="badge b-warn">待核实 ${open}</span></div>
-        <div class="t-meta"><span>${esc(t.category || "")}</span></div></button>`;
-    }).join("");
-  }
-  function patchStep1List() {
-    const box = document.querySelector("#screen .tickets");
-    if (!box || state.step !== 1 || state.entryTab !== "demo") return false;
-    box.innerHTML = ticketCards(state.tickets.filter((t) => t.source === "demo"));
-    const picked = pickedTicket();
-    const hint = document.querySelector("#screen .screen-foot .hint");
-    const next = document.getElementById("next1");
-    if (hint) {
-      hint.textContent = state.pick
-        ? `已选：${state.pick}${picked && picked.status !== "ready" ? " · " + (picked.status === "failed" ? "失败" : "分析中") : ""}`
-        : "请先选择一张工单";
-    }
-    if (next) next.disabled = !(picked && picked.status === "ready");
-    return true;
-  }
-  const SOURCE_LABEL = { demo: "演示", local: "本机导出", upload: "上传" };
   function jobOf(ref) { return state.tickets.find((t) => t.ticket_ref === ref) || null; }
   function fmtTime(iso) {
     if (!iso) return "";
@@ -321,65 +277,69 @@
         ${finished ? `<button class="btn ghost" data-batch-clear="1" type="button">收起</button>` : ""}</div>
       <div class="bar"><span style="width:${pct}%"></span></div></div>`;
   }
-  // 当前模型能不能实时调用；不能时有保存结果的单子回放，没有的分析不了。
+  // 两种做法由人选：回放已保存的模型结果（不联网），或实时调用当前模型。
   function modelLive() { return !!(state.model && state.model.usable); }
   function modelHint() {
-    if (modelLive()) return `分析时实时调用 <b>${esc(state.model.label)}</b>（模型摘录事实 + 本地规则裁决），每张约一两分钟。`;
-    return `还没有可用的模型：只能分析<b>有已保存模型结果</b>的单子（回放，不联网）。点右上角<b>模型设置</b>填 API key 或配置公司本地模型后可实时分析任何单子。`;
+    const live = modelLive()
+      ? `<b>调用模型分析</b>：实时请求 <b>${esc(state.model.label)}</b>，每张约一两分钟，结果会存下来以后可回放。`
+      : `<b>调用模型分析</b>：还没有可用的模型，点右上角<b>模型设置</b>填 API key 或配置公司本地模型后可用。`;
+    return `<b>回放已有记录</b>：用这张单以前保存的模型结果，几秒出结果、不联网，只对标“有记录”的单有效。<br>${live}`;
   }
-  function machineBundles() { return state.machine.groups.flatMap((g) => g.bundles); }
-  function selectable(b) { return !b.demo && (jobOf(b.ticket_ref) || {}).status !== "running" && (modelLive() || b.has_replay); }
-  function machinePane() {
-    const m = state.machine;
-    if (!m.available) {
-      return `<div class="wb-note">没有找到本机工单目录。先按使用说明从 NOC 导出工单，或启动时用 <code>--local-root</code> 指定目录。</div>`;
+  function machineBundles() { return state.machine.bundles || []; }
+  function running(b) { return (jobOf(b.ticket_ref) || {}).status === "running"; }
+  // 一张工单一个卡片：只给看的人需要的信息（标题、分类、分析结果），目录、内部代号等后台信息不上页面。
+  function ticketCard(b) {
+    const job = jobOf(b.ticket_ref);
+    const ref = esc(b.ticket_ref), key = esc(b.key);
+    const busy = running(b);
+    const replay = `<button class="btn" data-run="replay" data-key="${key}" type="button"${b.has_replay && !busy ? "" : " disabled"}
+      title="${b.has_replay ? "用以前保存的模型结果，不联网，几秒" : "这张单还没有保存的模型结果"}">回放</button>`;
+    const live = `<button class="btn" data-run="live" data-key="${key}" type="button"${modelLive() && !busy ? "" : " disabled"}
+      title="${modelLive() ? "实时调用 " + esc(state.model.label) + "，约一两分钟" : "先在右上角“模型设置”配置模型"}">调用模型</button>`;
+    let body, actions;
+    if (busy) {
+      body = `<div class="t-sum muted">正在分析…</div>`;
+      actions = "";
+    } else if (job && job.status === "ready" && job.element_status) {
+      const c = { confirmed: 0, documented: 0, unknown: 0, conflicted: 0 };
+      ELEMENTS.forEach((n) => { if (c[job.element_status[n]] != null) c[job.element_status[n]]++; });
+      body = `${miniDots(job)}
+        <div class="t-sum">${c.confirmed + c.documented} 项有结论${c.unknown ? ` · ${c.unknown} 项未知` : ""}${c.conflicted ? ` · ${c.conflicted} 项矛盾` : ""} · 待核实 ${job.open_issues || 0}</div>
+        <div class="t-meta"><span>${esc(shortModel(job.model_label))} · ${esc(fmtTime(job.finished_at))}</span></div>`;
+      actions = `<button class="btn primary" data-open="${ref}" type="button">查看结果</button><span class="spacer"></span>${replay}${live}`;
+    } else if (job && job.status === "failed") {
+      body = `<div class="t-sum problem">${esc((job.problems || []).join("；") || "分析失败")}</div>`;
+      actions = `<span class="spacer"></span>${replay}${live}`;
+    } else {
+      body = `<div class="t-sum muted">未分析</div>`;
+      actions = `<span class="spacer"></span>${replay}${live}`;
     }
-    const all = machineBundles().filter(selectable);
-    const n = state.selected.size;
-    const groups = m.groups.map((g) => {
-      if (!g.bundles.length) return `<h3 class="group-head"><code>${esc(g.root)}</code> <span class="small muted">没有工单包</span></h3>`;
-      const rows = g.bundles.map((b) => {
-        const job = jobOf(b.ticket_ref);
-        const ok = selectable(b);
-        const sel = state.selected.has(b.key);
-        const why = b.demo ? "演示单在“演示单”标签里查看" : ok ? "" : (job || {}).status === "running" ? "正在分析" : "没有已保存的模型结果，配置模型后才能分析";
-        const tags = [b.has_replay ? `<span class="badge b-info" title="有已保存的模型结果，可以不联网回放">有记录</span>` : "",
-          b.demo ? `<span class="badge s-documented">演示</span>` : ""].join(" ");
-        return `<tr class="${sel ? "sel" : ""}">
-          <td><input type="checkbox" data-sel="${esc(b.key)}" aria-label="选择 ${esc(b.ticket_ref)}"${sel ? " checked" : ""}${ok ? "" : ` disabled title="${esc(why)}"`}></td>
-          <td class="mono">${esc(b.ticket_ref)}</td>
-          <td class="title-cell">${esc(b.title || "")}</td>
-          <td>${esc(b.category || "")}</td>
-          <td>${tags}</td>
-          <td>${statusChip(job)}</td>
-          <td>${miniDots(job)}</td>
-          <td>${job && job.status === "ready" ? `<button class="btn" data-open="${esc(b.ticket_ref)}" type="button">查看</button>` : ""}</td></tr>`;
-      }).join("");
-      return `<h3 class="group-head"><code>${esc(g.root)}</code> <span class="small muted">${g.bundles.length} 张</span></h3>
-        <table class="grid-table"><thead><tr><th></th><th>工单</th><th>标题</th><th>分类</th><th>标记</th><th>状态</th><th>七要素</th><th></th></tr></thead>
-        <tbody>${rows}</tbody></table>`;
-    }).join("");
+    return `<div class="ticket">
+      <div class="t-title" title="${esc(b.title || "")}">${esc(b.title || "")}</div>
+      <div class="t-meta"><span>${esc(b.category || "")}</span></div>
+      ${body}
+      <div class="t-actions">${actions}</div></div>`;
+  }
+  function modelHint() {
+    return modelLive()
+      ? `<b>回放</b>：用以前保存的模型结果，不联网，几秒出结果。<b>调用模型</b>：实时请求 <b>${esc(state.model.label)}</b>，约一两分钟，结果会存下来以后可回放。两种都经过本地规则裁决。`
+      : `<b>回放</b>：用以前保存的模型结果，不联网，几秒出结果。要<b>调用模型</b>实时分析，先点右上角<b>模型设置</b>填 API key 或配置公司本地模型。`;
+  }
+  function ticketsPane() {
+    const list = machineBundles();
+    const replayable = list.filter((b) => b.has_replay && !running(b));
     return `<div class="machine-bar">
-        <label><input type="checkbox" data-sel-all="1"${n && n === all.length ? " checked" : ""}${all.length ? "" : " disabled"}> 全选可分析的</label>
-        <span class="small muted">共 ${machineBundles().length} 张，可分析 ${all.length} 张</span>
+        <p class="small muted model-hint">${modelHint()}</p>
         <span class="spacer"></span>
-        <button class="btn primary" id="machine-run" type="button"${n ? "" : " disabled"}>分析选中的 ${n} 张</button></div>
-      <p class="small muted model-hint">${modelHint()}</p>
+        <button class="btn" data-run-all="replay" type="button"${replayable.length ? "" : " disabled"}>全部回放（${replayable.length}）</button></div>
       <p class="err" ${state.machineError ? "" : "hidden"}>${esc(state.machineError)}</p>
       ${batchProgress()}
-      ${groups}`;
-  }
-  function demoPane() {
-    const demos = state.tickets.filter((t) => t.source === "demo");
-    const importer = `<form id="import-form" class="wb-form import-row">
+      <div class="tickets">${list.length ? list.map(ticketCard).join("") : `<div class="wb-note">没有工单。在 <code>~/.noc7/platform.json</code> 的 <code>local_roots</code> 里列出工单包。</div>`}</div>
+      <form id="import-form" class="import-inline">
+        <span class="small muted">导入新的工单包：</span>
         <input id="import-file" type="file" accept=".zip,application/zip" aria-label="工单包 zip" required>
-        <button class="btn primary" type="submit">导入并分析</button></form>
+        <button class="btn" type="submit">导入并分析</button></form>
       <p class="err" id="import-err" ${state.importError ? "" : "hidden"}>${esc(state.importError || "")}</p>`;
-    return `<p class="small muted">演示单回放已保存的模型结果，再经本地规则裁决，结果和实时调用一致，不联网、不花钱。</p>
-      <div class="tickets">${demos.length ? ticketCards(demos) : `<div class="wb-note">没有演示单。</div>`}</div>
-      <h3 class="group-head">导入一个工单包</h3>
-      ${importer}
-      <p class="small muted">${modelHint()}</p>`;
   }
   function shortModel(label) {
     if (!label) return "";
@@ -392,8 +352,7 @@
   }
   function historyPane() {
     const rows = historyRows().map((t) => `<tr>
-        <td class="ref-cell"><div class="mono">${esc(t.ticket_ref)}</div><div class="small muted" title="${esc(t.title || "")}">${esc(t.title || "")}</div></td>
-        <td>${SOURCE_LABEL[t.source] || ""}</td>
+        <td class="title-cell" title="${esc(t.title || "")}">${esc(t.title || "")}</td>
         <td title="${esc(t.model_label || "")}">${esc(shortModel(t.model_label))}</td>
         <td>${esc(fmtTime(t.finished_at))}</td>
         <td>${miniDots(t)}</td>
@@ -404,7 +363,7 @@
              <a class="btn" href="/api/tickets/${encodeURIComponent(t.ticket_ref)}/company-report.docx" download>Word</a>`
           : `<span class="problem">${esc((t.problems || []).join("；"))}</span>`}</td></tr>`).join("");
     if (!rows) return `<div class="wb-note">还没有分析记录。</div>`;
-    return `<table class="grid-table"><thead><tr><th>工单</th><th>来源</th><th>模型</th><th>完成时间</th><th>七要素</th><th>待核实</th><th></th></tr></thead>
+    return `<table class="grid-table"><thead><tr><th>工单</th><th>模型</th><th>完成时间</th><th>七要素</th><th>待核实</th><th></th></tr></thead>
       <tbody>${rows}</tbody></table>
       <p class="small muted">按完成时间倒序，重启后保留。“模型”一栏写明是实时调用的哪个模型，还是回放已保存的模型结果。</p>`;
   }
@@ -414,16 +373,14 @@
   async function refreshModel() {
     try { state.model = await source.model(); } catch (err) { /* 保留上一次 */ }
   }
-  async function runMachineBatch() {
-    const keys = [...state.selected];
+  async function runMachineBatch(mode, keys) {
     if (!keys.length) return;
     let res;
-    try { res = await source.analyzeMachine(keys); } catch (err) { state.machineError = "请求没有完成"; return render(); }
+    try { res = await source.analyzeMachine(keys, mode); } catch (err) { state.machineError = "请求没有完成"; return render(); }
     if (!res.ok) { state.machineError = (res.body.problems || ["没有开始分析"]).join("；"); return render(); }
     const rejected = res.body.rejected || [];
     state.machineError = rejected.map((r) => `${r.key.split("/").pop()}：${(r.problems || []).join("；")}`).join("\n");
     state.batch = res.body.accepted || [];
-    state.selected.clear();
     state.tickets = await source.list();
     state.listSig = listSignature(state.tickets);
     ensurePoll();
@@ -437,27 +394,21 @@
       <div class="node"><b>③ 本地规则裁决</b>核对引文、按依据强弱逐层取值；拿不准就留空或标待核实</div><span class="arrow">→</span>
       <div class="node"><b>④ 标准化公司报告</b>可下载 Word</div><span class="arrow">→</span>
       <div class="node out-of-scope"><b>人工审核</b>在 NOC 工作台完成，不在本页</div></div>`;
-    const wb = `<div class="wb-note"><b>工作台只需要传入「工单号」</b>，本页自己向接口取分析结果，不要求工作台懂七要素的格式。</div>
-      <div class="wb-form"><input id="wb-ref" placeholder="工单号，例如 SYN-S09" value="${esc(state.wbRef || "")}" aria-label="工单号"><button class="btn primary" id="wb-load" type="button">载入</button></div>
-      <p class="err" id="wb-err" ${state.wbError ? "" : "hidden"}>${esc(state.wbError || "")}</p>
-      <p class="small muted">等价于工作台打开：<code>index.html?ticket=SYN-S09</code>，或向本页 iframe 发送 <code>postMessage({type:"noc7.open", ticket_ref:"SYN-S09"})</code>。点右上角“接入 NOC 工作台”可看完整约定和实时事件。</p>`;
-    const panes = { machine: machinePane, demo: demoPane, history: historyPane, workbench: () => wb };
-    const demoCount = state.tickets.filter((t) => t.source === "demo").length;
+    const panes = { tickets: ticketsPane, history: historyPane };
     const tab = (id, name, count) => `<button class="tab ${state.entryTab === id ? "active" : ""}" data-etab="${id}" role="tab">${name}${count != null ? `<span class="count">${count}</span>` : ""}</button>`;
     $("#screen").innerHTML = `
-      <div class="screen-head"><h1>选择一张工单</h1><p>分析固定是“模型摘录 + 本地规则裁决”。本机导出的工单勾选后批量分析；演示单回放已保存的模型结果。</p></div>
+      <div class="screen-head"><h1>选择工单</h1><p>分析固定是“模型摘录 + 本地规则裁决”。每张工单可以回放以前保存的模型结果，或实时调用模型重新分析。</p></div>
       ${flow}
       <div class="entry">
         <section class="card entry-main" style="padding:0 14px 0">
           <div class="tabs" role="tablist">
-            ${tab("machine", "本机工单", machineBundles().length)}${tab("demo", "演示单", demoCount)}${tab("history", "分析记录", historyRows().length)}${tab("workbench", "由 NOC 工作台传入")}</div>
-          <div class="tab-body">${(panes[state.entryTab] || demoPane)()}</div>
+            ${tab("tickets", "工单", machineBundles().length)}${tab("history", "分析记录", historyRows().length)}</div>
+          <div class="tab-body">${(panes[state.entryTab] || ticketsPane)()}</div>
         </section>
         <aside class="card entry-side">
           <h2>这一步在做什么</h2>
           <ul>
-            <li><b>本机工单</b>：从 NOC 导出到本机的工单，勾选后批量分析，进度实时刷新。</li>
-            <li><b>演示单</b>：合成单和几张真实单，回放保存好的模型结果，不联网。也可以导入 zip 工单包。</li>
+            <li><b>工单</b>：从 NOC 导出的已结单工单。每张可以<b>回放</b>（用保存的模型结果，不联网，几秒）或<b>调用模型</b>（实时分析），完成后点<b>查看结果</b>。</li>
             <li><b>分析记录</b>：做过的分析都在这里，重启后保留。</li>
             <li>右上角<b>模型设置</b>：填 DeepSeek API key，或配置公司本地模型，就能实时分析新工单。</li>
             <li>下一页看<b>七要素</b>，每条结论都能点回<b>原文出处</b>；再下一页是<b>公司报告</b>，可下载 Word。</li>
@@ -470,9 +421,7 @@
             <span><span class="dot unknown" style="display:inline-block;vertical-align:middle"></span> 未知（宁可留空）</span>
             <span><span class="dot conflicted" style="display:inline-block;vertical-align:middle"></span> 矛盾（并列展示）</span></div>
         </aside>
-      </div>
-      <div class="screen-foot"><span class="hint">${state.pick ? `已选：${esc(state.pick)}${pickedTicket() && pickedTicket().status !== "ready" ? " · " + (pickedTicket().status === "failed" ? "失败" : "分析中") : ""}` : "请先选择一张工单"}</span>
-        <button class="btn primary big" id="next1" ${pickedTicket() && pickedTicket().status === "ready" ? "" : "disabled"}>查看七要素与原文出处 →</button></div>`;
+      </div>`;
   }
 
   // ───────────────────────── 画面 2：七要素与原文出处 ─────────────────────────
@@ -700,8 +649,8 @@
       <p class="small">所有入口最后都只调用一个函数 <code>openTicket(工单号)</code>；页面再向 <code>TicketSource</code> 取数据。工作台不需要懂七要素的内部格式。</p>
       <h3>① 入口（工作台 → 本页）</h3>
       <table><tr><th>方式</th><th>怎么用</th></tr>
-        <tr><td>独立使用</td><td>画面 1 里选本地工单包</td></tr>
-        <tr><td>链接</td><td><code>index.html?ticket=SYN-S09</code> 或 <code>#/2/SYN-S09/cause</code>，直接落在七要素页</td></tr>
+        <tr><td>独立使用</td><td>画面 1 的工单列表</td></tr>
+        <tr><td>链接</td><td><code>index.html?ticket=&lt;工单号&gt;</code> 或 <code>#/2/&lt;工单号&gt;/cause</code>，直接落在七要素页</td></tr>
         <tr><td>嵌入</td><td>工作台用 iframe 加载，加 <code>?embed=1</code> 隐藏品牌栏；再发 <code>postMessage({type:"noc7.open", ticket_ref})</code></td></tr></table>
       <h3>② 数据（本页 → 后端）</h3>
       <pre>GET /api/tickets                           工单列表
@@ -717,10 +666,18 @@ POST /api/tickets                          上传工单包 zip（模型摘录 + 
         <tr><td><code>noc7.review.requested</code></td><td>点了“在 NOC 工作台中审核”，由工作台跳转到审核界面</td></tr></table>
       <h3>④ 实时事件（可试）</h3>
       <div class="evlog" id="evlog"></div>
-      <p><button class="btn" id="sim-wb" type="button">模拟工作台传入 SYN-S06</button></p>
+      ${simulator()}
       <h3>本页不做的事</h3>
       <p class="small">不做审核（通过 / 改写 / 清空）、不改工单、不回写 NOC。那些属于 NOC 工作台。</p>`;
     refreshLog();
+  }
+  // 模拟工作台：从已分析好的单里选一张，像工作台那样只发工单号过来。
+  function simulator() {
+    const ready = state.tickets.filter((t) => t.status === "ready");
+    if (!ready.length) return `<p class="small muted">先在工单列表里分析一张，才能模拟工作台传入。</p>`;
+    return `<div class="wb-form"><select id="sim-ref" aria-label="模拟传入的工单">${ready.map((t) =>
+      `<option value="${esc(t.ticket_ref)}">${esc(t.title || t.ticket_ref)}</option>`).join("")}</select>
+      <button class="btn" id="sim-wb" type="button">模拟工作台传入</button></div>`;
   }
   function renderModelDrawer() {
     const m = state.model;
@@ -791,7 +748,7 @@ POST /api/tickets                          上传工单包 zip（模型摘录 + 
     if (d.step) return go(+d.step);
     if (d.etab) {
       state.entryTab = d.etab;
-      if (d.etab === "machine") await Promise.all([refreshMachine(), refreshModel()]);
+      if (d.etab === "tickets") await Promise.all([refreshMachine(), refreshModel()]);
       return render();
     }
     if (d.open || d.openReport) {
@@ -799,15 +756,9 @@ POST /api/tickets                          上传工单包 zip（模型摘录 + 
       if (await openTicket(ref, "local")) go(d.openReport ? 3 : 2);
       return;
     }
-    if (t.id === "machine-run") return runMachineBatch();
+    if (d.run) return runMachineBatch(d.run, [d.key]);
+    if (d.runAll) return runMachineBatch(d.runAll, machineBundles().filter((b) => b.has_replay && !running(b)).map((b) => b.key));
     if (d.batchClear) { state.batch = []; return render(); }
-    if (d.pick) {
-      state.pick = d.pick;
-      if (patchStep1List()) return;
-      return render();
-    }
-    if (t.id === "next1" && state.pick) { if (await openTicket(state.pick, "local")) go(2); return; }
-    if (t.id === "wb-load") return loadFromWorkbenchTab();
     if (d.el) { state.element = d.el; state.tab = "main"; return render(); }
     if (d.tab) { state.tab = d.tab; return render(); }
     if (t.id === "toggle-legend") { state.legend = !state.legend; return render(); }
@@ -824,25 +775,17 @@ POST /api/tickets                          上传工单包 zip（模型摘录 + 
     if (t.id === "model-chip") { await refreshModel(); return setDrawer(true, "model"); }
     if (d.keyClear) return modelAction("/api/model/key/clear", { profile: d.keyClear }, "已清除 key");
     if (t.id === "close-drawer") return setDrawer(false);
-    if (t.id === "sim-wb") { window.postMessage({ type: "noc7.open", ticket_ref: "SYN-S06" }, location.origin); return; }
+    if (t.id === "sim-wb") { const ref = $("#sim-ref").value; setDrawer(false); window.postMessage({ type: "noc7.open", ticket_ref: ref }, location.origin); return; }
   });
   $("#scrim").addEventListener("click", () => setDrawer(false));
   document.addEventListener("keydown", (e) => {
     if (e.key === "Escape") setDrawer(false);
-    if (e.target.matches("input")) { if (e.key === "Enter" && e.target.id === "wb-ref") loadFromWorkbenchTab(); return; }
+    if (e.target.matches("input, select")) return;
     if (state.step === 2 && (e.key === "ArrowDown" || e.key === "ArrowUp")) {
       const i = ELEMENTS.indexOf(state.element) + (e.key === "ArrowDown" ? 1 : -1);
       if (i >= 0 && i < ELEMENTS.length) { e.preventDefault(); state.element = ELEMENTS[i]; state.tab = "main"; render(); }
     }
   });
-
-  async function loadFromWorkbenchTab() {
-    const input = $("#wb-ref"), ref = input.value.trim();
-    state.wbRef = ref;
-    if (await openTicket(ref, "workbench")) { state.wbError = ""; return go(2); }
-    state.wbError = state.pendingNote || `找不到工单 “${ref}”。当前有：${state.tickets.map((t) => t.ticket_ref).join("、")}。`;
-    render();
-  }
 
   function listSignature(tickets) {
     return tickets.map((t) => `${t.ticket_ref}:${t.status}:${t.open_issues || 0}`).join("|");
@@ -856,7 +799,7 @@ POST /api/tickets                          上传工单包 zip（模型摘录 + 
         const changed = sig !== state.listSig;
         state.tickets = tickets;
         state.listSig = sig;
-        if (changed && state.step === 1 && !patchStep1List()) render();
+        if (changed && state.step === 1) render();
         if (!tickets.some((t) => t.status === "running")) {
           clearInterval(state.poll);
           state.poll = null;
@@ -867,14 +810,6 @@ POST /api/tickets                          上传工单包 zip（模型摘录 + 
 
   document.addEventListener("change", (e) => {
     const box = e.target;
-    if (box && box.dataset && (box.dataset.sel || box.dataset.selAll)) {
-      if (box.dataset.selAll) {
-        state.selected.clear();
-        if (box.checked) machineBundles().filter(selectable).forEach((b) => state.selected.add(b.key));
-      } else if (box.checked) state.selected.add(box.dataset.sel);
-      else state.selected.delete(box.dataset.sel);
-      return render();
-    }
     if (box && box.name === "active-model") modelAction("/api/model/active", { profile: box.value }, "已切换模型");
   });
 
@@ -951,7 +886,6 @@ POST /api/tickets                          上传工单包 zip（模型摘录 + 
     state.tickets = catalog.tickets;
     state.listSig = listSignature(state.tickets);
     await Promise.all([refreshMachine(), refreshModel()]);
-    if (machineBundles().length) state.entryTab = "machine";
     ensurePoll();
     await applyLocation();
     window.addEventListener("hashchange", applyLocation);
